@@ -20,6 +20,8 @@
 | [B012](#b012) | Committed tree not dprint/rustfmt-clean (`just fix-fmt` rewrites files) | refactor | open |
 | [B013](#b013) | Topic-queue perf unbenchmarked (O(n) get_note vs p95<100ms) | issue | open |
 | [B014](#b014) | Sandbox blocks tsx IPC pipe in `just test-py` build | issue | known-gap |
+| [B015](#b015) | Topic-queue undo/interval-equivalence proof untested | issue | in-progress |
+| [B016](#b016) | Topic queue leaves `active_decks` pointing at its deck | bug | open |
 
 ---
 
@@ -134,8 +136,8 @@
 - **Type:** issue · **Status:** open · **Severity:** medium
 - **Discovered:** 2026-06-30, Phase 2a code review.
 - **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` (one `get_note` per due card).
-- **Context:** the queue does O(n) per-card note reads to resolve topic tags; the PRD targets p95 < 100 ms for next-card and dashboard on a 50k-card deck ([`prd-speedrun`](prd-speedrun.md) §7), which this path has not been measured against.
-- **Next:** benchmark on the 50k deck; if needed, batch the tag lookups (single query) before Phase 4/mobile, where it also ships.
+- **Context:** per due card the queue does a `get_note` + a *full* revlog load, nothing is cached, and because ordering is global the entire due set is rescanned on every call (so `fetch_limit`/paging stays O(n) per call). The PRD targets p95<100ms on a 50k deck ([`prd-speedrun`](prd-speedrun.md) §7); the Phase 2a review judged the current design will likely miss it.
+- **Next:** dedicated perf pass before the reviewer hot path / mobile: cache the ordered build per session, replace per-card `get_note` + full-revlog loads with a single join, then benchmark on the 50k deck.
 
 <a id="b014"></a>
 ### B014 — Sandbox blocks tsx IPC pipe (`just test-py` build step)
@@ -145,6 +147,24 @@
 - **Ref:** `ts/tools/markpure.ts` run via `just _test-py` (tsx `createIpcServer`).
 - **Context:** `just test-py` rebuilds the generated TS lib; tsx tries to `listen` on a Unix socket in `$TMPDIR` and the sandbox denies it (`EPERM`), failing the build before pytest runs. Same class as B008 (sandbox-only, not our code). The Rust/rsbridge rebuild itself succeeded first.
 - **Workaround:** run `just test-py` with the sandbox disabled. `cargo test` for Rust is unaffected.
+
+<a id="b015"></a>
+### B015 — Topic-queue undo / interval-equivalence proof untested
+
+- **Type:** issue · **Status:** in-progress (Phase 2b) · **Severity:** medium
+- **Discovered:** 2026-06-30, Phase 2a code review.
+- **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` tests; [`spec-engine-topic-queue`](spec-engine-topic-queue.md) §8-§9 (AC5/AC6); source §7a ("proof undo works and the collection does not corrupt").
+- **Context:** additive safety is sound by construction (answering uses the unchanged `AnswerCard` RPC; the new RPC only returns `QueuedCards`), but no test answers a card from this queue then checks undo restores state, nor asserts intervals match the default queue. The brief requires an undo/corruption proof for the Rust change.
+- **Next:** add the test in Phase 2b (folded into the memory-score subagent's scope).
+
+<a id="b016"></a>
+### B016 — Topic queue leaves `active_decks` pointing at its deck
+
+- **Type:** bug · **Status:** open · **Severity:** low
+- **Discovered:** 2026-06-30, Phase 2a code review (Minor).
+- **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` (`build_queues` writes the temporary `active_decks` table); `rslib/src/storage/deck/mod.rs` (`active_decks` is a temp table).
+- **Context:** the RPC's `build_queues` sets the session-local `active_decks` to its `deck_id`; readers (`col.decks.active()`, congrats, some stats) can transiently reflect the RPC's deck if Learn and Practice interleave in one session. Not persisted/synced/undoable; self-heals on the next default build.
+- **Next:** when Phase 3 wires Learn/Practice switching, snapshot/restore `active_decks` around the RPC or pass the actually-studied deck.
 
 ---
 
