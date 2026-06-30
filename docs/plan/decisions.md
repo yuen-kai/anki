@@ -33,6 +33,8 @@
 | [D23](#d23) | Weakness proxy + card→topic mapping (Wednesday) | resolved |
 | [D24](#d24) | Memory score concretization (range, confidence, shared signals) | resolved |
 | [D25](#d25) | Defer AttemptLog table to Phase 3 / Friday | resolved |
+| [D26](#d26) | Learn entry = reviewer queue-swap to topic-grouped queue | resolved |
+| [D27](#d27) | Application-card Show-Answer gate (fail-open, at _showAnswer) | resolved |
 
 ---
 
@@ -235,6 +237,22 @@
 - **Chose:** do not add an `AttemptLog` DB table for Wednesday. The Memory score uses existing FSRS/revlog data (which already carries per-review timing + correctness); scaffold-pick logging arrives with Phase 3's reviewer hook; the dedicated `AttemptLog` table lands when the Performance model (Friday) needs it.
 - **Considered:** building `AttemptLog` now per spec §7 (avoids a Friday migration, but adds a schema migration before any consumer exists, which is premature infrastructure).
 - **Gaps / risks:** Friday's Performance model will add the table + a migration; ensure revlog + the scaffold-pick logs capture timing/provenance so nothing is lost in the interim. **Overrides** spec-scores §7/§9.5 (see the override ledger in [README](README.md)).
+
+<a id="d26"></a>
+### D26: Learn entry = reviewer queue-swap to the topic-grouped queue
+
+- **Status:** resolved
+- **Chose:** "Learn" on the deck overview starts a normal review session but swaps the reviewer's next-card source to `get_topic_grouped_queue(deck_id)` (`qt/aqt/reviewer.py` + `overview.py`). Same `QueuedCards` + `answer_card` path, so FSRS scheduling and undo are unchanged; "Practice" is the unmodified normal session.
+- **Considered:** a bespoke Learn screen (more code, diverges from Anki's reviewer); a new study-session type in Rust (heavier). The queue-swap reuses the proven engine path.
+- **Gaps / risks:** Learn re-queries per card, so the leading block can shift mid-session (freeze the ordered id list at session start, [B013](backlog.md#b013)); Learn serves due reviews only ([B019](backlog.md#b019)).
+
+<a id="d27"></a>
+### D27: Application-card Show-Answer gate (fail-open, at `_showAnswer`)
+
+- **Status:** resolved
+- **Chose:** the scaffold Show-Answer gate lives at the reviewer's `_showAnswer` chokepoint (covers space/enter/button/auto-advance) and is **fail-open**: it probes the template's soft signals, and only an explicit "incomplete" blocks; complete/absent/unscaffolded/error/`None` all proceed. Gating is a property of the `SpeedrunApplication` card, so it applies in both Learn and Practice; non-application cards are never gated. Picks are logged with timing Python-side.
+- **Considered:** template-only gating (Phase 1 soft-signal, bypassable); per-mode gating (rejected, the scaffold should gate wherever the card appears).
+- **Gaps / risks:** desktop-only (pycmd seam; mobile deferred, [D19](#d19)); pick-signal format reconciliation ([B020](backlog.md#b020)).
 
 ---
 
