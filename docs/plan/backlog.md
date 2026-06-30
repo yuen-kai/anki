@@ -22,6 +22,7 @@
 | [B014](#b014) | Sandbox blocks tsx IPC pipe in `just test-py` build | issue | known-gap |
 | [B015](#b015) | Topic-queue undo/interval-equivalence proof untested | issue | fixed |
 | [B016](#b016) | Topic queue leaves `active_decks` pointing at its deck | bug | open |
+| [B017](#b017) | Memory score refinements (range semantics, scope, tests) | issue | open |
 
 ---
 
@@ -165,6 +166,15 @@
 - **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` (`build_queues` writes the temporary `active_decks` table); `rslib/src/storage/deck/mod.rs` (`active_decks` is a temp table).
 - **Context:** the RPC's `build_queues` sets the session-local `active_decks` to its `deck_id`; readers (`col.decks.active()`, congrats, some stats) can transiently reflect the RPC's deck if Learn and Practice interleave in one session. Not persisted/synced/undoable; self-heals on the next default build.
 - **Next:** when Phase 3 wires Learn/Practice switching, snapshot/restore `active_decks` around the RPC or pass the actually-studied deck.
+
+<a id="b017"></a>
+### B017 — Memory score refinements (range semantics, scope, tests)
+
+- **Type:** issue · **Status:** open · **Severity:** low
+- **Discovered:** 2026-06-30, Phase 2b review (Important #1 + Minors).
+- **Ref:** `rslib/src/speedrun/memory_score.rs`; `pylib/tests/test_speedrun_memory_score.py`.
+- **Items:** (a) range is a 95% CI of the *mean* (tightens with n) — product sign-off on whether to show per-card spread instead ([D24](decisions.md#d24)); (b) give-up is whole-deck-only (no per-topic abstention yet, though spec §5 allows per-scope); (c) the give-up boundary (exactly 200 / 0.50) is untested; (d) the Python e2e only exercises the 0.9 no-memory prior (degenerate range) — add a real-memory-state case; (e) `graded_reviews` includes learning-state ratings (decide whether Memory should count review-state only).
+- **Next:** address in Friday/Sunday score work; add boundary + real-memory tests.
 
 ---
 

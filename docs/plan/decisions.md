@@ -32,6 +32,7 @@
 | [D22](#d22) | Taxonomy seed = inline Rust, leaf-only weights | resolved |
 | [D23](#d23) | Weakness proxy + card→topic mapping (Wednesday) | resolved |
 | [D24](#d24) | Memory score concretization (range, confidence, shared signals) | resolved |
+| [D25](#d25) | Defer AttemptLog table to Phase 3 / Friday | resolved |
 
 ---
 
@@ -226,6 +227,14 @@
 - **Chose:** `estimate` = mean FSRS current retrievability over reviewed in-scope cards (0.9 prior for no-memory cards). `range` = 95% CI of the mean (mean ± 1.96·SE), clamped [0,1]. `confidence` bands: high ≥1000 reviews & ≥0.80 coverage; medium ≥500 & ≥0.65; else low (named consts). Give-up: `MIN_GRADED_REVIEWS=200`, `MIN_COVERAGE_PCT=0.50`; `abstained` zeroes the number and names the failed condition. Card→topic + retrievability logic extracted to `rslib/src/speedrun/card_signals.rs` so the queue (2a) and score (2b) treat a card identically. Landed in 2b (`4bad223cc`).
 - **Considered:** a bootstrap interval (heavier, similar at this scale); calibration-based uncertainty (deferred to Sunday per [D8](#d8), so the CI is spread, not model uncertainty); duplicating retrievability/mapping per module (drift risk, hence the shared helper).
 - **Gaps / risks:** thresholds (200 / 0.50 / confidence bands) untuned ([D9](#d9) gap); the range tightens with n (honest spread, not calibration); per-card `get_note` + `get_revlog` is O(n) ([B013] perf).
+
+<a id="d25"></a>
+### D25: Defer AttemptLog table to Phase 3 / Friday
+
+- **Status:** resolved (overrides [`spec-scores`](spec-scores.md) §7/§9.5 "from Wednesday")
+- **Chose:** do not add an `AttemptLog` DB table for Wednesday. The Memory score uses existing FSRS/revlog data (which already carries per-review timing + correctness); scaffold-pick logging arrives with Phase 3's reviewer hook; the dedicated `AttemptLog` table lands when the Performance model (Friday) needs it.
+- **Considered:** building `AttemptLog` now per spec §7 (avoids a Friday migration, but adds a schema migration before any consumer exists, which is premature infrastructure).
+- **Gaps / risks:** Friday's Performance model will add the table + a migration; ensure revlog + the scaffold-pick logs capture timing/provenance so nothing is lost in the interim. **Overrides** spec-scores §7/§9.5 (see the override ledger in [README](README.md)).
 
 ---
 
