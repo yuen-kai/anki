@@ -1,0 +1,14 @@
+<div class="speedrun sr-app" data-side="front">
+  <div class="sr-problem">{{Problem}}</div>
+
+  <div class="sr-scaffold" role="group" aria-label="Identify the problem type, one level at a time">
+    <ol class="sr-trail" id="sr-trail" aria-label="Chosen path"></ol>
+    <div class="sr-level" id="sr-level"></div>
+    <p class="sr-feedback" id="sr-feedback" role="status" aria-live="polite"></p>
+    <p class="sr-unlocked" id="sr-unlocked" hidden>Path complete. Reveal the worked solution.</p>
+  </div>
+
+  <script type="application/json" id="sr-steps">{{Steps}}</script>
+  <script type="application/json" id="sr-path">{{CorrectPath}}</script>
+  <script type="application/json" id="sr-fbmap">{{Feedback}}</script>
+</div>
