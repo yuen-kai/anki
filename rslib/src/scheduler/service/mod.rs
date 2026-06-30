@@ -275,6 +275,40 @@ impl crate::services::SchedulerService for Collection {
         })
     }
 
+    fn get_speedrun_card_mode(
+        &mut self,
+        input: anki_proto::cards::CardId,
+    ) -> Result<generic::String> {
+        let cid: CardId = input.into();
+        Ok(self.get_speedrun_card_mode(cid)?.to_string().into())
+    }
+
+    fn speedrun_record_answer(
+        &mut self,
+        input: scheduler::SpeedrunRecordAnswerRequest,
+    ) -> Result<generic::String> {
+        let new_state =
+            self.speedrun_record_answer(CardId(input.card_id), input.rating().into())?;
+        Ok(new_state.as_str().to_string().into())
+    }
+
+    fn get_speedrun_progress(
+        &mut self,
+        input: anki_proto::decks::DeckId,
+    ) -> Result<scheduler::SpeedrunProgress> {
+        let topics = self
+            .get_speedrun_progress(input.did.into())?
+            .into_iter()
+            .map(
+                |(topic_id, state)| scheduler::speedrun_progress::TopicProgress {
+                    topic_id,
+                    state: state.as_str().to_string(),
+                },
+            )
+            .collect();
+        Ok(scheduler::SpeedrunProgress { topics })
+    }
+
     fn custom_study(
         &mut self,
         input: scheduler::CustomStudyRequest,

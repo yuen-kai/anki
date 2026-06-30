@@ -25,6 +25,24 @@ service SchedulerService {
   // over in-scope taxonomy cards, with the full evidence envelope and the
   // give-up rule. Read-only; reads existing FSRS/revlog state only.
   rpc GetMemoryScore(GetMemoryScoreRequest) returns (MemoryScore);
+  // Speedrun mastery progression (decisions D30-D32): the per-topic four-state
+  // lifecycle learning → practicing → hierarchy → mastering. These read/write
+  // only the per-topic state map in the collection config; scheduling and undo
+  // are untouched (additive + undo-safe).
+  //
+  // The card's active mode, resolved from its topic's state and note type: one
+  // of "concept_learn", "concept_practice", "application_scaffolded",
+  // "application_unscaffolded", or "none" (non-Speedrun card, or an application
+  // card whose topic is still below the hierarchy state and is suppressed).
+  rpc GetSpeedrunCardMode(cards.CardId) returns (generic.String);
+  // Record an answer against the card's topic and return the topic's new state.
+  // Again demotes the topic one state (never below learning); any other rating
+  // advances one state once the topic's active-mode cards clear the mastery
+  // signal (recent ≥Good accuracy over enough graded reps).
+  rpc SpeedrunRecordAnswer(SpeedrunRecordAnswerRequest)
+      returns (generic.String);
+  // Per-topic mastery state for the deck's in-scope topics, for the dashboard.
+  rpc GetSpeedrunProgress(decks.DeckId) returns (SpeedrunProgress);
   rpc AnswerCard(CardAnswer) returns (collection.OpChanges);
   rpc SchedTimingToday(generic.Empty) returns (SchedTimingTodayResponse);
   rpc StudiedToday(generic.Empty) returns (generic.String);
@@ -198,6 +216,24 @@ message MemoryScore {
   string abstain_reason = 9;
   // Total scheduling-affecting revlog entries over the in-scope cards.
   uint32 graded_reviews = 10;
+}
+
+message SpeedrunRecordAnswerRequest {
+  int64 card_id = 1;
+  // The button the learner pressed; AGAIN demotes, the rest can advance.
+  CardAnswer.Rating rating = 2;
+}
+
+// Per-topic mastery progress for a deck (GetSpeedrunProgress), for the
+// dashboard's per-area progress.
+message SpeedrunProgress {
+  message TopicProgress {
+    // Taxonomy leaf id, e.g. "mcat::biomolecules::enzymes::kinetics".
+    string topic_id = 1;
+    // "learning" | "practicing" | "hierarchy" | "mastering".
+    string state = 2;
+  }
+  repeated TopicProgress topics = 1;
 }
 
 message SchedTimingTodayResponse {

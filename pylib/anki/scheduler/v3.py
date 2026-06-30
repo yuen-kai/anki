@@ -18,7 +18,7 @@ from typing import Any, Literal
 
 from anki import frontend_pb2, scheduler_pb2
 from anki._legacy import deprecated
-from anki.cards import Card
+from anki.cards import Card, CardId
 from anki.collection import OpChanges
 from anki.consts import *
 from anki.decks import DeckId
@@ -81,6 +81,35 @@ class Scheduler(SchedulerBaseWithLegacy):
         fires (too few graded reviews or too little topic coverage) the score
         abstains — estimate/range are 0 and abstain_reason says what's missing."""
         return self.col._backend.get_memory_score(deck_id=deck_id)
+
+    def get_speedrun_card_mode(self, *, card_id: CardId) -> str:
+        """Speedrun mastery progression: the card's active mode, resolved from
+        its topic's state and note type. One of "concept_learn",
+        "concept_practice", "application_scaffolded", "application_unscaffolded",
+        or "none" (a non-Speedrun card, or an application card whose topic is
+        below "hierarchy" and is suppressed). The reviewer injects this as
+        window.speedrunCardMode before render."""
+        return self.col._backend.get_speedrun_card_mode(card_id)
+
+    def speedrun_record_answer(
+        self, *, card_id: CardId, rating: CardAnswer.Rating.V
+    ) -> str:
+        """Record an answer against the card's topic and return the topic's new
+        mastery state ("learning"/"practicing"/"hierarchy"/"mastering"). Again
+        demotes one state (never below "learning"); any other rating advances one
+        state once the topic's active-mode cards clear the mastery signal.
+
+        Writes only the per-topic state map in the collection config — no
+        scheduling change, so the card's FSRS state and undo are untouched. Call
+        it alongside answer_card, not instead of it."""
+        return self.col._backend.speedrun_record_answer(card_id=card_id, rating=rating)
+
+    def get_speedrun_progress(
+        self, *, deck_id: DeckId
+    ) -> Sequence[scheduler_pb2.SpeedrunProgress.TopicProgress]:
+        """Per-topic mastery state ((topic_id, state) pairs) for the deck's
+        in-scope topics, for the dashboard's per-area progress. Read-only."""
+        return self.col._backend.get_speedrun_progress(deck_id)
 
     def describe_next_states(self, next_states: SchedulingStates) -> Sequence[str]:
         "Labels for each of the answer buttons."
