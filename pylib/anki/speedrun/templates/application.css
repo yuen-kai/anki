@@ -1,0 +1,200 @@
+/* SpeedrunApplication styling. The scaffold reads as a sequence of real
+   choices, not a quiz grid: a breadcrumb trail, one level of options at a time,
+   a cue when wrong, the solution behind the reveal. One accent for "on track",
+   one quiet warning tone for a wrong pick. */
+
+.card {
+  background: #f6f6f3;
+  padding: 0;
+}
+
+.speedrun {
+  --sr-ink: #1f2328;
+  --sr-muted: #5b636e;
+  --sr-surface: #ffffff;
+  --sr-line: #e3e3dd;
+  --sr-accent: #0e7c66;
+  --sr-accent-soft: #e6f1ed;
+  --sr-warn: #9a5b00;
+  --sr-warn-soft: #fbf1e0;
+  --sr-radius: 7px;
+
+  box-sizing: border-box;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 18px 28px;
+  text-align: left;
+  color: var(--sr-ink);
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+.speedrun *,
+.speedrun *::before,
+.speedrun *::after {
+  box-sizing: border-box;
+}
+
+.sr-problem {
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.sr-scaffold {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--sr-surface);
+  border: 1px solid var(--sr-line);
+  border-radius: var(--sr-radius);
+}
+
+.sr-trail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.sr-trail:empty {
+  display: none;
+}
+
+.sr-trail__step {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sr-accent);
+  background: var(--sr-accent-soft);
+  border-radius: 999px;
+}
+
+.sr-trail__step + .sr-trail__step::before {
+  content: "→";
+  margin: 0 8px 0 -4px;
+  color: var(--sr-muted);
+  font-weight: 400;
+}
+
+.sr-level__q {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sr-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sr-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--sr-ink);
+  background: var(--sr-surface);
+  border: 1px solid var(--sr-line);
+  border-radius: var(--sr-radius);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.sr-option:hover {
+  border-color: var(--sr-accent);
+}
+
+.sr-option:focus-visible,
+.sr-option:focus {
+  outline: 2px solid var(--sr-accent);
+  outline-offset: 1px;
+  border-color: var(--sr-accent);
+}
+
+.sr-option.is-wrong {
+  border-color: var(--sr-warn);
+  background: var(--sr-warn-soft);
+  color: var(--sr-warn);
+}
+
+.sr-feedback {
+  margin: 12px 0 0;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--sr-warn);
+}
+
+.sr-feedback:not(.is-visible) {
+  display: none;
+}
+
+.sr-feedback.is-visible {
+  padding: 10px 12px;
+  background: var(--sr-warn-soft);
+  border-left: 3px solid var(--sr-warn);
+  border-radius: 0 var(--sr-radius) var(--sr-radius) 0;
+}
+
+.sr-unlocked {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--sr-accent);
+  background: var(--sr-accent-soft);
+  border-left: 3px solid var(--sr-accent);
+  border-radius: 0 var(--sr-radius) var(--sr-radius) 0;
+}
+
+.sr-trail--final {
+  margin-top: 16px;
+}
+
+.sr-rule {
+  margin: 18px 0;
+  border: none;
+  border-top: 1px solid var(--sr-line);
+}
+
+.sr-reveal__label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sr-muted);
+}
+
+.sr-solution {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-option {
+    transition: none;
+  }
+}
+
+.nightMode .card {
+  background: #1a1c1f;
+}
+
+.nightMode .speedrun {
+  --sr-ink: #e7e9ec;
+  --sr-muted: #9aa1ab;
+  --sr-surface: #24272b;
+  --sr-line: #3a3e44;
+  --sr-accent: #4fd1ac;
+  --sr-accent-soft: #1c322c;
+  --sr-warn: #e0a35a;
+  --sr-warn-soft: #33291a;
+}

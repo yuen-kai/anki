@@ -1,0 +1,157 @@
+/* SpeedrunConcept styling. Reading-first layout: two cases to compare, a prompt
+   to articulate the shared idea, then the reveal. One accent, used sparingly. */
+
+.card {
+  background: #f6f6f3;
+  padding: 0;
+}
+
+.speedrun {
+  --sr-ink: #1f2328;
+  --sr-muted: #5b636e;
+  --sr-surface: #ffffff;
+  --sr-line: #e3e3dd;
+  --sr-accent: #0e7c66;
+  --sr-warn: #9a5b00;
+  --sr-radius: 7px;
+
+  box-sizing: border-box;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 18px 28px;
+  text-align: left;
+  color: var(--sr-ink);
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+.speedrun *,
+.speedrun *::before,
+.speedrun *::after {
+  box-sizing: border-box;
+}
+
+.sr-cases {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  background: var(--sr-surface);
+  border: 1px solid var(--sr-line);
+  border-radius: var(--sr-radius);
+  overflow: hidden;
+}
+
+.sr-case {
+  padding: 16px 16px 18px;
+}
+
+.sr-case + .sr-case {
+  border-left: 1px solid var(--sr-line);
+}
+
+.sr-case__label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sr-accent);
+}
+
+.sr-case__body {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.sr-prompt {
+  margin: 20px 0 14px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.sr-answer__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: var(--sr-muted);
+}
+
+.sr-answer__input {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--sr-ink);
+  background: var(--sr-surface);
+  border: 1px solid var(--sr-line);
+  border-radius: var(--sr-radius);
+  resize: vertical;
+}
+
+.sr-answer__input:focus-visible,
+.sr-answer__input:focus {
+  outline: 2px solid var(--sr-accent);
+  outline-offset: 1px;
+  border-color: var(--sr-accent);
+}
+
+.sr-answer__input.is-locked {
+  opacity: 0.7;
+  resize: none;
+}
+
+.sr-reveal {
+  margin-top: 20px;
+  padding-left: 14px;
+  border-left: 3px solid var(--sr-accent);
+}
+
+.sr-reveal__label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sr-muted);
+}
+
+.sr-your-answer {
+  font-size: 16px;
+}
+
+.sr-blank {
+  color: var(--sr-muted);
+  font-style: italic;
+}
+
+.sr-concept__body {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+@media (max-width: 620px) {
+  .sr-cases {
+    grid-template-columns: 1fr;
+  }
+  .sr-case + .sr-case {
+    border-left: none;
+    border-top: 1px solid var(--sr-line);
+  }
+}
+
+.nightMode .card {
+  background: #1a1c1f;
+}
+
+.nightMode .speedrun {
+  --sr-ink: #e7e9ec;
+  --sr-muted: #9aa1ab;
+  --sr-surface: #24272b;
+  --sr-line: #3a3e44;
+  --sr-accent: #4fd1ac;
+  --sr-warn: #e0a35a;
+}
