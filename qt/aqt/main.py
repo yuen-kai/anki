@@ -1448,6 +1448,18 @@ title="{}" {}>{}</button>""".format(
         qconnect(m.action_check_for_updates.triggered, self.on_check_for_updates)
         qconnect(m.actionPreferences.triggered, self.onPrefs)
 
+        # Tools: Speedrun score dashboard for the current deck. Added in code
+        # (not the .ui) to keep the fork's changes additive.
+        from aqt import speedrun_dashboard
+
+        speedrun_action = QAction("Speedrun scores", m.menuTools)
+        qconnect(
+            speedrun_action.triggered,
+            speedrun_dashboard.show_speedrun_dashboard_for_current_deck,
+        )
+        m.menuTools.insertAction(m.actionStudyDeck, speedrun_action)
+        m.menuTools.insertSeparator(m.actionStudyDeck)
+
         # View
         qconnect(
             m.actionZoomIn.triggered,
