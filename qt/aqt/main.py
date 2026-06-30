@@ -661,6 +661,7 @@ class AnkiQt(QMainWindow):
         try:
             self.update_undo_actions()
             gui_hooks.collection_did_load(self.col)
+            self._maybe_seed_speedrun()
             self.apply_collection_options()
             self.moveToState("deckBrowser")
         except Exception:
@@ -668,6 +669,17 @@ class AnkiQt(QMainWindow):
             traceback.print_exc()
 
         return True
+
+    def _maybe_seed_speedrun(self) -> None:
+        # Speedrun: preload the MCAT seed deck so the Learn/Practice flow and the
+        # dashboard have content out of the box. add_seed_notes is idempotent, so
+        # this is a no-op after the first load. Fail open: never block startup.
+        try:
+            from anki.speedrun.notetypes import add_seed_notes
+
+            add_seed_notes(self.col)
+        except Exception as exc:
+            print(f"speedrun: seed skipped ({exc})")
 
     def _loadCollection(self) -> None:
         cpath = self.pm.collectionPath()
