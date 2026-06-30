@@ -3,9 +3,15 @@
 
 //! Speedrun: MCAT study extensions on top of Anki.
 //!
-//! Phase 1A ships only the foundation the rest of the fork stands on: the AAMC
-//! MCAT topic taxonomy (a seed subset) plus pure coverage/weakness helpers.
-//! There is deliberately no protobuf and no scheduler/queue code here; later
-//! phases build those against the contracts defined in [`taxonomy`].
+//! - [`taxonomy`]: the AAMC MCAT topic taxonomy (seed subset) plus pure
+//!   coverage/weakness helpers (Phase 1).
+//! - [`card_signals`]: per-card FSRS retrievability and the card→topic mapping,
+//!   shared by the topic-grouped queue and the Memory score so the two never
+//!   diverge (Phase 2a/2b).
+//! - [`memory_score`]: the honest Memory score — aggregated FSRS retrievability
+//!   over in-scope cards, with an evidence envelope and the give-up rule
+//!   (Phase 2b).
 
+pub mod card_signals;
+pub mod memory_score;
 pub mod taxonomy;

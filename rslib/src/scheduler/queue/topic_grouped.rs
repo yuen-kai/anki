@@ -23,8 +23,10 @@
 //! - `mean_retrievability`: the mean FSRS current retrievability over the
 //!   topic's due cards (same computation as the stats graphs). A card with no
 //!   FSRS memory state (e.g. an SM-2 card, or one moved with "set due date")
-//!   contributes [`NO_MEMORY_STATE_RETRIEVABILITY`], a mild "probably still
-//!   known" prior, so such cards never masquerade as the weakest.
+//!   contributes the shared `NO_MEMORY_STATE_RETRIEVABILITY` prior, a mild
+//!   "probably still known" value, so such cards never masquerade as the
+//!   weakest. Retrievability and the card→topic mapping come from
+//!   [`crate::speedrun::card_signals`], shared with the Memory score.
 //! - `recent_accuracy`: the pass rate (button ≥ Hard) over the topic's most
 //!   recent [`RECENT_REVIEW_WINDOW`] graded reviews. With no graded history we
 //!   fall back to `mean_retrievability`, collapsing the blend onto the memory
@@ -36,7 +38,6 @@
 use std::collections::HashMap;
 
 use fsrs::FSRS;
-use fsrs::FSRS5_DEFAULT_DECAY;
 
 use super::new_scheduling_context;
 use super::QueueEntryKind;
@@ -44,14 +45,10 @@ use super::QueuedCard;
 use super::QueuedCards;
 use crate::card::Card;
 use crate::prelude::*;
-use crate::scheduler::timing::SchedTimingToday;
-use crate::speedrun::taxonomy::seed_taxonomy;
+use crate::speedrun::card_signals::card_retrievability;
+use crate::speedrun::card_signals::card_topic;
+use crate::speedrun::card_signals::leaf_topic_weights;
 use crate::speedrun::taxonomy::topic_weakness;
-
-/// Retrievability assigned to a due review card that carries no FSRS memory
-/// state. A mild "probably still known" prior so such cards sort after
-/// genuinely weak ones instead of being treated as perfectly retained.
-const NO_MEMORY_STATE_RETRIEVABILITY: f32 = 0.9;
 
 /// How many of a topic's most recent graded reviews feed `recent_accuracy`.
 const RECENT_REVIEW_WINDOW: usize = 50;
@@ -104,12 +101,7 @@ impl Collection {
                 .or_not_found(card.note_id)?;
             // A card's topic is the note tag equal to a taxonomy leaf id; if
             // several match, the smallest id keeps the choice deterministic.
-            let topic = note
-                .tags
-                .iter()
-                .filter(|tag| leaf_weights.contains_key(tag.as_str()))
-                .min()
-                .cloned();
+            let topic = card_topic(&note.tags, &leaf_weights);
             let retrievability = card_retrievability(&card, &timing, &fsrs);
             data.push(ReviewCardData {
                 card,
@@ -184,30 +176,6 @@ impl Collection {
     }
 }
 
-/// The in-scope leaf topics keyed by id with their exam weight.
-fn leaf_topic_weights() -> HashMap<String, f32> {
-    seed_taxonomy()
-        .into_iter()
-        .filter(|node| node.in_scope)
-        .map(|node| (node.id, node.exam_weight))
-        .collect()
-}
-
-/// FSRS current retrievability for a card, or the no-memory-state prior.
-fn card_retrievability(card: &Card, timing: &SchedTimingToday, fsrs: &FSRS) -> f32 {
-    match card.memory_state {
-        Some(state) => {
-            let elapsed_seconds = card.seconds_since_last_review(timing).unwrap_or_default();
-            fsrs.current_retrievability_seconds(
-                state.into(),
-                elapsed_seconds,
-                card.decay.unwrap_or(FSRS5_DEFAULT_DECAY),
-            )
-        }
-        None => NO_MEMORY_STATE_RETRIEVABILITY,
-    }
-}
-
 /// Mean retrievability over a non-empty block; `0.0` for an empty slice.
 fn mean_retrievability(cards: &[ReviewCardData]) -> f32 {
     if cards.is_empty() {
@@ -275,10 +243,16 @@ fn sort_block_by_weakness(cards: &mut [ReviewCardData]) {
 
 #[cfg(test)]
 mod tests {
+    use fsrs::FSRS5_DEFAULT_DECAY;
+
     use super::*;
     use crate::card::CardQueue;
     use crate::card::CardType;
     use crate::card::FsrsMemoryState;
+    use crate::scheduler::answering::CardAnswer;
+    use crate::scheduler::answering::Rating;
+    use crate::scheduler::states::SchedulingStates;
+    use crate::timestamp::TimestampMillis;
     use crate::timestamp::TimestampSecs;
 
     const KINETICS: &str = "mcat::biomolecules::enzymes::kinetics"; // weight 0.18
@@ -478,6 +452,115 @@ mod tests {
         // PKA weight 0.12 > METABOLISM 0.08, and PKA is also less accurate, so
         // it must lead regardless.
         assert_eq!(topics, vec![PKA.to_string(), METABOLISM.to_string()]);
+    }
+
+    /// Answers `cid` with Good through the standard `answer_card` path using the
+    /// provided scheduling states, and returns the resulting interval. The card
+    /// is answered out-of-queue (`from_queue: false`) because the topic-grouped
+    /// queue is an owned, read-only ordering, not the live study queue — exactly
+    /// how the reviewer grades a card it surfaced.
+    fn answer_good(col: &mut Collection, cid: CardId, states: &SchedulingStates) -> u32 {
+        let mut answer = CardAnswer {
+            card_id: cid,
+            current_state: states.current,
+            new_state: states.good,
+            rating: Rating::Good,
+            answered_at: TimestampMillis::now(),
+            milliseconds_taken: 0,
+            custom_data: None,
+            from_queue: false,
+        };
+        col.answer_card(&mut answer).unwrap();
+        col.storage.get_card(cid).unwrap().unwrap().interval
+    }
+
+    /// Safety proof for spec-engine-topic-queue §8–§9 (AC5 undo, AC6 interval
+    /// equivalence): the topic queue only reorders presentation, so grading a
+    /// card it surfaced goes through the unchanged `answer_card` path, undoes
+    /// cleanly, and produces exactly the interval the default queue would.
+    #[test]
+    fn answering_topic_queue_card_is_undoable_and_matches_default_interval() {
+        let mut col = Collection::new();
+        // Two due review cards in different topics so the topic ordering is real;
+        // we grade the weaker one the queue surfaces first.
+        let weak = add_review_card(&mut col, Some(KINETICS), 5.0, 30);
+        add_review_card(&mut col, Some(STRUCTURE), 60.0, 3);
+
+        let before = col.storage.get_card(weak).unwrap().unwrap();
+        assert_eq!(before.ctype, CardType::Review, "precondition: review card");
+
+        // The states the topic queue reports for the card are exactly the
+        // default scheduling states — the topic path alters no scheduling.
+        let topic_states = {
+            let queued = col.get_topic_grouped_queue(DeckId(1), 0).unwrap();
+            queued
+                .cards
+                .iter()
+                .find(|qc| qc.card.id == weak)
+                .expect("weak card is in the topic queue")
+                .states
+                .clone()
+        };
+        // SchedulingStates isn't PartialEq, so compare the per-rating CardStates
+        // (which are): every next-state the topic queue offers matches the
+        // default path's, so no interval differs.
+        let default_states = col.get_scheduling_states(weak).unwrap();
+        assert_eq!(topic_states.current, default_states.current);
+        assert_eq!(topic_states.again, default_states.again);
+        assert_eq!(topic_states.hard, default_states.hard);
+        assert_eq!(topic_states.good, default_states.good);
+        assert_eq!(topic_states.easy, default_states.easy);
+
+        // Answer the card Good after pulling it from the topic queue.
+        let topic_interval = answer_good(&mut col, weak, &topic_states);
+        assert_eq!(
+            col.storage
+                .get_all_revlog_entries(TimestampSecs(0))
+                .unwrap()
+                .len(),
+            1,
+            "answering writes one revlog entry"
+        );
+
+        // Undo restores the card to its pristine pre-answer state and removes
+        // the revlog entry — identical to undoing a default-queue answer.
+        col.undo().unwrap();
+        let restored = col.storage.get_card(weak).unwrap().unwrap();
+        assert_eq!(restored.interval, before.interval, "interval restored");
+        assert_eq!(restored.due, before.due, "due restored");
+        assert_eq!(restored.reps, before.reps, "reps restored");
+        assert_eq!(restored.lapses, before.lapses, "lapses restored");
+        assert_eq!(restored.ctype, before.ctype, "type restored");
+        assert_eq!(restored.queue, before.queue, "queue restored");
+        assert_eq!(restored.ease_factor(), before.ease_factor(), "ease restored");
+        assert_eq!(
+            col.storage
+                .get_all_revlog_entries(TimestampSecs(0))
+                .unwrap()
+                .len(),
+            0,
+            "the revlog entry is removed on undo"
+        );
+
+        // Grade the very same card (now pristine again) Good, this time pulling
+        // it from the default queue. The card's fuzz seed depends only on id and
+        // reps, both restored by undo, so the scheduled interval must be
+        // identical — the topic queue produced no different scheduling (AC6).
+        let default_states = {
+            let queued = col.get_queued_cards(10, false).unwrap();
+            queued
+                .cards
+                .iter()
+                .find(|qc| qc.card.id == weak)
+                .expect("weak card is in the default queue")
+                .states
+                .clone()
+        };
+        let default_interval = answer_good(&mut col, weak, &default_states);
+        assert_eq!(
+            topic_interval, default_interval,
+            "interval must match whether the card came from the topic or default queue"
+        );
     }
 
     /// Writes review-kind revlog entries with the given answer buttons.
