@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 import re
+import time
 from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -15,8 +17,10 @@ from typing import Any, Literal, Match, Union, cast
 import aqt
 import aqt.browser
 import aqt.operations
+import aqt.speedrun
 from anki.cards import Card, CardId
 from anki.collection import Config, OpChanges, OpChangesWithCount
+from anki.decks import DeckId
 from anki.lang import with_collapsed_whitespace
 from anki.scheduler.base import ScheduleCardsAsNew
 from anki.scheduler.v3 import (
@@ -58,6 +62,11 @@ from aqt.utils import (
     tooltip,
     tr,
 )
+
+# Structured scaffold-pick log for the Speedrun reviewer hook. The AttemptLog
+# table is deferred (decision D25), so picks land here as JSON until the Friday
+# Performance model needs durable storage.
+_speedrun_logger = logging.getLogger("anki.speedrun")
 
 
 class RefreshNeeded(Enum):
@@ -169,6 +178,12 @@ class Reviewer:
         self._show_question_timer: QTimer | None = None
         self._show_answer_timer: QTimer | None = None
         self.auto_advance_enabled = False
+        # Speedrun: when set, serve this deck's topic-grouped "Learn" queue
+        # instead of the normal review queue. None = normal Practice review.
+        self._speedrun_learn_deck_id: DeckId | None = None
+        # Per-question state for the application-card scaffold gate + pick log.
+        self._speedrun_question_shown_at: float | None = None
+        self._speedrun_gate_cleared = False
         gui_hooks.av_player_did_end_playing.append(self._on_av_player_did_end_playing)
 
     def show(self) -> None:
@@ -199,6 +214,19 @@ class Reviewer:
         gui_hooks.reviewer_will_end()
         self.card = None
         self.auto_advance_enabled = False
+        # Don't let Learn mode leak into the next session; the overview re-arms
+        # it explicitly each time a mode is chosen.
+        self._speedrun_learn_deck_id = None
+        self._speedrun_gate_cleared = False
+
+    def set_speedrun_learn_deck(self, deck_id: DeckId | None) -> None:
+        """Choose the queue for the next review session.
+
+        ``deck_id`` serves that deck's topic-grouped Learn queue; ``None``
+        restores the normal Practice review queue. Set by the deck overview
+        before entering review.
+        """
+        self._speedrun_learn_deck_id = deck_id
 
     def refresh_if_needed(self) -> None:
         if self._refresh_needed is RefreshNeeded.QUEUES:
@@ -264,7 +292,15 @@ class Reviewer:
 
     def _get_next_v3_card(self) -> None:
         assert isinstance(self.mw.col.sched, V3Scheduler)
-        output = self.mw.col.sched.get_queued_cards()
+        if self._speedrun_learn_deck_id is not None:
+            # Learn mode: same QueuedCards shape (states + context), just a
+            # topic-blocked order. The answer path below is unchanged, so FSRS
+            # and undo are untouched (decisions D3/D19).
+            output = self.mw.col.sched.get_topic_grouped_queue(
+                deck_id=self._speedrun_learn_deck_id, fetch_limit=1
+            )
+        else:
+            output = self.mw.col.sched.get_queued_cards()
         if not output.cards:
             return
         self._v3 = V3CardInfo.from_queue(output)
@@ -373,6 +409,9 @@ class Reviewer:
         self._reps += 1
         self.state = "question"
         self.typedAnswer: str | None = None
+        # Speedrun: a fresh question resets the scaffold gate + pick-timing clock.
+        self._speedrun_question_shown_at = time.monotonic()
+        self._speedrun_gate_cleared = False
         c = self.card
         # grab the question and play audio
         q = c.question()
@@ -462,6 +501,12 @@ class Reviewer:
     def _showAnswer(self) -> None:
         if self.mw.state != "review":
             # showing resetRequired screen; ignore space
+            return
+        # Speedrun: hold Show Answer on an incomplete application scaffold. Only
+        # blocks the question->answer transition, and fails open for everything
+        # that isn't a live, incomplete scaffold (see _speedrun_gate_then_show).
+        if self.state == "question" and self._speedrun_answer_gate_active():
+            self._speedrun_gate_then_show()
             return
         self.state = "answer"
         c = self.card
@@ -691,8 +736,74 @@ class Reviewer:
             self.web.update()
         elif url == "statesMutated":
             self._states_mutated = True
+        elif url.startswith(aqt.speedrun.SIGNAL_PREFIX):
+            self._handle_speedrun_signal(url)
         else:
             print("unrecognized anki link:", url)
+
+    # Speedrun: Show-Answer gate + scaffold-pick logging (decision D19)
+    ##########################################################################
+
+    def _speedrun_note_type_name(self) -> str | None:
+        try:
+            return self.card.note_type()["name"]
+        except Exception:
+            # No card / odd note type: treated as not-an-application card, so
+            # the gate stays open.
+            return None
+
+    def _speedrun_answer_gate_active(self) -> bool:
+        if self._speedrun_gate_cleared:
+            return False
+        return aqt.speedrun.is_application_note_type(self._speedrun_note_type_name())
+
+    def _speedrun_gate_then_show(self) -> None:
+        """Ask the card whether its scaffold is complete, then show or hold.
+
+        The probe reads the template's own soft signals and never throws, so any
+        result other than a definite incomplete scaffold lets the answer
+        through: a normal card, an unscaffolded one, or a template that failed
+        to render can never trap the learner.
+        """
+
+        def on_probe(result: Any) -> None:
+            if aqt.speedrun.gate_blocks_answer(result):
+                tooltip(tr.studying_complete_the_steps())
+                return
+            self._speedrun_gate_cleared = True
+            self._showAnswer()
+
+        self.web.evalWithCallback(aqt.speedrun.GATE_PROBE_JS, on_probe)
+
+    def _handle_speedrun_signal(self, url: str) -> None:
+        # Logging only; a bad signal must never disrupt the review session.
+        try:
+            if url == aqt.speedrun.SCAFFOLD_COMPLETE:
+                self._log_speedrun_event("scaffold_complete")
+                return
+            pick = aqt.speedrun.parse_pick_signal(url)
+            if pick is not None:
+                self._log_speedrun_event("pick", level=pick.level, correct=pick.correct)
+        except Exception:
+            pass
+
+    def _log_speedrun_event(self, event: str, **fields: Any) -> None:
+        card = self.card
+        if card is None:
+            return
+        elapsed_ms: int | None = None
+        if self._speedrun_question_shown_at is not None:
+            elapsed_ms = int(
+                (time.monotonic() - self._speedrun_question_shown_at) * 1000
+            )
+        payload = {
+            "event": event,
+            "card_id": int(card.id),
+            "note_id": int(card.nid),
+            "ms_since_shown": elapsed_ms,
+            **fields,
+        }
+        _speedrun_logger.info("scaffold %s", json.dumps(payload))
 
     # Type in the answer
     ##########################################################################

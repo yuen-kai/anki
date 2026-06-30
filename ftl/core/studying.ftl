@@ -14,6 +14,7 @@ studying-cards-buried =
        *[other] { $count } cards buried.
     }
 studying-cards-will-be-automatically-returned-to = Cards will be automatically returned to their original decks after you review them.
+studying-complete-the-steps = Work through the steps to reveal the answer.
 studying-continue = Continue
 studying-counts-differ = Counts differ from the deck list, because burying is enabled. Some cards have been excluded, and others may have taken their place.
 studying-delete-note = Delete Note
@@ -26,6 +27,7 @@ studying-flag-card = Flag Card
 studying-good = Good
 studying-hard = Hard
 studying-it-has-been-suspended = It has been suspended.
+studying-learn = Learn
 studying-manually-buried-cards = Manually Buried Cards
 studying-mark-note = Mark Note
 studying-more = More
@@ -33,6 +35,7 @@ studying-no-cards-are-due-yet = No cards are due yet.
 studying-note-suspended = Note suspended.
 studying-pause-audio = Pause Audio
 studying-please-run-toolsempty-cards = Please run Tools>Empty Cards
+studying-practice = Practice
 studying-record-own-voice = Record Own Voice
 studying-replay-own-voice = Replay Own Voice
 studying-show-answer = Show Answer
