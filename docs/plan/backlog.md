@@ -31,6 +31,7 @@
 | [B023](#b023) | Gate-wiring + timing capture lack tests | refactor | open |
 | [B024](#b024) | Phase 3 polish bundle (dyn-deck Learn, dashboard i18n, nits) | issue | open |
 | [B025](#b025) | AnkiDroid UI doesn't call the new RPCs yet | issue | open |
+| [B026](#b026) | Blocked precedence can starve graduated topics' due reviews | issue | open |
 
 ---
 
@@ -254,6 +255,15 @@
 - **Discovered:** 2026-06-30, Phase 4.
 - **Context:** the modified engine + new RPCs (`getTopicGroupedQueue`, `getMemoryScore`) are verified on-device, and basic review works on the shared engine (the Wednesday mobile bar). But stock AnkiDroid's Kotlin UI has no Learn/dashboard surface, so the new RPCs aren't invoked on the phone yet.
 - **Next:** add AnkiDroid Kotlin UI that calls the new RPCs (a mobile-UI phase, post-Wednesday). Also: the seed deck must reach the phone (import, or Friday's two-way sync, [D14](decisions.md#d14)) for an on-device Speedrun review session.
+
+<a id="b026"></a>
+### B026: Blocked precedence can starve graduated topics' due reviews
+
+- **Type:** issue · **Status:** open · **Severity:** medium
+- **Discovered:** 2026-06-30, progression engine.
+- **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` `select_blocked_or_mixed`.
+- **Context:** per [`spec-mastery-progression`](spec-mastery-progression.md) §6, if ANY in-scope topic is in `learning`, the queue serves only that one blocked block, so due reviews of already-graduated topics wait until the learning block graduates. Faithful to the spec, but can delay retention of mastered material when new blocks are being learned.
+- **Next:** product call: interleave a few due reviews into the blocked phase, or cap consecutive blocked-only sessions.
 
 ---
 
