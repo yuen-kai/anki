@@ -10,6 +10,7 @@
 | [B002](#b002) | oneshot verify.sh doesn't match Anki's build | issue | open |
 | [B003](#b003) | Anki build does not auto-install n2/ninja | bug | known-gap |
 | [B004](#b004) | Planning docs + project memory are untracked | issue | fixed |
+| [B005](#b005) | Fresh worktree build needs ftl submodule init + PROTOC | issue | open |
 
 ---
 
@@ -48,6 +49,15 @@
 - **Ref:** `docs/plan/*`. Specs committed in `13f38ee`; iris-log docs committed in the foundation commit.
 - **Context:** worktree-based parallel implementation needs the specs/contracts on a committed base, otherwise fresh worktrees branched from HEAD won't contain them.
 - **Resolution:** specs already tracked at `13f38ee`; README/backlog/design-iterations committed on `main` as the foundation, so worktrees branched from HEAD inherit the full plan.
+
+<a id="b005"></a>
+### B005 — Fresh worktree build needs ftl submodule init + PROTOC
+
+- **Type:** issue · **Status:** open · **Severity:** medium
+- **Discovered:** 2026-06-30 by the Phase 1A subagent building in an isolated worktree.
+- **Ref:** `rslib/i18n/gather.rs:62` (`anki_i18n` panic); `anki_proto` build.
+- **Context:** a fresh git worktree has no checked-out ftl submodules, so `anki_i18n` panics; and raw `cargo` has no `protoc`, so `anki_proto` fails. The main checkout doesn't hit this because submodules + protoc are already present from prior `just` runs.
+- **Workaround (bootstrap every Rust worktree):** `git submodule update --init ftl/core-repo ftl/qt-repo` and `export PROTOC="$(git rev-parse --show-toplevel)/out/extracted/protoc/bin/protoc"`. Bake into the Phase 2 subagent prompts.
 
 ---
 
