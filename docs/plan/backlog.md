@@ -6,7 +6,7 @@
 
 | ID | Title | Type | Status |
 | :-- | :-- | :-- | :-- |
-| [B001](#b001) | rsdroid rebuild against modified backend (mobile long-pole) | issue | open |
+| [B001](#b001) | rsdroid rebuild against modified backend (mobile long-pole) | issue | resolved |
 | [B002](#b002) | oneshot verify.sh doesn't match Anki's build | issue | open |
 | [B003](#b003) | Anki build does not auto-install n2/ninja | bug | known-gap |
 | [B004](#b004) | Planning docs + project memory are untracked | issue | fixed |
@@ -30,17 +30,18 @@
 | [B022](#b022) | Gate lacks a manual reveal-anyway override (D19 tension) | issue | open |
 | [B023](#b023) | Gate-wiring + timing capture lack tests | refactor | open |
 | [B024](#b024) | Phase 3 polish bundle (dyn-deck Learn, dashboard i18n, nits) | issue | open |
+| [B025](#b025) | AnkiDroid UI doesn't call the new RPCs yet | issue | open |
 
 ---
 
 <a id="b001"></a>
 ### B001: rsdroid must be rebuilt against the modified rslib for engine changes to reach mobile
 
-- **Type:** issue · **Status:** open · **Severity:** high
+- **Type:** issue · **Status:** resolved · **Severity:** high
 - **Discovered:** 2026-06-30 during build bring-up (base AnkiDroid packaged the upstream prebuilt `librsdroid.so`).
 - **Ref:** [`spec-mobile-shared-engine.md`](spec-mobile-shared-engine.md) §6.
-- **Context:** stock AnkiDroid bundles a prebuilt backend, so none of our Rust changes (e.g. `GetTopicGroupedQueue`) appear on Android until `rsdroid` is cross-compiled against our `rslib` and repackaged. This is the single highest-risk Wednesday task.
-- **Next:** prove the rsdroid → AnkiDroid native rebuild path on a trivial backend change before relying on it.
+- **Context:** stock AnkiDroid bundles a prebuilt backend, so none of our Rust changes (e.g. `GetTopicGroupedQueue`) appear on Android until `rsdroid` is cross-compiled against our `rslib` and repackaged. This was the single highest-risk Wednesday task.
+- **Resolution (Phase 4):** rebuilt `Anki-Android-Backend` (rsdroid) off its `main` (anki 26.05b1) with its `anki` mount symlinked to our fork, produced a local arm64 `.aar`, consumed it in the AnkiDroid fork (`local_backend=true`), and ran it on the emulator. The new RPCs are verified on-device at four levels (generated `GeneratedBackend.kt`, the `.aar`, the APK dex, and a runtime smoke whose native lib reports our fork's buildhash `8ecbfac04`). One compat fix (`Deck.kt` `RELATIVE_OVERDUENESS`) covered the AnkiDroid-25.09 vs engine-26.05 skew. See [D29](decisions.md#d29); remaining mobile-UI work is [B025](#b025).
 
 <a id="b002"></a>
 ### B002: oneshot `verify.sh` does not verify Anki
@@ -245,6 +246,14 @@
 - **Discovered:** 2026-06-30, Phase 3 review (Minors #3 to #8).
 - **Items:** (a) the Learn button shows on filtered/dynamic decks where topic-grouping is meaningless (hide when `deck["dyn"]`); (b) the stale probe callback can reveal a newly-loaded card's answer if a new card loads mid-probe (capture `card.id` at probe time; fails safe); (c) pick logs go to stdout only with partial provenance (no `seen_before`/`topic_id`) and are ephemeral (also tracked by [D25](decisions.md#d25)/[B017](#b017)); (d) timing is cumulative ms-since-question, not per-pick latency (document it); (e) dashboard copy is hardcoded English, not Fluent (`ScoreTile`/`SpeedrunDashboard` strings, the Tools menu item, the window title); (f) nits: `font-weight` 680/650 round to 700/600, `updatedAtSecs=0` renders an empty "Updated", confidence shown without its paired reason.
 - **Next:** address in a polish pass / the Friday i18n cycle.
+
+<a id="b025"></a>
+### B025: AnkiDroid UI doesn't call the new RPCs yet
+
+- **Type:** issue · **Status:** open · **Severity:** medium
+- **Discovered:** 2026-06-30, Phase 4.
+- **Context:** the modified engine + new RPCs (`getTopicGroupedQueue`, `getMemoryScore`) are verified on-device, and basic review works on the shared engine (the Wednesday mobile bar). But stock AnkiDroid's Kotlin UI has no Learn/dashboard surface, so the new RPCs aren't invoked on the phone yet.
+- **Next:** add AnkiDroid Kotlin UI that calls the new RPCs (a mobile-UI phase, post-Wednesday). Also: the seed deck must reach the phone (import, or Friday's two-way sync, [D14](decisions.md#d14)) for an on-device Speedrun review session.
 
 ---
 

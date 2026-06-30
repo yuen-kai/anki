@@ -36,6 +36,7 @@
 | [D26](#d26) | Learn entry = reviewer queue-swap to topic-grouped queue | resolved |
 | [D27](#d27) | Application-card Show-Answer gate (fail-open, at _showAnswer) | resolved |
 | [D28](#d28) | Preload the MCAT seed deck on collection load | resolved |
+| [D29](#d29) | Mobile shared-engine build (rsdroid repointed at the fork) | resolved |
 
 ---
 
@@ -262,6 +263,14 @@
 - **Chose:** auto-run `add_seed_notes` on collection load (`qt/aqt/main.py` `_maybe_seed_speedrun`), idempotent and fail-open, so the **Speedrun** MCAT deck is preloaded without a manual step (the user reported there was no deck to study).
 - **Considered:** a Tools-menu "Load deck" action (explicit, but not "preloaded"); guarding on deck-absence (unnecessary, `add_seed_notes` is already idempotent, verified: 2nd run adds 0).
 - **Gaps / risks:** seeds 4 cards (the small authored seed; scale via Friday AI authoring); the cards are NEW, so they appear under **Practice** now and not under **Learn** until [B019](backlog.md#b019) (include new cards in the topic queue) lands; modifies the collection on first open (acceptable for the fork/demo).
+
+<a id="d29"></a>
+### D29: Mobile shared-engine build (rsdroid repointed at the fork)
+
+- **Status:** resolved (resolves [B001](backlog.md#b001))
+- **Chose:** build `Anki-Android-Backend` (rsdroid) off its `main` (anki 26.05b1, matching our fork) with the backend's `anki` mount **symlinked to our fork** (reuses the fork's `out/` + `ftl`), produce a local arm64 debug `.aar`, and consume it in the AnkiDroid fork via `local.properties` `local_backend=true`. The new RPCs are verified on-device.
+- **Considered:** cloning anki into the backend submodule (a second full bring-up; rejected, the symlink reuses the built fork); building off the released backend `0.1.64-anki25.09.2` (rejected, version-skews with our 26.05 `rslib`).
+- **Gaps / risks:** AnkiDroid (25.09-era) vs engine (26.05) skew cost one `Deck.kt` branch (`RELATIVE_OVERDUENESS`) and future proto changes may need more compat patches; `out/strings.json` must be pre-generated (`STRINGS_JSON`); built arm64 debug only; the stock AnkiDroid UI doesn't call the new RPCs yet ([B025](backlog.md#b025)); the AnkiDroid + backend repo changes are uncommitted (env-specific).
 
 ---
 
