@@ -4,16 +4,21 @@
 //! Topic-grouped ("Learn") review queue — Speedrun Phase 2a, decisions D3,
 //! D16, D17 (see docs/plan/decisions.md).
 //!
-//! An *additive* alternative ordering of today's due review cards: instead of
-//! the default interleaved queue, cards are regrouped into topic-contiguous
-//! blocks, the blocks ordered by `topic_weakness × exam_weight` and the cards
-//! within a block by weakness (lowest FSRS retrievability first).
+//! An *additive* alternative ordering of a deck's actionable cards: instead of
+//! the default interleaved queue, the new, due-review and interday-learning
+//! cards are regrouped into topic-contiguous blocks, the blocks ordered by
+//! `topic_weakness × exam_weight` and the cards within a block by weakness
+//! (lowest FSRS retrievability first). Surfacing new cards is what lets "Learn"
+//! serve blocked first-exposure study grouped by topic (B019); intraday
+//! learning steps keep their short-term timing in the default queue and are
+//! skipped here.
 //!
 //! It is read-only queue construction. Gathering, limits, the [`QueuedCards`]
 //! return shape and the downstream `answer_card` path are all reused verbatim,
 //! so this code path never produces or alters an FSRS interval and never
 //! touches the undo queue (spec §8). The only thing it decides is the order in
-//! which already-due cards are presented.
+//! which cards are presented; each card keeps its real [`QueueEntryKind`], so a
+//! new card still grades through the new-card path.
 //!
 //! ## Weakness proxy (Wednesday)
 //!
@@ -21,8 +26,8 @@
 //! forgetting, fed two per-topic signals derived here:
 //!
 //! - `mean_retrievability`: the mean FSRS current retrievability over the
-//!   topic's due cards (same computation as the stats graphs). A card with no
-//!   FSRS memory state (e.g. an SM-2 card, or one moved with "set due date")
+//!   topic's cards (same computation as the stats graphs). A card with no FSRS
+//!   memory state (a new card, an SM-2 card, or one moved with "set due date")
 //!   contributes the shared `NO_MEMORY_STATE_RETRIEVABILITY` prior, a mild
 //!   "probably still known" value, so such cards never masquerade as the
 //!   weakest. Retrievability and the card→topic mapping come from
@@ -40,6 +45,8 @@ use std::collections::HashMap;
 use fsrs::FSRS;
 
 use super::new_scheduling_context;
+use super::MainQueueEntryKind;
+use super::QueueEntry;
 use super::QueueEntryKind;
 use super::QueuedCard;
 use super::QueuedCards;
@@ -53,47 +60,67 @@ use crate::speedrun::taxonomy::topic_weakness;
 /// How many of a topic's most recent graded reviews feed `recent_accuracy`.
 const RECENT_REVIEW_WINDOW: usize = 50;
 
-/// A gathered due review card paired with the two values the ordering needs:
-/// its topic (if any) and its current FSRS retrievability.
-struct ReviewCardData {
+/// A gathered card paired with the values the ordering and the returned
+/// [`QueuedCard`] need: its topic (if any), its current FSRS retrievability and
+/// its real queue kind (New / Review / interday Learning).
+struct QueueCardData {
     card: Card,
     /// The taxonomy leaf id this card maps to, or `None` (unmapped).
     topic: Option<String>,
     /// FSRS current retrievability in `[0, 1]`; weakness is `1 - this`.
     retrievability: f32,
+    /// The card's queue kind, threaded through so the returned [`QueuedCard`]
+    /// reports New vs Review vs Learning correctly instead of a hardcoded kind.
+    kind: QueueEntryKind,
 }
 
 impl Collection {
-    /// Build the topic-grouped review queue for `deck_id` (spec §4–§5).
+    /// Build the topic-grouped ("Learn") queue for `deck_id` (spec §4–§5).
     ///
     /// Reuses the standard builder for gathering + deck/limit handling, keeps
-    /// only the due review cards, then regroups them. `fetch_limit` caps the
-    /// returned cards (`0` = no limit); the reported `review_count` is always
-    /// the full block total, mirroring [`Collection::get_queued_cards`].
+    /// the new, due-review and interday-learning cards (intraday learning steps
+    /// stay in the default queue), then regroups them into topic blocks. Each
+    /// card keeps its real [`QueueEntryKind`] so the reviewer grades it through
+    /// the right path. `fetch_limit` caps the returned cards (`0` = no limit);
+    /// the reported counts are always the full per-kind totals, mirroring
+    /// [`Collection::get_queued_cards`].
     pub(crate) fn get_topic_grouped_queue(
         &mut self,
         deck_id: DeckId,
         fetch_limit: usize,
     ) -> Result<QueuedCards> {
         // build_queues() returns an *owned* queue and does not replace the live
-        // study queue, so the default Practice path is left untouched.
-        let review_ids: Vec<CardId> = {
+        // study queue, so the default Practice path is left untouched. Keep each
+        // entry's kind so new cards come back as New, not a hardcoded Review.
+        let gathered: Vec<(CardId, QueueEntryKind)> = {
             let queues = self.build_queues(deck_id)?;
             queues
                 .iter()
-                .filter(|entry| matches!(entry.kind(), QueueEntryKind::Review))
-                .map(|entry| entry.card_id())
+                .filter_map(|entry| topic_queue_kind(&entry).map(|kind| (entry.card_id(), kind)))
                 .collect()
         };
-        let review_count = review_ids.len();
+        let new_count = gathered
+            .iter()
+            .filter(|(_, k)| *k == QueueEntryKind::New)
+            .count();
+        let learning_count = gathered
+            .iter()
+            .filter(|(_, k)| *k == QueueEntryKind::Learning)
+            .count();
+        let review_count = gathered
+            .iter()
+            .filter(|(_, k)| *k == QueueEntryKind::Review)
+            .count();
 
         let timing = self.timing_today()?;
         let fsrs = FSRS::new(None)?;
         let leaf_weights = leaf_topic_weights();
 
-        // Pass 1: resolve each card's topic and retrievability.
-        let mut data: Vec<ReviewCardData> = Vec::with_capacity(review_count);
-        for cid in review_ids {
+        // Pass 1: resolve each card's topic and retrievability. New cards carry
+        // no FSRS memory state, so card_retrievability() returns the shared 0.9
+        // no-memory prior for them automatically.
+        let mut data: Vec<QueueCardData> = Vec::with_capacity(gathered.len());
+        for (cid, kind) in gathered {
             let card = self.storage.get_card(cid)?.or_not_found(cid)?;
             let note = self
                 .storage
@@ -103,10 +130,11 @@ impl Collection {
             // several match, the smallest id keeps the choice deterministic.
             let topic = card_topic(&note.tags, &leaf_weights);
             let retrievability = card_retrievability(&card, &timing, &fsrs);
-            data.push(ReviewCardData {
+            data.push(QueueCardData {
                 card,
                 topic,
                 retrievability,
+                kind,
             });
         }
 
@@ -124,7 +152,7 @@ impl Collection {
             topic_accuracy.insert(topic.clone(), self.topic_recent_accuracy(&cids)?);
         }
 
-        let ordered = order_review_cards(data, &leaf_weights, &topic_accuracy);
+        let ordered = order_cards(data, &leaf_weights, &topic_accuracy);
 
         // Assemble the standard QueuedCards payload (states + context), exactly
         // as the default queue does, so the reviewer/answer path is reused.
@@ -134,12 +162,12 @@ impl Collection {
             fetch_limit.min(ordered.len())
         };
         let mut cards = Vec::with_capacity(limit);
-        for card in ordered.into_iter().take(limit) {
-            let states = self.get_scheduling_states(card.id)?;
-            let context = new_scheduling_context(self, &card)?;
+        for data in ordered.into_iter().take(limit) {
+            let states = self.get_scheduling_states(data.card.id)?;
+            let context = new_scheduling_context(self, &data.card)?;
             cards.push(QueuedCard {
-                card,
-                kind: QueueEntryKind::Review,
+                card: data.card,
+                kind: data.kind,
                 states,
                 context,
             });
@@ -147,8 +175,8 @@ impl Collection {
 
         Ok(QueuedCards {
             cards,
-            new_count: 0,
-            learning_count: 0,
+            new_count,
+            learning_count,
             review_count,
         })
     }
@@ -176,8 +204,26 @@ impl Collection {
     }
 }
 
+/// The kind a queued entry contributes to the topic-grouped queue, or `None`
+/// for entries the Learn ordering deliberately leaves to the default queue.
+///
+/// New, due Review and *interday* (day-granularity) Learning cards are the daily
+/// study set we regroup by topic. Intraday learning steps (due in minutes) carry
+/// their own short-term sequence and are skipped, so a card mid-step isn't pulled
+/// out of order — it still surfaces normally in the default queue.
+fn topic_queue_kind(entry: &QueueEntry) -> Option<QueueEntryKind> {
+    match entry {
+        QueueEntry::Main(e) => Some(match e.kind {
+            MainQueueEntryKind::New => QueueEntryKind::New,
+            MainQueueEntryKind::Review => QueueEntryKind::Review,
+            MainQueueEntryKind::InterdayLearning => QueueEntryKind::Learning,
+        }),
+        QueueEntry::IntradayLearning(_) => None,
+    }
+}
+
 /// Mean retrievability over a non-empty block; `0.0` for an empty slice.
-fn mean_retrievability(cards: &[ReviewCardData]) -> f32 {
+fn mean_retrievability(cards: &[QueueCardData]) -> f32 {
     if cards.is_empty() {
         return 0.0;
     }
@@ -187,13 +233,14 @@ fn mean_retrievability(cards: &[ReviewCardData]) -> f32 {
 /// Order cards into topic-contiguous blocks by `block_priority` (descending),
 /// cards within a block by weakness (lowest retrievability first), with the
 /// unmapped block trailing. Deterministic: ties break on topic id then card id.
-fn order_review_cards(
-    cards: Vec<ReviewCardData>,
+/// Each card keeps its [`QueueCardData`] (so its kind survives the regrouping).
+fn order_cards(
+    cards: Vec<QueueCardData>,
     leaf_weights: &HashMap<String, f32>,
     topic_accuracy: &HashMap<String, Option<f32>>,
-) -> Vec<Card> {
-    let mut blocks: HashMap<String, Vec<ReviewCardData>> = HashMap::new();
-    let mut unmapped: Vec<ReviewCardData> = Vec::new();
+) -> Vec<QueueCardData> {
+    let mut blocks: HashMap<String, Vec<QueueCardData>> = HashMap::new();
+    let mut unmapped: Vec<QueueCardData> = Vec::new();
     for card in cards {
         match &card.topic {
             Some(topic) => blocks.entry(topic.clone()).or_default().push(card),
@@ -203,7 +250,7 @@ fn order_review_cards(
 
     // block_priority = topic_weakness(recent_accuracy, mean_retrievability)
     //                  × exam_weight   (spec §5)
-    let mut block_list: Vec<(String, f32, Vec<ReviewCardData>)> = blocks
+    let mut block_list: Vec<(String, f32, Vec<QueueCardData>)> = blocks
         .into_iter()
         .map(|(topic, cards)| {
             let mean_r = mean_retrievability(&cards);
@@ -221,19 +268,19 @@ fn order_review_cards(
         prio_b.total_cmp(prio_a).then_with(|| topic_a.cmp(topic_b))
     });
 
-    let mut ordered: Vec<Card> = Vec::new();
+    let mut ordered: Vec<QueueCardData> = Vec::new();
     for (_topic, _priority, mut cards) in block_list {
         sort_block_by_weakness(&mut cards);
-        ordered.extend(cards.into_iter().map(|c| c.card));
+        ordered.extend(cards);
     }
     sort_block_by_weakness(&mut unmapped);
-    ordered.extend(unmapped.into_iter().map(|c| c.card));
+    ordered.extend(unmapped);
     ordered
 }
 
 /// Sort a block so the weakest cards (lowest retrievability) come first, ties
 /// broken by ascending card id.
-fn sort_block_by_weakness(cards: &mut [ReviewCardData]) {
+fn sort_block_by_weakness(cards: &mut [QueueCardData]) {
     cards.sort_by(|a, b| {
         a.retrievability
             .total_cmp(&b.retrievability)
@@ -290,6 +337,21 @@ mod tests {
         card.last_review_time = Some(TimestampSecs::now().adding_secs(-elapsed_days * 86_400));
         col.storage.update_card(&card).unwrap();
         cid
+    }
+
+    /// Adds a brand-new card (optionally tagged `tag`) and returns its id. A
+    /// freshly added note's card is already New with no memory state, so no
+    /// scheduling mutation is needed — this is exactly the first-exposure card
+    /// Learn must surface (B019).
+    fn add_new_card(col: &mut Collection, tag: Option<&str>) -> CardId {
+        let nt = col.basic_notetype();
+        let mut note = nt.new_note();
+        note.set_field(0, "front").unwrap();
+        if let Some(tag) = tag {
+            note.tags.push(tag.to_string());
+        }
+        col.add_note(&mut note, DeckId(1)).unwrap();
+        col.storage.card_ids_of_notes(&[note.id]).unwrap()[0]
     }
 
     /// The topic each returned card maps to, in queue order, for assertions.
@@ -405,6 +467,50 @@ mod tests {
             vec![weak, strong],
             "the shakier card should surface first within the block"
         );
+    }
+
+    /// B019: new cards (no FSRS memory state) are surfaced by Learn, grouped
+    /// into their topic block alongside due reviews, and returned with their
+    /// real kind (New) rather than a hardcoded Review.
+    #[test]
+    fn new_cards_are_included_grouped_and_tagged_new() {
+        let mut col = Collection::new();
+        // KINETICS (weight 0.18) holds a weak due review and a brand-new card;
+        // STRUCTURE (0.15) holds a strongly-retained review, so KINETICS leads.
+        let kinetics_review = add_review_card(&mut col, Some(KINETICS), 1.0, 60);
+        let kinetics_new = add_new_card(&mut col, Some(KINETICS));
+        let structure_review = add_review_card(&mut col, Some(STRUCTURE), 100_000.0, 1);
+
+        let queued = col.get_topic_grouped_queue(DeckId(1), 0).unwrap();
+
+        // Counts report the per-kind totals, not everything lumped as review.
+        assert_eq!(queued.new_count, 1, "the new card is counted as new");
+        assert_eq!(queued.review_count, 2);
+        assert_eq!(queued.learning_count, 0);
+
+        let order: Vec<CardId> = queued.cards.iter().map(|qc| qc.card.id).collect();
+        assert_eq!(
+            order,
+            vec![kinetics_review, kinetics_new, structure_review],
+            "the new card joins its KINETICS block (weakest review first, then \
+             the 0.9-prior new card); the strong STRUCTURE block trails"
+        );
+
+        let kind_of = |id: CardId| {
+            queued
+                .cards
+                .iter()
+                .find(|qc| qc.card.id == id)
+                .unwrap()
+                .kind
+        };
+        assert_eq!(
+            kind_of(kinetics_new),
+            QueueEntryKind::New,
+            "kind threaded through as New"
+        );
+        assert_eq!(kind_of(kinetics_review), QueueEntryKind::Review);
+        assert_eq!(kind_of(structure_review), QueueEntryKind::Review);
     }
 
     /// fetch_limit caps the returned cards while review_count still reports the
@@ -564,6 +670,126 @@ mod tests {
         assert_eq!(
             topic_interval, default_interval,
             "interval must match whether the card came from the topic or default queue"
+        );
+    }
+
+    /// Answers `cid` Good at a fixed instant via the standard path (out of
+    /// queue, as the reviewer does for a card the topic queue surfaced) and
+    /// returns the resulting card. A fixed `at` keeps a learning card's due time
+    /// comparable across two separate answers.
+    fn answer_good_at(
+        col: &mut Collection,
+        cid: CardId,
+        states: &SchedulingStates,
+        at: TimestampMillis,
+    ) -> Card {
+        let mut answer = CardAnswer {
+            card_id: cid,
+            current_state: states.current,
+            new_state: states.good,
+            rating: Rating::Good,
+            answered_at: at,
+            milliseconds_taken: 0,
+            custom_data: None,
+            from_queue: false,
+        };
+        col.answer_card(&mut answer).unwrap();
+        col.storage.get_card(cid).unwrap().unwrap()
+    }
+
+    /// The scheduling-relevant fields of a card, for comparing two answer paths.
+    fn sched_outcome(card: &Card) -> (CardType, CardQueue, i32, u32, u32, u32) {
+        (
+            card.ctype,
+            card.queue,
+            card.due,
+            card.interval,
+            card.reps,
+            card.remaining_steps,
+        )
+    }
+
+    /// B019 safety proof for new cards: a new card the topic queue surfaces
+    /// reports the same scheduling states as the default new-card path, grades
+    /// through the unchanged `answer_card` path to an identical outcome, and the
+    /// answer undoes cleanly back to the pristine new card.
+    #[test]
+    fn answering_new_card_from_topic_queue_matches_default_and_is_undoable() {
+        let mut col = Collection::new();
+        // A new card to grade, plus a due review in another topic so the queue
+        // is a real topic-grouped ordering rather than a single card.
+        let new_card = add_new_card(&mut col, Some(KINETICS));
+        add_review_card(&mut col, Some(STRUCTURE), 60.0, 3);
+
+        let before = col.storage.get_card(new_card).unwrap().unwrap();
+        assert_eq!(before.ctype, CardType::New, "precondition: new card");
+
+        // The topic queue surfaces it as New with the *same* scheduling states
+        // the default new-card path computes — the topic path schedules nothing.
+        let topic_states = {
+            let queued = col.get_topic_grouped_queue(DeckId(1), 0).unwrap();
+            let qc = queued
+                .cards
+                .iter()
+                .find(|qc| qc.card.id == new_card)
+                .expect("the new card is in the topic queue");
+            assert_eq!(qc.kind, QueueEntryKind::New, "carried through as New");
+            qc.states.clone()
+        };
+        let default_states = col.get_scheduling_states(new_card).unwrap();
+        assert_eq!(topic_states.current, default_states.current);
+        assert_eq!(topic_states.again, default_states.again);
+        assert_eq!(topic_states.hard, default_states.hard);
+        assert_eq!(topic_states.good, default_states.good);
+        assert_eq!(topic_states.easy, default_states.easy);
+
+        // Grade Good at a fixed instant from the topic queue; capture the result.
+        let at = TimestampMillis::now();
+        let topic_outcome = sched_outcome(&answer_good_at(&mut col, new_card, &topic_states, at));
+        assert_eq!(
+            col.storage
+                .get_all_revlog_entries(TimestampSecs(0))
+                .unwrap()
+                .len(),
+            1,
+            "answering a new card writes one revlog entry"
+        );
+
+        // Undo restores the pristine new card and removes the revlog entry.
+        col.undo().unwrap();
+        let restored = col.storage.get_card(new_card).unwrap().unwrap();
+        assert_eq!(restored.ctype, before.ctype, "type restored to New");
+        assert_eq!(restored.queue, before.queue, "queue restored to New");
+        assert_eq!(restored.due, before.due, "due restored");
+        assert_eq!(restored.reps, before.reps, "reps restored");
+        assert_eq!(restored.remaining_steps, before.remaining_steps);
+        assert_eq!(
+            col.storage
+                .get_all_revlog_entries(TimestampSecs(0))
+                .unwrap()
+                .len(),
+            0,
+            "the revlog entry is removed on undo"
+        );
+
+        // Grading the same pristine card from the default queue at the same
+        // instant produces an identical outcome — the topic queue scheduled the
+        // new card exactly as the default new-card path would (AC6).
+        let default_states = {
+            let queued = col.get_queued_cards(10, false).unwrap();
+            queued
+                .cards
+                .iter()
+                .find(|qc| qc.card.id == new_card)
+                .expect("the new card is in the default queue")
+                .states
+                .clone()
+        };
+        let default_outcome =
+            sched_outcome(&answer_good_at(&mut col, new_card, &default_states, at));
+        assert_eq!(
+            topic_outcome, default_outcome,
+            "a new card is scheduled identically via the topic or default queue"
         );
     }
 
