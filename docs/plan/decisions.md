@@ -31,6 +31,7 @@
 | [D21](#d21) | Contrasting-case sourcing = authored seed, then AI | resolved |
 | [D22](#d22) | Taxonomy seed = inline Rust, leaf-only weights | resolved |
 | [D23](#d23) | Weakness proxy + card→topic mapping (Wednesday) | resolved |
+| [D24](#d24) | Memory score concretization (range, confidence, shared signals) | resolved |
 
 ---
 
@@ -217,6 +218,14 @@
 - **Chose:** `block_priority = topic_weakness(recent_accuracy, mean_retrievability) × exam_weight`. `recent_accuracy` = pass rate (button ≥ Hard) over the topic's last 50 graded revlog entries; `mean_retrievability` = mean FSRS current retrievability over the topic's due cards, with a 0.9 prior for cards lacking memory state; no-graded-history falls back to the memory signal. Within a block, `card_priority = 1 − retrievability` (weakest first). **Card→topic** = the note tag exactly equal to a `seed_taxonomy()` leaf id (smallest id wins on ties). Landed in Phase 2a (`rslib/src/scheduler/queue/topic_grouped.rs`).
 - **Considered:** accuracy-only or stability-only weakness (each ignores half the signal); fuzzy/substring tag matching (ambiguous); the spec's `manual` override table (deferred per [`spec-topic-taxonomy`](spec-topic-taxonomy.md)).
 - **Gaps / risks:** the 50-review window, the 0.9 prior, and the fallback are untuned heuristics; swap to the Performance-model signal in Friday/Sunday. One `get_note` per due card is O(n) DB reads, not yet benchmarked against the PRD p95<100ms target (see [B009] note on perf; tracked for Phase 2b/3).
+
+<a id="d24"></a>
+### D24: Memory score concretization (range, confidence, shared card signals)
+
+- **Status:** resolved (concretizes [D8](#d8), [D9](#d9))
+- **Chose:** `estimate` = mean FSRS current retrievability over reviewed in-scope cards (0.9 prior for no-memory cards). `range` = 95% CI of the mean (mean ± 1.96·SE), clamped [0,1]. `confidence` bands: high ≥1000 reviews & ≥0.80 coverage; medium ≥500 & ≥0.65; else low (named consts). Give-up: `MIN_GRADED_REVIEWS=200`, `MIN_COVERAGE_PCT=0.50`; `abstained` zeroes the number and names the failed condition. Card→topic + retrievability logic extracted to `rslib/src/speedrun/card_signals.rs` so the queue (2a) and score (2b) treat a card identically. Landed in 2b (`4bad223cc`).
+- **Considered:** a bootstrap interval (heavier, similar at this scale); calibration-based uncertainty (deferred to Sunday per [D8](#d8), so the CI is spread, not model uncertainty); duplicating retrievability/mapping per module (drift risk, hence the shared helper).
+- **Gaps / risks:** thresholds (200 / 0.50 / confidence bands) untuned ([D9](#d9) gap); the range tightens with n (honest spread, not calibration); per-card `get_note` + `get_revlog` is O(n) ([B013] perf).
 
 ---
 

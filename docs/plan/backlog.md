@@ -20,7 +20,7 @@
 | [B012](#b012) | Committed tree not dprint/rustfmt-clean (`just fix-fmt` rewrites files) | refactor | open |
 | [B013](#b013) | Topic-queue perf unbenchmarked (O(n) get_note vs p95<100ms) | issue | open |
 | [B014](#b014) | Sandbox blocks tsx IPC pipe in `just test-py` build | issue | known-gap |
-| [B015](#b015) | Topic-queue undo/interval-equivalence proof untested | issue | in-progress |
+| [B015](#b015) | Topic-queue undo/interval-equivalence proof untested | issue | fixed |
 | [B016](#b016) | Topic queue leaves `active_decks` pointing at its deck | bug | open |
 
 ---
@@ -151,11 +151,11 @@
 <a id="b015"></a>
 ### B015 — Topic-queue undo / interval-equivalence proof untested
 
-- **Type:** issue · **Status:** in-progress (Phase 2b) · **Severity:** medium
+- **Type:** issue · **Status:** fixed · **Severity:** medium
 - **Discovered:** 2026-06-30, Phase 2a code review.
 - **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` tests; [`spec-engine-topic-queue`](spec-engine-topic-queue.md) §8-§9 (AC5/AC6); source §7a ("proof undo works and the collection does not corrupt").
-- **Context:** additive safety is sound by construction (answering uses the unchanged `AnswerCard` RPC; the new RPC only returns `QueuedCards`), but no test answers a card from this queue then checks undo restores state, nor asserts intervals match the default queue. The brief requires an undo/corruption proof for the Rust change.
-- **Next:** add the test in Phase 2b (folded into the memory-score subagent's scope).
+- **Context:** additive safety is sound by construction (answering uses the unchanged `AnswerCard` RPC; the new RPC only returns `QueuedCards`), but no test answered a card from this queue to check undo/interval equivalence.
+- **Resolution:** Phase 2b added `answering_topic_queue_card_is_undoable_and_matches_default_interval` (`topic_grouped.rs`): answers via the unchanged path, undoes (asserts card row + revlog restored), and confirms the interval matches the default queue. Green on merged `main`.
 
 <a id="b016"></a>
 ### B016 — Topic queue leaves `active_decks` pointing at its deck
