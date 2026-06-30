@@ -27,6 +27,9 @@
 | [B019](#b019) | Learn shows due reviews only (new/learning excluded) | issue | open |
 | [B020](#b020) | Scaffold pick-signal format reconciliation | issue | open |
 | [B021](#b021) | No automated UI regression test (dashboard + Qt Learn flow) | refactor | open |
+| [B022](#b022) | Gate lacks a manual reveal-anyway override (D19 tension) | issue | open |
+| [B023](#b023) | Gate-wiring + timing capture lack tests | refactor | open |
+| [B024](#b024) | Phase 3 polish bundle (dyn-deck Learn, dashboard i18n, nits) | issue | open |
 
 ---
 
@@ -216,6 +219,32 @@
 - **Ref:** `ts/routes/speedrun-dashboard/*` (no committed e2e); the Qt-native Learn/reviewer flow.
 - **Context:** the dashboard has screenshots but no committed e2e; the Learn/gate flow is Qt-native, so the `ts/tests/e2e` Playwright harness (mediasrv pages only) can't drive it. The 28 qt unit tests cover the gate logic, but the end-to-end UI has no regression guard.
 - **Next:** add a Playwright smoke for the dashboard page (mirror `ts/tests/e2e/sanity.test.ts`); evaluate a Qt-level test for the Learn flow.
+
+<a id="b022"></a>
+### B022: Gate lacks a manual reveal-anyway override (D19 tension)
+
+- **Type:** issue · **Status:** open · **Severity:** medium
+- **Discovered:** 2026-06-30, Phase 3 review (Important #1).
+- **Ref:** `qt/aqt/reviewer.py` (`_showAnswer` gate); `qt/aqt/speedrun.py` `gate_blocks_answer`; [D19](decisions.md#d19), [D27](decisions.md#d27).
+- **Context:** the gate is fail-open for normal/missing/error/`None` cards, but a scaffold that RENDERS yet never self-marks complete (its pick JS throws) blocks that card's answer reveal forever, with no in-card override. The learner can bury/skip/undo/leave but cannot reveal that card's answer. Slight tension with D19 ("a template bug never traps"). Our hand-authored seed scaffolds do not trigger this (tested); the risk is future/AI-generated content (Friday).
+- **Next:** add a manual override (second consecutive Show-Answer press, or reveal after N attempts) to fully honor D19.
+
+<a id="b023"></a>
+### B023: Gate-wiring + timing capture lack tests
+
+- **Type:** refactor · **Status:** open · **Severity:** low
+- **Discovered:** 2026-06-30, Phase 3 review (Important #2).
+- **Ref:** `qt/aqt/reviewer.py` (gate call in `_showAnswer`, async `on_probe` callback, `_log_speedrun_event` timing); `qt/tests/test_speedrun.py` (covers pure decision logic only).
+- **Context:** the 28 tests cover `gate_blocks_answer`/`parse_pick_signal`/`is_application_note_type` but not the `_showAnswer` enforcement wiring, the async probe callback (block vs clear+reshow), or the timing capture. A regression that removed the gate call would still pass all 28.
+- **Next:** extract the callback decision into a pure helper and assert it; add a wiring test.
+
+<a id="b024"></a>
+### B024: Phase 3 polish bundle (dyn-deck Learn, dashboard i18n, nits)
+
+- **Type:** issue · **Status:** open · **Severity:** low
+- **Discovered:** 2026-06-30, Phase 3 review (Minors #3 to #8).
+- **Items:** (a) the Learn button shows on filtered/dynamic decks where topic-grouping is meaningless (hide when `deck["dyn"]`); (b) the stale probe callback can reveal a newly-loaded card's answer if a new card loads mid-probe (capture `card.id` at probe time; fails safe); (c) pick logs go to stdout only with partial provenance (no `seen_before`/`topic_id`) and are ephemeral (also tracked by [D25](decisions.md#d25)/[B017](#b017)); (d) timing is cumulative ms-since-question, not per-pick latency (document it); (e) dashboard copy is hardcoded English, not Fluent (`ScoreTile`/`SpeedrunDashboard` strings, the Tools menu item, the window title); (f) nits: `font-weight` 680/650 round to 700/600, `updatedAtSecs=0` renders an empty "Updated", confidence shown without its paired reason.
+- **Next:** address in a polish pass / the Friday i18n cycle.
 
 ---
 
