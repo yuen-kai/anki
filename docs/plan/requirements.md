@@ -23,6 +23,7 @@
 | U1 | Show the topic's hierarchy (breadcrumb) on the card, at least when learning | building | UX refinement subagent (was missed initially; now tracked + in flight) |
 | U2 | Merge the Learn and Practice buttons into one | building | UX refinement subagent (was missed initially) |
 | U3 | A UI listing all topics and which of the 4 stages each is at | todo | build after U1/U2 (reuses taxonomy labels); data from `get_speedrun_progress` |
+| U4 | `frontend-design` polish pass on the Speedrun UI (dashboard, cards, Study entry, topics view) | todo | after U1/U2/U3 + F1-F3 land; follow the `frontend-design` skill (distinct identity, type, signature element) |
 
 ## Correctness fixes from the progression review (binding)
 
