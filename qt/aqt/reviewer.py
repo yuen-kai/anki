@@ -610,6 +610,7 @@ class Reviewer:
         ).run_in_background(initiator=self)
 
     def _after_answering(self, ease: Literal[1, 2, 3, 4]) -> None:
+        self._speedrun_record_answer(ease)
         gui_hooks.reviewer_did_answer_card(self, self.card, ease)
         self._answeredIds.append(self.card.id)
         if not self.check_timebox():
@@ -743,6 +744,26 @@ class Reviewer:
 
     # Speedrun: Show-Answer gate + scaffold-pick logging (decision D19)
     ##########################################################################
+
+    def _speedrun_record_answer(self, ease: Literal[1, 2, 3, 4]) -> None:
+        """Drive the answered card's topic through its mastery transition.
+
+        Again demotes one state; any other rating advances once the topic clears
+        its mastery signal (decision D32). This writes only the per-topic state
+        map in the collection config — no scheduling change — and fails open, so
+        a non-Speedrun card or any backend error leaves review and FSRS
+        untouched.
+        """
+        card = self.card
+        if card is None:
+            return
+        try:
+            record = getattr(self.mw.col.sched, "speedrun_record_answer", None)
+            if record is None:
+                return
+            record(card_id=card.id, rating=V3CardInfo.rating_from_ease(ease))
+        except Exception:
+            pass
 
     def _speedrun_note_type_name(self) -> str | None:
         try:
@@ -1345,6 +1366,30 @@ timerStopped = false;
     onDelete = delete_current_note
     onMark = toggle_mark_on_current_note
     setFlag = set_flag_on_current_card
+
+
+def _inject_speedrun_card_mode(text: str, card: Card, kind: str) -> str:
+    """card_will_show filter: prepend ``window.speedrunCardMode`` so the
+    state-aware Speedrun templates know which mode to render before their own JS
+    runs (decision D31, spec-mastery-progression §5).
+
+    Additive + fail-open: a non-Speedrun card (mode "none"), a scheduler without
+    the Speedrun RPC, or any error leaves the card HTML untouched, so normal
+    review and non-Speedrun cards are never affected.
+    """
+    try:
+        get_mode = getattr(card.col.sched, "get_speedrun_card_mode", None)
+        if get_mode is None:
+            return text
+        script = aqt.speedrun.card_mode_inject_script(get_mode(card_id=card.id))
+        if script:
+            return script + text
+    except Exception:
+        pass
+    return text
+
+
+gui_hooks.card_will_show.append(_inject_speedrun_card_mode)
 
 
 # if the last element is a comment, then the RUN_STATE_MUTATION code
