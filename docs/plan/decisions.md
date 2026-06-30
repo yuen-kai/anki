@@ -35,6 +35,7 @@
 | [D25](#d25) | Defer AttemptLog table to Phase 3 / Friday | resolved |
 | [D26](#d26) | Learn entry = reviewer queue-swap to topic-grouped queue | resolved |
 | [D27](#d27) | Application-card Show-Answer gate (fail-open, at _showAnswer) | resolved |
+| [D28](#d28) | Preload the MCAT seed deck on collection load | resolved |
 
 ---
 
@@ -253,6 +254,14 @@
 - **Chose:** the scaffold Show-Answer gate lives at the reviewer's `_showAnswer` chokepoint (covers space/enter/button/auto-advance) and is **fail-open**: it probes the template's soft signals, and only an explicit "incomplete" blocks; complete/absent/unscaffolded/error/`None` all proceed. Gating is a property of the `SpeedrunApplication` card, so it applies in both Learn and Practice; non-application cards are never gated. Picks are logged with timing Python-side.
 - **Considered:** template-only gating (Phase 1 soft-signal, bypassable); per-mode gating (rejected, the scaffold should gate wherever the card appears).
 - **Gaps / risks:** desktop-only (pycmd seam; mobile deferred, [D19](#d19)); pick-signal format reconciliation ([B020](backlog.md#b020)).
+
+<a id="d28"></a>
+### D28: Preload the MCAT seed deck on collection load
+
+- **Status:** resolved
+- **Chose:** auto-run `add_seed_notes` on collection load (`qt/aqt/main.py` `_maybe_seed_speedrun`), idempotent and fail-open, so the **Speedrun** MCAT deck is preloaded without a manual step (the user reported there was no deck to study).
+- **Considered:** a Tools-menu "Load deck" action (explicit, but not "preloaded"); guarding on deck-absence (unnecessary, `add_seed_notes` is already idempotent, verified: 2nd run adds 0).
+- **Gaps / risks:** seeds 4 cards (the small authored seed; scale via Friday AI authoring); the cards are NEW, so they appear under **Practice** now and not under **Learn** until [B019](backlog.md#b019) (include new cards in the topic queue) lands; modifies the collection on first open (acceptable for the fork/demo).
 
 ---
 
