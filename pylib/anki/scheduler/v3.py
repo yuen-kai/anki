@@ -56,6 +56,22 @@ class Scheduler(SchedulerBaseWithLegacy):
             fetch_limit=fetch_limit, intraday_learning_only=intraday_learning_only
         )
 
+    def get_topic_grouped_queue(
+        self,
+        *,
+        deck_id: DeckId,
+        fetch_limit: int = 0,
+    ) -> QueuedCards:
+        """Speedrun "Learn" mode: a deck's due review cards regrouped into
+        topic-contiguous blocks, ordered by weakness × exam weight.
+
+        Read-only: grading still flows through answer_card, so FSRS intervals and
+        undo are unchanged. fetch_limit caps the returned cards (0 = no limit);
+        review_count always reports the full block total. Idempotent."""
+        return self.col._backend.get_topic_grouped_queue(
+            deck_id=deck_id, fetch_limit=fetch_limit
+        )
+
     def describe_next_states(self, next_states: SchedulingStates) -> Sequence[str]:
         "Labels for each of the answer buttons."
         return self.col._backend.describe_next_states(next_states)
