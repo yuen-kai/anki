@@ -51,6 +51,18 @@ def _add_new_card(col: Collection, tag: str | None) -> int:
     return note.cards()[0].id
 
 
+def _graduate(col: Collection, topics: list[str]) -> None:
+    """Move topics out of the blocked `learning` phase into the mixed pool by
+    writing their state to the config map the backend reads. A fresh topic is
+    `learning`, which would serve only one blocked block; these tests assert the
+    mixed-pool ordering, so every block must be served (mastery progression
+    decisions D30-D32)."""
+    col.set_config(
+        "speedrun_topic_state",
+        {topic: {"state": "practicing", "updated_at": 0} for topic in topics},
+    )
+
+
 def test_topic_grouped_queue_blocks_and_orders():
     col = getEmptyCol()
     try:
@@ -61,6 +73,8 @@ def test_topic_grouped_queue_blocks_and_orders():
                 topic_of[_add_due_review_card(col, tag)] = tag
         # A card with no taxonomy tag is unmapped.
         topic_of[_add_due_review_card(col, None)] = ""
+        # Graduate every topic into the mixed pool so all blocks are served.
+        _graduate(col, [PKA, KINETICS, STRUCTURE])
 
         queued = col.sched.get_topic_grouped_queue(deck_id=DEFAULT_DECK, fetch_limit=0)
 
@@ -102,6 +116,8 @@ def test_topic_grouped_queue_includes_new_cards():
         kinetics_review = _add_due_review_card(col, KINETICS)
         kinetics_new = _add_new_card(col, KINETICS)
         structure_review = _add_due_review_card(col, STRUCTURE)
+        # Graduate both topics so the mixed pool serves both blocks.
+        _graduate(col, [KINETICS, STRUCTURE])
 
         queued = col.sched.get_topic_grouped_queue(deck_id=DEFAULT_DECK, fetch_limit=0)
 

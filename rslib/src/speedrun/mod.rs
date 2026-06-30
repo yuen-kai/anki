@@ -11,7 +11,11 @@
 //! - [`memory_score`]: the honest Memory score — aggregated FSRS retrievability
 //!   over in-scope cards, with an evidence envelope and the give-up rule (Phase
 //!   2b).
+//! - [`progression`]: the per-topic four-state mastery lifecycle
+//!   (learning → practicing → hierarchy → mastering), its state-aware card-mode
+//!   resolution and its config-backed transitions (decisions D30–D32).
 
 pub mod card_signals;
 pub mod memory_score;
+pub mod progression;
 pub mod taxonomy;

@@ -13,6 +13,21 @@
 //! learning steps keep their short-term timing in the default queue and are
 //! skipped here.
 //!
+//! ## State-aware selection (mastery progression, spec-mastery-progression §6)
+//!
+//! On top of the ordering, the queue honors each topic's mastery state
+//! ([`crate::speedrun::progression`]):
+//!
+//! - **Suppression:** a `SpeedrunApplication` card is dropped while its topic is
+//!   below `hierarchy` (no applying before the concept is in hand).
+//! - **Blocked vs mixed:** if any in-scope topic is still `learning`, only that
+//!   single highest-priority learning block is served (blocked first-exposure);
+//!   otherwise the whole mixed pool is served, graduated topics ordered by
+//!   block priority as before.
+//!
+//! Both are pure presentation: no card is mutated and the state map is only
+//! read, so FSRS scheduling and undo stay untouched.
+//!
 //! It is read-only queue construction. Gathering, limits, the [`QueuedCards`]
 //! return shape and the downstream `answer_card` path are all reused verbatim,
 //! so this code path never produces or alters an FSRS interval and never
@@ -55,6 +70,9 @@ use crate::prelude::*;
 use crate::speedrun::card_signals::card_retrievability;
 use crate::speedrun::card_signals::card_topic;
 use crate::speedrun::card_signals::leaf_topic_weights;
+use crate::speedrun::progression::application_suppressed;
+use crate::speedrun::progression::NoteKind;
+use crate::speedrun::progression::TopicState;
 use crate::speedrun::taxonomy::topic_weakness;
 
 /// How many of a topic's most recent graded reviews feed `recent_accuracy`.
@@ -72,6 +90,9 @@ struct QueueCardData {
     /// The card's queue kind, threaded through so the returned [`QueuedCard`]
     /// reports New vs Review vs Learning correctly instead of a hardcoded kind.
     kind: QueueEntryKind,
+    /// The card's topic's mastery state, used for blocked-vs-mixed selection
+    /// (an unmapped card defaults to `learning`).
+    state: TopicState,
 }
 
 impl Collection {
@@ -99,26 +120,18 @@ impl Collection {
                 .filter_map(|entry| topic_queue_kind(&entry).map(|kind| (entry.card_id(), kind)))
                 .collect()
         };
-        let new_count = gathered
-            .iter()
-            .filter(|(_, k)| *k == QueueEntryKind::New)
-            .count();
-        let learning_count = gathered
-            .iter()
-            .filter(|(_, k)| *k == QueueEntryKind::Learning)
-            .count();
-        let review_count = gathered
-            .iter()
-            .filter(|(_, k)| *k == QueueEntryKind::Review)
-            .count();
 
         let timing = self.timing_today()?;
         let fsrs = FSRS::new(None)?;
         let leaf_weights = leaf_topic_weights();
+        // One config read; topics absent from the map resolve to `learning`.
+        let topic_states = self.speedrun_topic_states();
 
-        // Pass 1: resolve each card's topic and retrievability. New cards carry
-        // no FSRS memory state, so card_retrievability() returns the shared 0.9
-        // no-memory prior for them automatically.
+        // Pass 1: resolve each card's topic, retrievability, note kind and the
+        // topic's mastery state. New cards carry no FSRS memory state, so
+        // card_retrievability() returns the shared 0.9 no-memory prior for them.
+        // Application cards whose topic is below `hierarchy` are suppressed here
+        // (spec §6) and never enter the queue.
         let mut data: Vec<QueueCardData> = Vec::with_capacity(gathered.len());
         for (cid, kind) in gathered {
             let card = self.storage.get_card(cid)?.or_not_found(cid)?;
@@ -129,12 +142,20 @@ impl Collection {
             // A card's topic is the note tag equal to a taxonomy leaf id; if
             // several match, the smallest id keeps the choice deterministic.
             let topic = card_topic(&note.tags, &leaf_weights);
+            let state = topic
+                .as_deref()
+                .and_then(|t| topic_states.get(t).copied())
+                .unwrap_or_default();
+            if self.note_kind(&note)? == NoteKind::Application && application_suppressed(state) {
+                continue;
+            }
             let retrievability = card_retrievability(&card, &timing, &fsrs);
             data.push(QueueCardData {
                 card,
                 topic,
                 retrievability,
                 kind,
+                state,
             });
         }
 
@@ -152,7 +173,25 @@ impl Collection {
             topic_accuracy.insert(topic.clone(), self.topic_recent_accuracy(&cids)?);
         }
 
+        // Order into priority blocks, then apply the blocked-vs-mixed selection.
         let ordered = order_cards(data, &leaf_weights, &topic_accuracy);
+        let ordered = select_blocked_or_mixed(ordered);
+
+        // Counts report what is actually servable, i.e. after suppression and
+        // the blocked/mixed selection but before fetch_limit (which only caps
+        // the returned cards, mirroring get_queued_cards).
+        let new_count = ordered
+            .iter()
+            .filter(|d| d.kind == QueueEntryKind::New)
+            .count();
+        let learning_count = ordered
+            .iter()
+            .filter(|d| d.kind == QueueEntryKind::Learning)
+            .count();
+        let review_count = ordered
+            .iter()
+            .filter(|d| d.kind == QueueEntryKind::Review)
+            .count();
 
         // Assemble the standard QueuedCards payload (states + context), exactly
         // as the default queue does, so the reviewer/answer path is reused.
@@ -278,6 +317,27 @@ fn order_cards(
     ordered
 }
 
+/// Apply the state-aware selection (spec-mastery-progression §6): if any mapped
+/// in-scope topic in the servable set is still `learning`, serve only that one
+/// highest-priority learning block (blocked first-exposure); otherwise serve
+/// the whole mixed pool unchanged. `ordered` is already block-priority ordered,
+/// so the first mapped `learning` card marks the highest-priority learning
+/// topic. Unmapped cards never trigger the blocked phase and are excluded from
+/// it (a learning block is a single mapped topic).
+fn select_blocked_or_mixed(ordered: Vec<QueueCardData>) -> Vec<QueueCardData> {
+    let blocked_topic = ordered.iter().find_map(|d| match &d.topic {
+        Some(topic) if d.state == TopicState::Learning => Some(topic.clone()),
+        _ => None,
+    });
+    match blocked_topic {
+        Some(topic) => ordered
+            .into_iter()
+            .filter(|d| d.topic.as_deref() == Some(topic.as_str()))
+            .collect(),
+        None => ordered,
+    }
+}
+
 /// Sort a block so the weakest cards (lowest retrievability) come first, ties
 /// broken by ascending card id.
 fn sort_block_by_weakness(cards: &mut [QueueCardData]) {
@@ -354,6 +414,16 @@ mod tests {
         col.storage.card_ids_of_notes(&[note.id]).unwrap()[0]
     }
 
+    /// Graduate `topics` out of the blocked `learning` phase into the mixed
+    /// pool by setting each to `state`. A fresh topic defaults to `learning`,
+    /// which would serve only a single blocked block; these mixed-pool ordering
+    /// tests need the topics graduated so every block is served.
+    fn graduate(col: &mut Collection, topics: &[&str], state: TopicState) {
+        for topic in topics {
+            col.set_speedrun_topic_state(topic, state).unwrap();
+        }
+    }
+
     /// The topic each returned card maps to, in queue order, for assertions.
     fn queue_topics(col: &mut Collection, of: &HashMap<CardId, &str>) -> Vec<String> {
         let queued = col.get_topic_grouped_queue(DeckId(1), 0).unwrap();
@@ -362,6 +432,58 @@ mod tests {
             .iter()
             .map(|qc| of[&qc.card.id].to_string())
             .collect()
+    }
+
+    /// The ids of the cards the queue serves, in order.
+    fn queue_ids(col: &mut Collection) -> Vec<CardId> {
+        col.get_topic_grouped_queue(DeckId(1), 0)
+            .unwrap()
+            .cards
+            .iter()
+            .map(|qc| qc.card.id)
+            .collect()
+    }
+
+    /// Create and persist a minimal note type with the given `name`, so the
+    /// queue's note-kind logic classifies its cards (e.g. "SpeedrunApplication").
+    fn add_notetype_named(col: &mut Collection, name: &str) -> Notetype {
+        let mut nt = Notetype {
+            name: name.to_string(),
+            ..Default::default()
+        };
+        nt.add_field("Front");
+        nt.add_template("Card 1", "{{Front}}", "{{Front}}");
+        col.add_notetype(&mut nt, true).unwrap();
+        nt
+    }
+
+    /// Add a due review card of `nt`, tagged `tag`, with an FSRS memory state.
+    fn add_review_card_of(
+        col: &mut Collection,
+        nt: &Notetype,
+        tag: &str,
+        stability: f32,
+        elapsed_days: i64,
+    ) -> CardId {
+        let mut note = nt.new_note();
+        note.set_field(0, "front").unwrap();
+        note.tags.push(tag.to_string());
+        col.add_note(&mut note, DeckId(1)).unwrap();
+        let cid = col.storage.card_ids_of_notes(&[note.id]).unwrap()[0];
+
+        let mut card = col.storage.get_card(cid).unwrap().unwrap();
+        card.ctype = CardType::Review;
+        card.queue = CardQueue::Review;
+        card.due = 0;
+        card.interval = elapsed_days.max(1) as u32;
+        card.memory_state = Some(FsrsMemoryState {
+            stability,
+            difficulty: 5.0,
+        });
+        card.decay = Some(FSRS5_DEFAULT_DECAY);
+        card.last_review_time = Some(TimestampSecs::now().adding_secs(-elapsed_days * 86_400));
+        col.storage.update_card(&card).unwrap();
+        cid
     }
 
     /// (1) Cards from interleaved topics come back grouped into contiguous
@@ -379,6 +501,11 @@ mod tests {
             );
             of.insert(add_review_card(&mut col, Some(PKA), 10.0, 5), PKA);
         }
+        graduate(
+            &mut col,
+            &[KINETICS, STRUCTURE, PKA],
+            TopicState::Practicing,
+        );
 
         let topics = queue_topics(&mut col, &of);
         assert_eq!(topics.len(), 9);
@@ -419,6 +546,11 @@ mod tests {
             add_review_card(&mut col, Some(KINETICS), 100_000.0, 1),
             KINETICS,
         );
+        graduate(
+            &mut col,
+            &[PKA, METABOLISM, KINETICS],
+            TopicState::Practicing,
+        );
 
         let topics = queue_topics(&mut col, &of);
         assert_eq!(
@@ -445,6 +577,7 @@ mod tests {
             "",
         );
         of.insert(add_review_card(&mut col, None, 1.0, 60), "");
+        graduate(&mut col, &[KINETICS], TopicState::Practicing);
 
         let topics = queue_topics(&mut col, &of);
         assert_eq!(topics.len(), 3);
@@ -480,6 +613,7 @@ mod tests {
         let kinetics_review = add_review_card(&mut col, Some(KINETICS), 1.0, 60);
         let kinetics_new = add_new_card(&mut col, Some(KINETICS));
         let structure_review = add_review_card(&mut col, Some(STRUCTURE), 100_000.0, 1);
+        graduate(&mut col, &[KINETICS, STRUCTURE], TopicState::Practicing);
 
         let queued = col.get_topic_grouped_queue(DeckId(1), 0).unwrap();
 
@@ -521,6 +655,11 @@ mod tests {
         add_review_card(&mut col, Some(KINETICS), 1.0, 60);
         add_review_card(&mut col, Some(STRUCTURE), 1.0, 60);
         add_review_card(&mut col, Some(PKA), 1.0, 60);
+        graduate(
+            &mut col,
+            &[KINETICS, STRUCTURE, PKA],
+            TopicState::Practicing,
+        );
 
         let limited = col.get_topic_grouped_queue(DeckId(1), 2).unwrap();
         assert_eq!(limited.cards.len(), 2, "fetch_limit caps returned cards");
@@ -553,11 +692,91 @@ mod tests {
         // Buttons: 1 = Again (miss), 2/3/4 = Hard/Good/Easy (pass).
         log_reviews(&mut col, missed, &[1, 1, 3]);
         log_reviews(&mut col, passed, &[3, 3, 3]);
+        graduate(&mut col, &[PKA, METABOLISM], TopicState::Practicing);
 
         let topics = queue_topics(&mut col, &of);
         // PKA weight 0.12 > METABOLISM 0.08, and PKA is also less accurate, so
         // it must lead regardless.
         assert_eq!(topics, vec![PKA.to_string(), METABOLISM.to_string()]);
+    }
+
+    /// (c) An application card is suppressed while its topic is below
+    /// `hierarchy` (learning/practicing) and served once it reaches `hierarchy`;
+    /// a non-application card in the same topic is never suppressed.
+    #[test]
+    fn application_cards_suppressed_below_hierarchy() {
+        let mut col = Collection::new();
+        let app_nt = add_notetype_named(&mut col, "SpeedrunApplication");
+        let app = add_review_card_of(&mut col, &app_nt, KINETICS, 10.0, 5);
+        let basic = add_review_card(&mut col, Some(KINETICS), 10.0, 5);
+
+        // practicing is still below hierarchy: the application card is dropped,
+        // the basic card stays. (practicing, not learning, so it's mixed — this
+        // isolates suppression from the blocked-phase filter.)
+        graduate(&mut col, &[KINETICS], TopicState::Practicing);
+        let ids = queue_ids(&mut col);
+        assert!(ids.contains(&basic), "non-application card always served");
+        assert!(
+            !ids.contains(&app),
+            "application card suppressed below hierarchy"
+        );
+
+        // At hierarchy the application card joins the queue.
+        graduate(&mut col, &[KINETICS], TopicState::Hierarchy);
+        let ids = queue_ids(&mut col);
+        assert!(ids.contains(&app), "application card served at hierarchy");
+        assert!(ids.contains(&basic));
+
+        // Still served at mastering (scaffold removed, but card present).
+        graduate(&mut col, &[KINETICS], TopicState::Mastering);
+        assert!(queue_ids(&mut col).contains(&app));
+    }
+
+    /// (d) Blocked vs mixed selection: while any topic is `learning` only the
+    /// single highest-priority learning block is served; once every topic has
+    /// graduated the whole mixed pool is served in priority order.
+    #[test]
+    fn blocked_phase_serves_one_learning_block_then_mixes() {
+        let mut col = Collection::new();
+        let mut of: HashMap<CardId, &str> = HashMap::new();
+        of.insert(add_review_card(&mut col, Some(KINETICS), 10.0, 5), KINETICS);
+        of.insert(
+            add_review_card(&mut col, Some(STRUCTURE), 10.0, 5),
+            STRUCTURE,
+        );
+        of.insert(add_review_card(&mut col, Some(PKA), 10.0, 5), PKA);
+
+        // All fresh (learning) → blocked on the heaviest topic (KINETICS 0.18).
+        assert_eq!(
+            queue_topics(&mut col, &of),
+            vec![KINETICS.to_string()],
+            "blocked: only the highest-priority learning block is served"
+        );
+
+        // Graduating KINETICS doesn't open the pool — STRUCTURE/PKA are still
+        // learning, so the queue blocks on the next-heaviest (STRUCTURE 0.15).
+        graduate(&mut col, &[KINETICS], TopicState::Practicing);
+        assert_eq!(
+            queue_topics(&mut col, &of),
+            vec![STRUCTURE.to_string()],
+            "still blocked while any topic is learning"
+        );
+
+        // Once nothing is learning, the mixed pool serves every block by
+        // priority (KINETICS 0.18 > STRUCTURE 0.15 > PKA 0.12).
+        graduate(&mut col, &[STRUCTURE, PKA], TopicState::Practicing);
+        let topics = queue_topics(&mut col, &of);
+        let runs: Vec<String> = topics
+            .iter()
+            .enumerate()
+            .filter(|(i, t)| *i == 0 || &topics[i - 1] != *t)
+            .map(|(_, t)| t.clone())
+            .collect();
+        assert_eq!(
+            runs,
+            vec![KINETICS.to_string(), STRUCTURE.to_string(), PKA.to_string()],
+            "mixed: all graduated blocks served in priority order"
+        );
     }
 
     /// Answers `cid` with Good through the standard `answer_card` path using
@@ -591,6 +810,7 @@ mod tests {
         // we grade the weaker one the queue surfaces first.
         let weak = add_review_card(&mut col, Some(KINETICS), 5.0, 30);
         add_review_card(&mut col, Some(STRUCTURE), 60.0, 3);
+        graduate(&mut col, &[KINETICS, STRUCTURE], TopicState::Practicing);
 
         let before = col.storage.get_card(weak).unwrap().unwrap();
         assert_eq!(before.ctype, CardType::Review, "precondition: review card");
@@ -720,6 +940,7 @@ mod tests {
         // is a real topic-grouped ordering rather than a single card.
         let new_card = add_new_card(&mut col, Some(KINETICS));
         add_review_card(&mut col, Some(STRUCTURE), 60.0, 3);
+        graduate(&mut col, &[KINETICS, STRUCTURE], TopicState::Practicing);
 
         let before = col.storage.get_card(new_card).unwrap().unwrap();
         assert_eq!(before.ctype, CardType::New, "precondition: new card");
