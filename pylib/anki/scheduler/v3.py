@@ -72,6 +72,16 @@ class Scheduler(SchedulerBaseWithLegacy):
             deck_id=deck_id, fetch_limit=fetch_limit
         )
 
+    def get_memory_score(self, *, deck_id: DeckId) -> scheduler_pb2.MemoryScore:
+        """Speedrun honest Memory score for a deck: aggregated FSRS
+        retrievability over its in-scope taxonomy cards, returned as the full
+        evidence envelope (estimate, range, coverage, confidence, reasons).
+
+        Read-only: reads existing FSRS/revlog state only. When the give-up rule
+        fires (too few graded reviews or too little topic coverage) the score
+        abstains — estimate/range are 0 and abstain_reason says what's missing."""
+        return self.col._backend.get_memory_score(deck_id=deck_id)
+
     def describe_next_states(self, next_states: SchedulingStates) -> Sequence[str]:
         "Labels for each of the answer buttons."
         return self.col._backend.describe_next_states(next_states)

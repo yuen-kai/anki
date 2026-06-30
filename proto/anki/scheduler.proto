@@ -21,6 +21,10 @@ service SchedulerService {
   // construction that reuses the standard QueuedCards shape and answer path, so
   // FSRS intervals and undo are untouched.
   rpc GetTopicGroupedQueue(GetTopicGroupedQueueRequest) returns (QueuedCards);
+  // Speedrun honest Memory score for a deck: aggregated FSRS retrievability
+  // over in-scope taxonomy cards, with the full evidence envelope and the
+  // give-up rule. Read-only; reads existing FSRS/revlog state only.
+  rpc GetMemoryScore(GetMemoryScoreRequest) returns (MemoryScore);
   rpc AnswerCard(CardAnswer) returns (collection.OpChanges);
   rpc SchedTimingToday(generic.Empty) returns (SchedTimingTodayResponse);
   rpc StudiedToday(generic.Empty) returns (generic.String);
@@ -164,6 +168,36 @@ message GetTopicGroupedQueueRequest {
   int64 deck_id = 1;
   // Maximum cards to return; 0 means no limit (the whole ordered block list).
   uint32 fetch_limit = 2;
+}
+
+message GetMemoryScoreRequest {
+  int64 deck_id = 1;
+}
+
+// The Speedrun evidence envelope for the Memory score (spec-scores §4). A score
+// is only ever this whole object — there is no bare-number path. When
+// `abstained` is true the give-up rule fired: `estimate`/`range_low`/
+// `range_high` are 0 and `abstain_reason` names the failed condition(s).
+message MemoryScore {
+  // Mean FSRS retrievability over reviewed in-scope cards, in [0, 1].
+  float estimate = 1;
+  // 95% interval of the estimate (low/high), clamped to [0, 1].
+  float range_low = 2;
+  float range_high = 3;
+  // Fraction of in-scope taxonomy topics with at least one reviewed card.
+  float coverage_pct = 4;
+  // "low" | "medium" | "high".
+  string confidence = 5;
+  // When the score was computed (unix seconds).
+  int64 updated_at_secs = 6;
+  // Top human-readable drivers, e.g. "coverage 62%", "weak: Kinetics".
+  repeated string reasons = 7;
+  // True when the give-up rule fired and no number is shown.
+  bool abstained = 8;
+  // The failed give-up condition(s) and what clears them; empty when eligible.
+  string abstain_reason = 9;
+  // Total scheduling-affecting revlog entries over the in-scope cards.
+  uint32 graded_reviews = 10;
 }
 
 message SchedTimingTodayResponse {

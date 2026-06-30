@@ -256,6 +256,25 @@ impl crate::services::SchedulerService for Collection {
             .map(Into::into)
     }
 
+    fn get_memory_score(
+        &mut self,
+        input: scheduler::GetMemoryScoreRequest,
+    ) -> Result<scheduler::MemoryScore> {
+        let score = self.get_memory_score(input.deck_id.into())?;
+        Ok(scheduler::MemoryScore {
+            estimate: score.estimate,
+            range_low: score.range_low,
+            range_high: score.range_high,
+            coverage_pct: score.coverage_pct,
+            confidence: score.confidence.as_str().to_string(),
+            updated_at_secs: score.updated_at_secs,
+            reasons: score.reasons,
+            abstained: score.abstained,
+            abstain_reason: score.abstain_reason,
+            graded_reviews: score.graded_reviews,
+        })
+    }
+
     fn custom_study(
         &mut self,
         input: scheduler::CustomStudyRequest,
