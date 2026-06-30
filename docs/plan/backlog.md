@@ -23,6 +23,7 @@
 | [B015](#b015) | Topic-queue undo/interval-equivalence proof untested | issue | fixed |
 | [B016](#b016) | Topic queue leaves `active_decks` pointing at its deck | bug | open |
 | [B017](#b017) | Memory score refinements (range semantics, scope, tests) | issue | open |
+| [B018](#b018) | Markdown not dprint-clean fails `just check` (check:format) | issue | known-gap |
 
 ---
 
@@ -126,10 +127,11 @@
 <a id="b012"></a>
 ### B012 — Committed tree isn't dprint/rustfmt-clean
 
-- **Type:** refactor · **Status:** open · **Severity:** low
-- **Discovered:** 2026-06-30, Phase 2a (`just fix-fmt` rewrote `docs/plan/*`, Phase-1 `.js`, `taxonomy.rs`).
-- **Context:** `just fix-fmt` reports formatting changes on already-committed files. A prior full `just check` reached later steps without flagging them (its format step may apply rather than check, or scope differs), so the real impact is unclear.
-- **Next:** run a deliberate `just fix-fmt` + commit at a phase boundary to make the tree formatter-canonical, then confirm `just check`'s format step is green.
+- **Type:** refactor · **Status:** in-progress · **Severity:** low
+- **Discovered:** 2026-06-30, Phase 2a; confirmed at the Phase 2 closing gate.
+- **Context:** the committed tree wasn't rustfmt/dprint-clean; `just check`'s `cargo fmt --check` failed on `taxonomy.rs` (Phase 1A was hand-formatted without rustfmt).
+- **Resolution (rust):** rustfmt applied to the speedrun Rust modules (`bdf52d5af`); `cargo fmt` is now clean for our code.
+- **Remaining:** markdown `dprint` is split out to [B018](#b018); the user's root source docs are excluded (their inputs, not project source).
 
 <a id="b013"></a>
 ### B013 — Topic-grouped queue performance is unbenchmarked
@@ -176,6 +178,11 @@
 - **Items:** (a) range is a 95% CI of the *mean* (tightens with n) — product sign-off on whether to show per-card spread instead ([D24](decisions.md#d24)); (b) give-up is whole-deck-only (no per-topic abstention yet, though spec §5 allows per-scope); (c) the give-up boundary (exactly 200 / 0.50) is untested; (d) the Python e2e only exercises the 0.9 no-memory prior (degenerate range) — add a real-memory-state case; (e) `graded_reviews` includes learning-state ratings (decide whether Memory should count review-state only).
 - **Next:** address in Friday/Sunday score work; add boundary + real-memory tests.
 
----
+<a id="b018"></a>
+### B018 — Markdown not dprint-clean fails `just check` (check:format)
 
-<sub>Maintained with the `iris-log` skill by Iris Cai.</sub>
+- **Type:** issue · **Status:** known-gap · **Severity:** low
+- **Discovered:** 2026-06-30, Phase 2 closing gate.
+- **Ref:** `check:format` (dprint); root source docs `Brainlift MCAT.md` + `Speedrun_ A Desktop + Mobile Study App Built on Anki.md` (pre-existing, tracked since `13f38ee`); also `docs/plan/*.md` (hand-written, not yet dprint-canonical).
+- **Context:** `just check`'s format step runs dprint over markdown; the user's root source docs (one carries a large base64 image) and our plan docs aren't dprint-canonical, so `check:format` still fails after `cargo fmt` is clean. All CODE checks pass (clippy, cross-language tests, mypy, TS, rustfmt).
+- **Next:** optionally dprint `docs/plan/` in a cleanup; do NOT auto-reformat the user's root source docs (their inputs) — exclude them from the check or leave as pre-existing.
