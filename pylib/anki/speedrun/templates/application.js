@@ -1,10 +1,19 @@
-// SpeedrunApplication card behaviour: the principle-first scaffold (decision
-// D5). The learner narrows foundation -> category -> topic; a wrong pick shows
-// that node's discriminating cue and re-prompts the same level; a complete
-// correct path unlocks the worked solution. Entirely data-driven from the
-// note's JSON fields, with no fetch / XHR / model calls. `pycmd` is the desktop
-// Qt bridge (not network) and is only touched when present, so mobile and the
-// answer side degrade cleanly.
+// SpeedrunApplication card behaviour. Two render modes (decision D31), chosen by
+// the topic's state, which the reviewer injects as window.speedrunCardMode before
+// render:
+//   application_scaffolded   - the principle-first scaffold (decision D5): narrow
+//                              foundation -> category -> topic, a wrong pick shows
+//                              that node's discriminating cue and re-prompts, a
+//                              complete correct path unlocks the worked solution.
+//                              The default.
+//   application_unscaffolded - the scaffold is removed (the mastering transfer
+//                              goal): just the problem, then the worked solution
+//                              straight away on Show Answer, with no gate.
+// An absent or unrecognised mode falls back to application_scaffolded, so the
+// current behaviour is never broken. Entirely data-driven from the note's JSON
+// fields, with no fetch / XHR / model calls. `pycmd` is the desktop Qt bridge
+// (not network) and is only touched when present, so mobile and the answer side
+// degrade cleanly.
 (function () {
   "use strict";
 
@@ -16,6 +25,10 @@
   };
   var DEFAULT_FB =
     "Not the distinguishing feature here. Look again at what the problem pins down.";
+
+  // Only the unscaffolded string removes the scaffold; anything else (absent,
+  // unknown, or a wrong-family value) keeps the safe scaffolded default.
+  var unscaffolded = window.speedrunCardMode === "application_unscaffolded";
 
   function parseJSON(id, fallback) {
     var el = document.getElementById(id);
@@ -87,6 +100,13 @@
 
   // --- Answer side: show the path taken (or the correct path) + solution ----
   if (document.querySelector(".sr-app--answer")) {
+    if (unscaffolded) {
+      // No scaffold means no path was taken; drop the breadcrumb and show only
+      // the worked solution.
+      var answerTrail = document.getElementById("sr-trail");
+      if (answerTrail) answerTrail.hidden = true;
+      return;
+    }
     var labels = loadTrail();
     if (!labels.length && correctPath.length) {
       labels = correctPath.map(labelOf);
@@ -95,8 +115,20 @@
     return;
   }
 
-  // --- Question side: the interactive chooser -------------------------------
+  // --- Question side --------------------------------------------------------
   var root = document.querySelector(".sr-app");
+
+  if (unscaffolded) {
+    // Hide the chooser and mark the card unscaffolded so the reviewer's
+    // Show-Answer gate (qt/aqt/speedrun.py GATE_PROBE_JS) reads "unscaffolded"
+    // and fails open: the answer reveals directly, with no gate.
+    var scaffold = document.querySelector(".sr-scaffold");
+    if (scaffold) scaffold.hidden = true;
+    if (root) root.classList.add("sr-app--unscaffolded");
+    return;
+  }
+
+  // --- Scaffolded question side: the interactive chooser --------------------
   var trailEl = document.getElementById("sr-trail");
   var levelEl = document.getElementById("sr-level");
   var feedbackEl = document.getElementById("sr-feedback");

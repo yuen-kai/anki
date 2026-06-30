@@ -65,6 +65,12 @@
   line-height: 1.55;
 }
 
+/* Practice mode shows a single cue case, so the contrast grid collapses to one
+   column. */
+.sr-concept--practice .sr-cases {
+  grid-template-columns: 1fr;
+}
+
 .sr-prompt {
   margin: 20px 0 14px;
   font-size: 17px;
