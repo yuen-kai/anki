@@ -1,0 +1,31 @@
+---
+description: Never drop a stated requirement; track every ask to verified done
+alwaysApply: true
+---
+
+# Requirement tracking (no dropped asks)
+
+A requirement is anything the user says they want, including asides and mid-stream
+messages ("also...", "one of the things I said...", "there should be..."). Mid-stream
+asks are the ones that get dropped. Treat every one as binding.
+
+When the user states requirements (or I restate them and they confirm):
+
+1. Add each to the ledger `docs/plan/requirements.md` as a numbered, observable
+   acceptance criterion with a status: `todo` / `building` / `done` / `superseded`.
+2. Create a todo for each open requirement. One requirement maps to at least one todo.
+3. If I say "I'll add/do X", X becomes a ledger row in that same turn, before I move on.
+
+Before claiming any work "done" / "complete" / "shipped":
+
+- Reconcile the ledger against what actually shipped. Re-read the in-scope requirements
+  and confirm each has a `done` row backed by a test, a verified run, or a concrete
+  file reference. Saying it is not evidence.
+- If a subagent built it, the requirement must appear verbatim in that subagent's
+  acceptance criteria AND its verify output must cover it. If not, it is not done.
+- Never report a batch "done" while any in-scope requirement is `todo` or `building`.
+
+When delegating, copy the relevant ledger requirements verbatim into the subagent's
+acceptance criteria, so nothing is paraphrased away.
+
+If unsure whether something was a requirement, assume it was and track it.

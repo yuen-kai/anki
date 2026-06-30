@@ -22,6 +22,7 @@ A fork of Anki that adds a desktop + mobile study app for **one exam (MCAT)**, b
 | [`decisions.md`](decisions.md) | Decision log D1–D21 (Chose / Considered / Gaps) | append-only |
 | [`design-iterations.md`](design-iterations.md) | Dated, feedback-driven design changes | append-only |
 | [`backlog.md`](backlog.md) | Bugs / refactors / open issues | updated in place |
+| [`requirements.md`](requirements.md) | Requirements ledger (every ask → status), reconcile before "done" | living |
 
 ## Authority order (what wins when docs conflict)
 
