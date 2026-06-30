@@ -24,6 +24,7 @@ Run it without a build via either::
 import os
 import sys
 import unittest
+from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -211,6 +212,79 @@ class SeedContentTest(unittest.TestCase):
             "mcat::biomolecules::amino_acids::pka_titration",
         )
         self.assertEqual(seed_content.FOUNDATION_BIOMOLECULES, "mcat::biomolecules")
+
+
+# Every leaf topic of the in-scope biomolecules foundation (spec-topic-taxonomy
+# section 4); the mastery progression climbs each one concept -> application.
+LEAF_TOPICS = [
+    seed_content.TOPIC_AA_STRUCTURE,
+    seed_content.TOPIC_AA_PKA_TITRATION,
+    seed_content.TOPIC_AA_METABOLISM,
+    seed_content.TOPIC_PROTEIN_STRUCTURE_LEVELS,
+    seed_content.TOPIC_PROTEIN_FOLDING,
+    seed_content.TOPIC_ENZYME_KINETICS,
+    seed_content.TOPIC_ENZYME_INHIBITION,
+    seed_content.TOPIC_ENZYME_REGULATION,
+]
+
+
+def _cases_by_topic() -> Counter[str]:
+    return Counter(case.topic_id for case in seed_content.CONTRASTING_CASES)
+
+
+def _applications_by_topic() -> Counter[str]:
+    # An application item's topic is the final node of its correct path.
+    return Counter(item.correct_path[-1] for item in seed_content.APPLICATION_ITEMS)
+
+
+class SeedCoverageTest(unittest.TestCase):
+    """The progression (concept -> application; blocked -> mixed) is only
+    testable if the seed spans the taxonomy leaves with both card kinds."""
+
+    def test_seed_volume_grew_past_the_original_stub(self):
+        # The seed started as 2 cases + 2 items; the progression needs far more.
+        self.assertGreaterEqual(len(seed_content.CONTRASTING_CASES), 8)
+        self.assertGreaterEqual(len(seed_content.APPLICATION_ITEMS), 8)
+
+    def test_all_card_topics_are_known_leaf_topics(self):
+        known = set(LEAF_TOPICS)
+        for case in seed_content.CONTRASTING_CASES:
+            with self.subTest(case=case.topic_id):
+                self.assertIn(case.topic_id, known)
+        for item in seed_content.APPLICATION_ITEMS:
+            with self.subTest(item=item.problem_id):
+                self.assertIn(item.correct_path[-1], known)
+
+    def test_each_leaf_topic_has_a_contrasting_case(self):
+        cases = _cases_by_topic()
+        for topic in LEAF_TOPICS:
+            with self.subTest(topic=topic):
+                self.assertGreaterEqual(cases[topic], 1)
+
+    def test_each_leaf_topic_has_an_application_item(self):
+        apps = _applications_by_topic()
+        for topic in LEAF_TOPICS:
+            with self.subTest(topic=topic):
+                self.assertGreaterEqual(apps[topic], 1)
+
+    def test_enough_topics_carry_both_card_kinds(self):
+        cases = _cases_by_topic()
+        apps = _applications_by_topic()
+        both = [t for t in LEAF_TOPICS if cases[t] >= 1 and apps[t] >= 1]
+        # The brief's bar is at least 6 of the 8 leaves with both kinds, so a
+        # topic can progress all the way from concept to application.
+        self.assertGreaterEqual(
+            len(both), 6, f"only {len(both)} leaf topics carry both card kinds"
+        )
+
+    def test_application_topic_matches_its_topic_step(self):
+        # The progression keys off the topic node: the path's last entry must be
+        # the topic-level step's correct node (and a real leaf).
+        for item in seed_content.APPLICATION_ITEMS:
+            with self.subTest(item=item.problem_id):
+                topic_step = item.steps[-1]
+                self.assertEqual(topic_step.level, "topic")
+                self.assertEqual(item.correct_path[-1], topic_step.correct)
 
 
 if __name__ == "__main__":
