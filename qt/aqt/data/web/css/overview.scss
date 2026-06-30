@@ -37,6 +37,11 @@ h3 {
     text-align: center;
 }
 
-#study {
+#learn {
+    @include button.base();
+    margin-inline-end: 0.5em;
+}
+
+#practice {
     @include button.base($primary: true);
 }

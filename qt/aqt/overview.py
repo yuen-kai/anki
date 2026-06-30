@@ -94,11 +94,12 @@ class Overview:
     ############################################################
 
     def _linkHandler(self, url: str) -> bool:
-        if url == "study":
-            self.mw.col.startTimebox()
-            self.mw.moveToState("review")
-            if self.mw.state == "overview":
-                tooltip(tr.studying_no_cards_are_due_yet())
+        if url in {"study", "practice"}:
+            # Practice: the normal interleaved review queue (decision D2/D20).
+            self._start_session(learn=False)
+        elif url == "learn":
+            # Learn: the topic-grouped (blocked) queue for this deck.
+            self._start_session(learn=True)
         elif url == "anki":
             print("anki menu")
         elif url == "opts":
@@ -122,6 +123,15 @@ class Overview:
         elif url.lower().startswith("http"):
             openLink(url)
         return False
+
+    def _start_session(self, *, learn: bool) -> None:
+        deck_id = self.mw.col.decks.get_current_id()
+        self.mw.reviewer.set_speedrun_learn_deck(deck_id if learn else None)
+        self.mw.col.startTimebox()
+        self.mw.moveToState("review")
+        if self.mw.state == "overview":
+            # No cards to serve: review bounced straight back to the overview.
+            tooltip(tr.studying_no_cards_are_due_yet())
 
     def _shortcutKeys(self) -> list[tuple[str, Callable]]:
         return [
@@ -254,6 +264,11 @@ class Overview:
 </tr>
 """
 
+        # Two modes, plain labels, no marketing (decision D20). Practice keeps
+        # the autofocus so Enter still starts a normal review session.
+        study = but("learn", tr.studying_learn(), id="learn") + but(
+            "practice", tr.studying_practice(), id="practice", extra=" autofocus"
+        )
         return f"""
 <table width=400 cellpadding=5>
 <tr><td align=center valign=top>
@@ -263,7 +278,7 @@ class Overview:
 {number_row(tr.studying_to_review(), "review-count", counts[2], buried_review)}
 </table>
 </td><td align=center>
-{but("study", tr.studying_study_now(), id="study", extra=" autofocus")}</td></tr></table>"""
+{study}</td></tr></table>"""
 
     _body = """
 <center>
