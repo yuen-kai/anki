@@ -32,6 +32,8 @@
 | [B024](#b024) | Phase 3 polish bundle (dyn-deck Learn, dashboard i18n, nits) | issue | open |
 | [B025](#b025) | AnkiDroid UI doesn't call the new RPCs yet | issue | open |
 | [B026](#b026) | Blocked precedence can starve graduated topics' due reviews | issue | open |
+| [B027](#b027) | `window.speedrunCardMode` leaks across cards (no reset) | bug | open |
+| [B028](#b028) | `speedrun_record_answer` mutates state for any tagged card | bug | open |
 
 ---
 
@@ -263,7 +265,25 @@
 - **Discovered:** 2026-06-30, progression engine.
 - **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` `select_blocked_or_mixed`.
 - **Context:** per [`spec-mastery-progression`](spec-mastery-progression.md) §6, if ANY in-scope topic is in `learning`, the queue serves only that one blocked block, so due reviews of already-graduated topics wait until the learning block graduates. Faithful to the spec, but can delay retention of mastered material when new blocks are being learned.
-- **Next:** product call: interleave a few due reviews into the blocked phase, or cap consecutive blocked-only sessions.
+- **Next (decided):** with Learn + Practice merging into one Study flow, there is no Practice fallback, so the blocked phase MUST surface graduated topics' due reviews (don't starve). Fixing in the post-UX fix pass: interleave due reviews alongside the blocked learning block, or cap consecutive blocked-only serving.
+
+<a id="b027"></a>
+### B027: `window.speedrunCardMode` leaks across cards (no reset)
+
+- **Type:** bug · **Status:** open · **Severity:** medium
+- **Discovered:** 2026-06-30, progression review (Important #1).
+- **Ref:** `qt/aqt/speedrun.py` `card_mode_inject_script` (returns `""` for `none`); `qt/aqt/reviewer.py` (card content swapped via `web.eval`, no page reload).
+- **Context:** the injected `window.speedrunCardMode` persists between cards; a card that resolves to `none` injects nothing and inherits the previous card's mode. In a mixed/normal queue, a below-`hierarchy` or non-Speedrun card shown after a `mastering` card can render unscaffolded and the Show-Answer gate fails open, bypassing the scaffold.
+- **Fix:** always emit a reset (`window.speedrunCardMode = null`) for `none`/error. Apply in the post-UX fix pass.
+
+<a id="b028"></a>
+### B028: `speedrun_record_answer` mutates topic state for any tagged card
+
+- **Type:** bug · **Status:** open · **Severity:** medium
+- **Discovered:** 2026-06-30, progression review (Important #2).
+- **Ref:** `rslib/src/speedrun/progression.rs` `speedrun_record_answer` (guards only on topic presence, not note kind); the reviewer records on every answer.
+- **Context:** `card_topic` is tag-based ([D23](decisions.md#d23)), so once a real deck tags a non-Speedrun card with a leaf id, `Again` on that plain card demotes the topic (and `Good` can advance it). Asymmetric: advancement is scoped to the active Speedrun note kind, demotion is not. Latent today (the seed uses only Speedrun note types).
+- **Fix:** early-return when `note_kind == Other` in `speedrun_record_answer`. Apply in the post-UX fix pass.
 
 ---
 
