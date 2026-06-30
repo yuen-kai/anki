@@ -30,6 +30,7 @@
 | [D20](#d20) | User-facing mode labels = Learn / Practice | resolved |
 | [D21](#d21) | Contrasting-case sourcing = authored seed, then AI | resolved |
 | [D22](#d22) | Taxonomy seed = inline Rust, leaf-only weights | resolved |
+| [D23](#d23) | Weakness proxy + card→topic mapping (Wednesday) | resolved |
 
 ---
 
@@ -208,6 +209,14 @@
 - **Chose:** Encode the seed taxonomy inline in Rust (`rslib/src/speedrun/taxonomy.rs`), carry `exam_weight` only on leaf topics (structural nodes get `0.0` / `in_scope=false`), and give `coverage_pct`/`weighted_coverage` set semantics (dedupe inputs, ignore out-of-scope ids). Landed in Phase 1A (`524a8501d`).
 - **Considered:** a JSON seed file (forces `Result`/`expect`, breaks the pure `Vec` contract the queue consumes); weights on every level (risks double-counting a branch in `weighted_coverage`).
 - **Gaps / risks:** seed `exam_weight`s are placeholder proportions, not a specific AAMC table, and biomolecules-only; the section-mapping layer ([`spec-topic-taxonomy`](spec-topic-taxonomy.md) §4) is deferred. Both are intended future extensions; weights stay data-tunable.
+
+<a id="d23"></a>
+### D23: Weakness proxy + card→topic mapping (Wednesday)
+
+- **Status:** resolved (concretizes [D16](#d16))
+- **Chose:** `block_priority = topic_weakness(recent_accuracy, mean_retrievability) × exam_weight`. `recent_accuracy` = pass rate (button ≥ Hard) over the topic's last 50 graded revlog entries; `mean_retrievability` = mean FSRS current retrievability over the topic's due cards, with a 0.9 prior for cards lacking memory state; no-graded-history falls back to the memory signal. Within a block, `card_priority = 1 − retrievability` (weakest first). **Card→topic** = the note tag exactly equal to a `seed_taxonomy()` leaf id (smallest id wins on ties). Landed in Phase 2a (`rslib/src/scheduler/queue/topic_grouped.rs`).
+- **Considered:** accuracy-only or stability-only weakness (each ignores half the signal); fuzzy/substring tag matching (ambiguous); the spec's `manual` override table (deferred per [`spec-topic-taxonomy`](spec-topic-taxonomy.md)).
+- **Gaps / risks:** the 50-review window, the 0.9 prior, and the fallback are untuned heuristics; swap to the Performance-model signal in Friday/Sunday. One `get_note` per due card is O(n) DB reads, not yet benchmarked against the PRD p95<100ms target (see [B009] note on perf; tracked for Phase 2b/3).
 
 ---
 

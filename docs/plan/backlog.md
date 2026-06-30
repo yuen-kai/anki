@@ -16,6 +16,9 @@
 | [B008](#b008) | `just check` qt installer tests fail in sandbox (Briefcase cache) | issue | known-gap |
 | [B009](#b009) | Scaffold template JS + note-type installer lack automated tests | refactor | open |
 | [B010](#b010) | Scaffold sessionStorage keys shared across cards | bug | open |
+| [B011](#b011) | `cargo build -p anki` fails standalone (use `cargo test`) | issue | known-gap |
+| [B012](#b012) | Committed tree not dprint/rustfmt-clean (`just fix-fmt` rewrites files) | refactor | open |
+| [B013](#b013) | Topic-queue perf unbenchmarked (O(n) get_note vs p95<100ms) | issue | open |
 
 ---
 
@@ -62,7 +65,7 @@
 - **Discovered:** 2026-06-30 by the Phase 1A subagent building in an isolated worktree.
 - **Ref:** `rslib/i18n/gather.rs:62` (`anki_i18n` panic); `anki_proto` build.
 - **Context:** a fresh git worktree has no checked-out ftl submodules, so `anki_i18n` panics; and raw `cargo` has no `protoc`, so `anki_proto` fails. The main checkout doesn't hit this because submodules + protoc are already present from prior `just` runs.
-- **Workaround (bootstrap every Rust worktree):** `git submodule update --init ftl/core-repo ftl/qt-repo` and `export PROTOC="$(git rev-parse --show-toplevel)/out/extracted/protoc/bin/protoc"`. Bake into the Phase 2 subagent prompts.
+- **Workaround (bootstrap every Rust worktree):** `git submodule update --init ftl/core-repo ftl/qt-repo` (add `qt/installer/mac-template` before `just test-py`) and `export PROTOC="$(git rev-parse --show-toplevel)/out/extracted/protoc/bin/protoc"`. **Sandbox note:** worktrees live outside the sandbox's writable root, so `cargo`/`git`/`just` must run with the sandbox disabled, otherwise they silently operate on the main repo (hit in Phase 2a). Baked into the Phase 2 prompts.
 
 <a id="b006"></a>
 ### B006 — `pylib/tests/__init__.py` eager backend import blocks pure pytest
@@ -108,6 +111,30 @@
 - **Ref:** `pylib/anki/speedrun/templates/application.js` (`speedrun:app:trail`); `concept.js` (`speedrun:concept:answer`).
 - **Context:** the keys are global and reused by every card; normal review resets on render, but undo/back navigation after starting another card can briefly surface a prior card's trail/answer before the reset.
 - **Next:** namespace the key by card/note id when wiring the reviewer hook in Phase 3.
+
+<a id="b011"></a>
+### B011 — `cargo build -p anki` fails standalone; use `cargo test`
+
+- **Type:** issue · **Status:** known-gap · **Severity:** low
+- **Discovered:** 2026-06-30, Phase 2a.
+- **Context:** `cargo build -p anki` fails because the workspace's tokio features don't enable `io-util`; `cargo test -p anki` works because dev-deps (wiremock/reqwest) unify the feature in. Use `cargo test` for Rust verification, or `just` recipes for real builds.
+
+<a id="b012"></a>
+### B012 — Committed tree isn't dprint/rustfmt-clean
+
+- **Type:** refactor · **Status:** open · **Severity:** low
+- **Discovered:** 2026-06-30, Phase 2a (`just fix-fmt` rewrote `docs/plan/*`, Phase-1 `.js`, `taxonomy.rs`).
+- **Context:** `just fix-fmt` reports formatting changes on already-committed files. A prior full `just check` reached later steps without flagging them (its format step may apply rather than check, or scope differs), so the real impact is unclear.
+- **Next:** run a deliberate `just fix-fmt` + commit at a phase boundary to make the tree formatter-canonical, then confirm `just check`'s format step is green.
+
+<a id="b013"></a>
+### B013 — Topic-grouped queue performance is unbenchmarked
+
+- **Type:** issue · **Status:** open · **Severity:** medium
+- **Discovered:** 2026-06-30, Phase 2a code review.
+- **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` (one `get_note` per due card).
+- **Context:** the queue does O(n) per-card note reads to resolve topic tags; the PRD targets p95 < 100 ms for next-card and dashboard on a 50k-card deck ([`prd-speedrun`](prd-speedrun.md) §7), which this path has not been measured against.
+- **Next:** benchmark on the 50k deck; if needed, batch the tag lookups (single query) before Phase 4/mobile, where it also ships.
 
 ---
 
