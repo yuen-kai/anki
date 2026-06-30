@@ -16,6 +16,11 @@ import "anki/deck_config.proto";
 
 service SchedulerService {
   rpc GetQueuedCards(GetQueuedCardsRequest) returns (QueuedCards);
+  // Speedrun "Learn" mode: today's due review cards for a deck, regrouped into
+  // topic-contiguous blocks ordered by weakness × exam weight. Read-only queue
+  // construction that reuses the standard QueuedCards shape and answer path, so
+  // FSRS intervals and undo are untouched.
+  rpc GetTopicGroupedQueue(GetTopicGroupedQueueRequest) returns (QueuedCards);
   rpc AnswerCard(CardAnswer) returns (collection.OpChanges);
   rpc SchedTimingToday(generic.Empty) returns (SchedTimingTodayResponse);
   rpc StudiedToday(generic.Empty) returns (generic.String);
@@ -153,6 +158,12 @@ message QueuedCards {
 message GetQueuedCardsRequest {
   uint32 fetch_limit = 1;
   bool intraday_learning_only = 2;
+}
+
+message GetTopicGroupedQueueRequest {
+  int64 deck_id = 1;
+  // Maximum cards to return; 0 means no limit (the whole ordered block list).
+  uint32 fetch_limit = 2;
 }
 
 message SchedTimingTodayResponse {

@@ -5,6 +5,7 @@ mod builder;
 mod entry;
 mod learning;
 mod main;
+mod topic_grouped;
 pub(crate) mod undo;
 
 use std::collections::VecDeque;

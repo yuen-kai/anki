@@ -248,6 +248,14 @@ impl crate::services::SchedulerService for Collection {
             .map(Into::into)
     }
 
+    fn get_topic_grouped_queue(
+        &mut self,
+        input: scheduler::GetTopicGroupedQueueRequest,
+    ) -> Result<scheduler::QueuedCards> {
+        self.get_topic_grouped_queue(input.deck_id.into(), input.fetch_limit as usize)
+            .map(Into::into)
+    }
+
     fn custom_study(
         &mut self,
         input: scheduler::CustomStudyRequest,
