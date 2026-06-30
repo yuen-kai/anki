@@ -35,6 +35,7 @@ The PRD/specs are frozen initial plans. Where a decision conflicts with them, th
 ## Overrides since the plan
 
 - spec-scores §7/§9.5 said `AttemptLog` persists from Wednesday → deferred to Phase 3/Friday ([D25](decisions.md#d25)); the Memory score uses revlog in the interim.
+- spec-study-model §4-§6 (flat Learn/Practice two-mode model) → superseded by the four-state mastery progression ([D30](decisions.md#d30)/[D31](decisions.md#d31)/[D32](decisions.md#d32), [`spec-mastery-progression`](spec-mastery-progression.md)); building now.
 
 ---
 

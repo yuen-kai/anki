@@ -9,9 +9,9 @@
 | ID | Title | Status |
 | :-- | :-- | :-- |
 | [D1](#d1) | Exam = MCAT | resolved |
-| [D2](#d2) | Two-section study model (blocked → interleaved) | resolved |
+| [D2](#d2) | Two-section study model (blocked → interleaved) | superseded by D30 |
 | [D3](#d3) | Rust change = topic-grouped (blocked) queue | resolved |
-| [D4](#d4) | Blocked→interleaved transition is mastery-gated | resolved |
+| [D4](#d4) | Blocked→interleaved transition is mastery-gated | superseded by D32 |
 | [D5](#d5) | Principle-first scaffold + static feedback map (no AI) | resolved |
 | [D6](#d6) | Concept teaching = contrasting cases, then tell | resolved |
 | [D7](#d7) | Three scores shown separately, never blended | resolved |
@@ -37,6 +37,9 @@
 | [D27](#d27) | Application-card Show-Answer gate (fail-open, at _showAnswer) | resolved |
 | [D28](#d28) | Preload the MCAT seed deck on collection load | resolved |
 | [D29](#d29) | Mobile shared-engine build (rsdroid repointed at the fork) | resolved |
+| [D30](#d30) | Four-state mastery progression (supersedes two-mode) | resolved |
+| [D31](#d31) | State-aware card modes + scaffold fade | resolved |
+| [D32](#d32) | Topic-state storage + transitions + demotion | resolved |
 
 ---
 
@@ -51,7 +54,7 @@
 <a id="d2"></a>
 ### D2: Two-section study model (blocked → interleaved)
 
-- **Status:** resolved
+- **Status:** superseded by [D30](#d30) (the flat Learn/Practice split became a per-topic four-state progression; blocked→interleaved is retained inside it)
 - **Chose:** Two distinct study modes, **Learn** (topic-grouped / blocked) and **Practice** (regular spaced repetition / interleaved), and make that split the product's pedagogical spine.
 - **Considered:** A single interleaved SR flow (Anki's default, simplest, but teaches no application and discards the blocked-learning benefit); a single blocked flow (no discrimination training, weak long-term retention).
 - **Gaps / risks:** Two modes is more UI and more state; learners may skip Learn and lose the scaffold, mitigated by routing new topics through Learn first.
@@ -67,7 +70,7 @@
 <a id="d4"></a>
 ### D4: Blocked→interleaved transition is mastery-gated
 
-- **Status:** resolved
+- **Status:** superseded by [D32](#d32) (mastery-gating retained, now per-state across the four-state lifecycle, with demotion on lapse)
 - **Chose:** A topic graduates from Learn (blocked) to Practice (interleaved) when a per-topic understanding signal is met, not after a fixed count or time.
 - **Considered:** Fixed-count switch (e.g., "after N cards", simple but ignores whether the learner actually understands); always-interleaved (rejected, see grounding below).
 - **Gaps / risks:** Defining the understanding signal is itself a tuning problem; Wednesday uses a simple proxy (per-topic recent accuracy + FSRS stability over a threshold) and flags it for refinement. **Grounding:** interleaving introduced before a topic is understood is an "undesirable difficulty" that backfires, especially for shaky material (Hwang 2024, *Language Learning* doi:10.1111/lang.12659; "No Simple Solutions" 2024, PMC10950551, the optimal switch point "depends on what each learner has been able to understand"; Kaminske et al. 2020).
@@ -271,6 +274,30 @@
 - **Chose:** build `Anki-Android-Backend` (rsdroid) off its `main` (anki 26.05b1, matching our fork) with the backend's `anki` mount **symlinked to our fork** (reuses the fork's `out/` + `ftl`), produce a local arm64 debug `.aar`, and consume it in the AnkiDroid fork via `local.properties` `local_backend=true`. The new RPCs are verified on-device.
 - **Considered:** cloning anki into the backend submodule (a second full bring-up; rejected, the symlink reuses the built fork); building off the released backend `0.1.64-anki25.09.2` (rejected, version-skews with our 26.05 `rslib`).
 - **Gaps / risks:** AnkiDroid (25.09-era) vs engine (26.05) skew cost one `Deck.kt` branch (`RELATIVE_OVERDUENESS`) and future proto changes may need more compat patches; `out/strings.json` must be pre-generated (`STRINGS_JSON`); built arm64 debug only; the stock AnkiDroid UI doesn't call the new RPCs yet ([B025](backlog.md#b025)); the AnkiDroid + backend repo changes are uncommitted (env-specific).
+
+<a id="d30"></a>
+### D30: Four-state mastery progression (supersedes the two-mode model)
+
+- **Status:** resolved (supersedes [D2](#d2), [D4](#d4))
+- **Chose:** replace the flat Learn/Practice modes with a per-topic lifecycle `learning → practicing → hierarchy → mastering`, keyed by hierarchy leaf node. Topics are learned **blocked** (one block), then **mixed** into the interleaved pool; each topic's cards upgrade to match its state (concept-learn → concept-practice → scaffolded application → unscaffolded application). Full design in [`spec-mastery-progression`](spec-mastery-progression.md).
+- **Considered:** keeping the two flat modes (simpler, but no scaffold fade, no per-topic progression, weaker transfer); per-card rather than per-topic states (rejected, the progression + scaffold-fade is per-topic by the user's model).
+- **Gaps / risks:** more state to track + UI; transition tuning ([D32](#d32)); the application card is suppressed until `hierarchy`, so the engine must know each note's kind (concept vs application).
+
+<a id="d31"></a>
+### D31: State-aware card modes + scaffold fade
+
+- **Status:** resolved (extends [D5](#d5), [D19](#d19), [D27](#d27))
+- **Chose:** the two note types render different **modes** driven by the topic's state, which the reviewer injects into the card webview (`window.speedrunCardMode`): `SpeedrunConcept` = learn vs practice; `SpeedrunApplication` = scaffolded (`hierarchy`) vs unscaffolded (`mastering`, scaffold removed). The no-AI feedback map + fail-open Show-Answer gate ([D27](#d27)) still apply in scaffolded mode.
+- **Considered:** distinct cards per mode (more notes, more SR noise); static templates (can't fade the scaffold).
+- **Gaps / risks:** dynamic injection means the reviewer must set the mode before render; desktop-first (pycmd seam; mobile deferred, [D19](#d19)).
+
+<a id="d32"></a>
+### D32: Topic-state storage + transitions + demotion (supersedes D4)
+
+- **Status:** resolved (supersedes [D4](#d4))
+- **Chose:** persist per-topic state in the **collection config** (JSON map `topic_id → {state, updated_at}` under `speedrun_topic_state`; absent = `learning`). Advance a topic when its active-mode cards clear a per-state mastery signal (recent accuracy ≥ threshold AND a minimum graded reps, reusing the weakness / FSRS-stability machinery from [`spec-scores`](spec-scores.md) §6). A lapse (Again) demotes one state, never below `learning`.
+- **Considered:** a new DB table (schema migration, heavier); deriving state purely from card data (harder to express four states + demotion); count-only gates (rejected, per [D4](#d4)).
+- **Gaps / risks:** thresholds untuned; a config write per transition (small JSON, fine); cross-device sync of the map is automatic via config but untested.
 
 ---
 
