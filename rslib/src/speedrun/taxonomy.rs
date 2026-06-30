@@ -229,7 +229,10 @@ mod tests {
             assert!(id_is_well_formed(&n.id), "{} should be well-formed", n.id);
             if let Some(parent) = &n.parent_id {
                 assert_ne!(parent, &n.id, "no node is its own parent");
-                assert!(ids.contains(parent.as_str()), "parent {parent} should exist");
+                assert!(
+                    ids.contains(parent.as_str()),
+                    "parent {parent} should exist"
+                );
                 // parent_id == id minus its last segment.
                 let derived = n.id.rsplit_once("::").map(|(head, _)| head);
                 assert_eq!(derived, Some(parent.as_str()), "{} parent wiring", n.id);
@@ -237,8 +240,15 @@ mod tests {
         }
 
         // Leaf weights are normalized within the foundation.
-        let total: f32 = nodes.iter().filter(|n| n.in_scope).map(|n| n.exam_weight).sum();
-        assert!((total - 1.0).abs() < 1e-5, "weights should sum to 1.0, got {total}");
+        let total: f32 = nodes
+            .iter()
+            .filter(|n| n.in_scope)
+            .map(|n| n.exam_weight)
+            .sum();
+        assert!(
+            (total - 1.0).abs() < 1e-5,
+            "weights should sum to 1.0, got {total}"
+        );
     }
 
     #[test]
@@ -269,7 +279,10 @@ mod tests {
         }
         assert_eq!(many_cards.len(), 15_000);
         let pct = coverage_pct(&many_topics, &many_cards);
-        assert!((pct - 0.03).abs() < 1e-6, "lopsided coverage should be 3%, got {pct}");
+        assert!(
+            (pct - 0.03).abs() < 1e-6,
+            "lopsided coverage should be 3%, got {pct}"
+        );
     }
 
     #[test]
@@ -286,10 +299,16 @@ mod tests {
         let kinetics = "mcat::biomolecules::enzymes::kinetics".to_string();
         let expected = nodes.iter().find(|n| n.id == kinetics).unwrap().exam_weight;
         let got = weighted_coverage(&nodes, std::slice::from_ref(&kinetics));
-        assert!((got - expected).abs() < 1e-6, "expected {expected}, got {got}");
+        assert!(
+            (got - expected).abs() < 1e-6,
+            "expected {expected}, got {got}"
+        );
 
         // Structural nodes never contribute, even if passed in.
-        let structural = vec![FOUNDATION_ID.to_string(), format!("{FOUNDATION_ID}::enzymes")];
+        let structural = vec![
+            FOUNDATION_ID.to_string(),
+            format!("{FOUNDATION_ID}::enzymes"),
+        ];
         assert_eq!(weighted_coverage(&nodes, &structural), 0.0);
     }
 

@@ -15,13 +15,13 @@
 //! taxonomy-leaf tag, [`card_topic`]):
 //!
 //! - `estimate` = mean current FSRS retrievability over the *reviewed* in-scope
-//!   cards. Retrievability comes from the shared [`card_retrievability`]; a card
-//!   with no FSRS memory state contributes the same
+//!   cards. Retrievability comes from the shared [`card_retrievability`]; a
+//!   card with no FSRS memory state contributes the same
 //!   `NO_MEMORY_STATE_RETRIEVABILITY` (0.9) prior the queue uses (D23).
-//! - `range` = the 95% interval of that mean (mean ± `Z_95`·SE over the per-card
-//!   retrievabilities), clamped to `[0, 1]`. This is a *spread-based* interval,
-//!   not yet model/calibration uncertainty — calibration is proven Sunday
-//!   (spec §6, D8).
+//! - `range` = the 95% interval of that mean (mean ± `Z_95`·SE over the
+//!   per-card retrievabilities), clamped to `[0, 1]`. This is a *spread-based*
+//!   interval, not yet model/calibration uncertainty — calibration is proven
+//!   Sunday (spec §6, D8).
 //! - `coverage_pct` = [`coverage_pct`] of in-scope topics that have ≥1 reviewed
 //!   card.
 //! - `graded_reviews` = scheduling-affecting revlog entries over the in-scope
@@ -202,17 +202,21 @@ fn mean_and_interval(values: &[f32]) -> (f32, f32, f32) {
     if n < 2 {
         return (mean, mean, mean);
     }
-    let variance =
-        values.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / (n as f32 - 1.0);
+    let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / (n as f32 - 1.0);
     let std_err = (variance / n as f32).sqrt();
     let half = Z_95 * std_err;
-    (mean, (mean - half).clamp(0.0, 1.0), (mean + half).clamp(0.0, 1.0))
+    (
+        mean,
+        (mean - half).clamp(0.0, 1.0),
+        (mean + half).clamp(0.0, 1.0),
+    )
 }
 
 fn confidence_for(graded_reviews: u32, coverage: f32) -> Confidence {
     if graded_reviews >= CONFIDENCE_HIGH_REVIEWS && coverage >= CONFIDENCE_HIGH_COVERAGE {
         Confidence::High
-    } else if graded_reviews >= CONFIDENCE_MEDIUM_REVIEWS && coverage >= CONFIDENCE_MEDIUM_COVERAGE {
+    } else if graded_reviews >= CONFIDENCE_MEDIUM_REVIEWS && coverage >= CONFIDENCE_MEDIUM_COVERAGE
+    {
         Confidence::Medium
     } else {
         Confidence::Low
@@ -369,7 +373,10 @@ mod tests {
         assert!(!score.abstained, "deck above the give-up line is eligible");
         assert!(score.abstain_reason.is_empty());
         assert_eq!(score.graded_reviews, 250);
-        assert!((score.coverage_pct - 5.0 / 8.0).abs() < 1e-4, "5 of 8 topics");
+        assert!(
+            (score.coverage_pct - 5.0 / 8.0).abs() < 1e-4,
+            "5 of 8 topics"
+        );
         assert!(
             score.estimate > 0.0 && score.estimate <= 1.0,
             "real estimate in (0, 1], got {}",
@@ -379,7 +386,10 @@ mod tests {
             score.range_low <= score.estimate && score.estimate <= score.range_high,
             "estimate must sit inside its range"
         );
-        assert!(score.range_low >= 0.0 && score.range_high <= 1.0, "range clamped");
+        assert!(
+            score.range_low >= 0.0 && score.range_high <= 1.0,
+            "range clamped"
+        );
         assert!(!score.reasons.is_empty(), "drivers are reported");
         assert!(score.updated_at_secs > 0);
     }

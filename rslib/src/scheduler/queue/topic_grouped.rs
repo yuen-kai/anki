@@ -454,11 +454,11 @@ mod tests {
         assert_eq!(topics, vec![PKA.to_string(), METABOLISM.to_string()]);
     }
 
-    /// Answers `cid` with Good through the standard `answer_card` path using the
-    /// provided scheduling states, and returns the resulting interval. The card
-    /// is answered out-of-queue (`from_queue: false`) because the topic-grouped
-    /// queue is an owned, read-only ordering, not the live study queue — exactly
-    /// how the reviewer grades a card it surfaced.
+    /// Answers `cid` with Good through the standard `answer_card` path using
+    /// the provided scheduling states, and returns the resulting interval.
+    /// The card is answered out-of-queue (`from_queue: false`) because the
+    /// topic-grouped queue is an owned, read-only ordering, not the live
+    /// study queue — exactly how the reviewer grades a card it surfaced.
     fn answer_good(col: &mut Collection, cid: CardId, states: &SchedulingStates) -> u32 {
         let mut answer = CardAnswer {
             card_id: cid,
@@ -532,7 +532,11 @@ mod tests {
         assert_eq!(restored.lapses, before.lapses, "lapses restored");
         assert_eq!(restored.ctype, before.ctype, "type restored");
         assert_eq!(restored.queue, before.queue, "queue restored");
-        assert_eq!(restored.ease_factor(), before.ease_factor(), "ease restored");
+        assert_eq!(
+            restored.ease_factor(),
+            before.ease_factor(),
+            "ease restored"
+        );
         assert_eq!(
             col.storage
                 .get_all_revlog_entries(TimestampSecs(0))

@@ -9,8 +9,8 @@
 //!   shared by the topic-grouped queue and the Memory score so the two never
 //!   diverge (Phase 2a/2b).
 //! - [`memory_score`]: the honest Memory score — aggregated FSRS retrievability
-//!   over in-scope cards, with an evidence envelope and the give-up rule
-//!   (Phase 2b).
+//!   over in-scope cards, with an evidence envelope and the give-up rule (Phase
+//!   2b).
 
 pub mod card_signals;
 pub mod memory_score;
