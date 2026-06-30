@@ -29,6 +29,7 @@
 | [D19](#d19) | App-teacher UI = note types + card-template JS | resolved |
 | [D20](#d20) | User-facing mode labels = Learn / Practice | resolved |
 | [D21](#d21) | Contrasting-case sourcing = authored seed, then AI | resolved |
+| [D22](#d22) | Taxonomy seed = inline Rust, leaf-only weights | resolved |
 
 ---
 
@@ -199,6 +200,14 @@
 - **Chose:** For Wednesday (no AI), the two cases per concept are **hand-authored or curated into `SpeedrunConcept` notes** for a small, complete seed topic set, drawing raw scenarios from open-licensed sources (e.g. OpenStax, CC BY) to cut authoring time, held to the [`spec-study-model`](spec-study-model.md) §10 quality bar. Friday adds AI generation of candidate pairs from a named source, gated by the gold-set checker.
 - **Considered:** Auto-pairing existing deck cards (rejected, flashcards are not contrasting cases with shared deep structure); AI generation on Wednesday (rejected, violates the no-AI rule); a large authored set (rejected for the timeline, the seed is intentionally small).
 - **Gaps / risks:** authoring is manual and slow, so coverage is thin until Friday's AI path (the cold-start risk in [`spec-study-model`](spec-study-model.md) §9); curated third-party scenarios must keep license compatibility ([D18](#d18)).
+
+<a id="d22"></a>
+### D22: Taxonomy seed = inline Rust data, leaf-only weights
+
+- **Status:** resolved
+- **Chose:** Encode the seed taxonomy inline in Rust (`rslib/src/speedrun/taxonomy.rs`), carry `exam_weight` only on leaf topics (structural nodes get `0.0` / `in_scope=false`), and give `coverage_pct`/`weighted_coverage` set semantics (dedupe inputs, ignore out-of-scope ids). Landed in Phase 1A (`524a8501d`).
+- **Considered:** a JSON seed file (forces `Result`/`expect`, breaks the pure `Vec` contract the queue consumes); weights on every level (risks double-counting a branch in `weighted_coverage`).
+- **Gaps / risks:** seed `exam_weight`s are placeholder proportions, not a specific AAMC table, and biomolecules-only; the section-mapping layer ([`spec-topic-taxonomy`](spec-topic-taxonomy.md) §4) is deferred. Both are intended future extensions; weights stay data-tunable.
 
 ---
 
