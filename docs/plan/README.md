@@ -10,7 +10,7 @@ A fork of Anki that adds a desktop + mobile study app for **one exam (MCAT)**, b
 
 - **Planning:** complete. PRD + 5 specs + decision log (D1–D21) written and frozen.
 - **Build bring-up:** base Anki runs on desktop (`just run`, after installing `n2`); base AnkiDroid runs on an arm64 emulator. Zero source edits. Anki HEAD `b00308e`.
-- **Implementation:** starting. No feature code landed yet.
+- **Implementation:** Phase 1 merged to `main` (AAMC taxonomy Rust module + Learn content layer / note types + seed). Integrated tests green: 4 Rust (`cargo test -p anki speedrun`) + 22 Python (`python3 -m unittest test_speedrun_content`). Code-reviewed (no Critical; 2 Important fixes landed: concept-seed idempotency, `</script>` JSON hardening). Next: Phase 2 (engine queue, then Memory score).
 
 ## Doc map
 

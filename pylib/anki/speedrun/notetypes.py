@@ -130,12 +130,23 @@ def concept_fields(case: seed_content.ContrastingCase) -> dict[str, str]:
     }
 
 
+def _embed_json(value: object) -> str:
+    """Serialize to JSON safe to embed in an HTML ``<script>`` block.
+
+    ``json.dumps`` escapes the charset but not a literal ``</script>``. Since
+    ``<`` only ever appears inside JSON string values, replacing it with the
+    ``\\u003c`` escape neutralizes any breakout and ``JSON.parse`` restores it.
+    """
+    return json.dumps(value).replace("<", "\\u003c")
+
+
 def application_fields(item: ApplicationItem) -> dict[str, str]:
     """Map an ApplicationItem onto SpeedrunApplication fields.
 
     CorrectPath/Steps/Feedback are JSON strings; Steps carries each option's
-    display label so the template never has to know the taxonomy. JSON is
-    ASCII-escaped so it embeds safely in the template's ``<script>`` blocks.
+    display label so the template never has to know the taxonomy. ``<`` is
+    escaped so the JSON embeds safely in the template's ``<script>`` blocks even
+    if a label or cue ever contains ``</script>``.
     """
     validate_application_item(item)
     steps = [
@@ -152,9 +163,9 @@ def application_fields(item: ApplicationItem) -> dict[str, str]:
     return {
         "Problem": item.problem,
         "Solution": item.solution,
-        "CorrectPath": json.dumps(item.correct_path),
-        "Steps": json.dumps(steps),
-        "Feedback": json.dumps(item.feedback),
+        "CorrectPath": _embed_json(item.correct_path),
+        "Steps": _embed_json(steps),
+        "Feedback": _embed_json(item.feedback),
     }
 
 
@@ -180,6 +191,7 @@ def add_seed_notes(col: anki.collection.Collection) -> list[NoteId]:
         for name, value in concept_fields(case).items():
             note[name] = value
         note.add_tag(SEED_TAG)
+        note.add_tag(marker)
         note.add_tag(case.topic_id)
         col.add_note(note, deck_id)
         created.append(note.id)
