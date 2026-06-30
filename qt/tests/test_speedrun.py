@@ -1,24 +1,32 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-"""Unit tests for the Speedrun reviewer hook's pure decision logic (Phase 3b).
+"""Unit tests for the Speedrun reviewer hook's pure decision logic.
 
-The gate and pick parser are deliberately Qt-free so they can be tested without
-a running app. The load-bearing property is that the gate *fails open*: only a
-live, incomplete SpeedrunApplication scaffold ever holds Show Answer back; a
-normal card or a broken template never does.
+The gate, pick parser, card-mode inject builder, and answer→rating mapping are
+deliberately backend-free so they can be tested without a collection. Two
+load-bearing properties: the gate *fails open* (only a live, incomplete
+SpeedrunApplication scaffold ever holds Show Answer back) and the card-mode
+injection is *additive* (only a known Speedrun mode injects anything, so a
+normal card and normal review are never touched).
 """
 
 from __future__ import annotations
 
 import pytest
 
-from aqt.reviewer import Reviewer
+# CardAnswer is re-exported by aqt.reviewer; importing it from there (rather than
+# anki.scheduler.v3 directly) keeps aqt first in the import order, dodging a
+# pre-existing anki.scheduler circular import when this module is run alone.
+from aqt.reviewer import CardAnswer, Reviewer, V3CardInfo
 from aqt.speedrun import (
     APPLICATION_NOTETYPE,
+    CARD_MODE_NONE,
+    CARD_MODES,
     GATE_INCOMPLETE,
     SCAFFOLD_COMPLETE,
     ScaffoldPick,
+    card_mode_inject_script,
     gate_blocks_answer,
     is_application_note_type,
     parse_pick_signal,
@@ -108,3 +116,50 @@ class TestReviewerGateWiring:
         reviewer = self._reviewer_with_card(APPLICATION_NOTETYPE)
         reviewer._speedrun_gate_cleared = True
         assert reviewer._speedrun_answer_gate_active() is False
+
+
+class TestCardModeInjectScript:
+    """The mode→inject string builder the reviewer prepends before render."""
+
+    @pytest.mark.parametrize("mode", sorted(CARD_MODES))
+    def test_known_mode_sets_the_window_variable(self, mode: str) -> None:
+        # The template reads window.speedrunCardMode, so the value injected must
+        # match get_speedrun_card_mode exactly (json-quoted so it can't escape
+        # the tag).
+        assert (
+            card_mode_inject_script(mode)
+            == f'<script>window.speedrunCardMode = "{mode}";</script>'
+        )
+
+    @pytest.mark.parametrize(
+        "mode",
+        [CARD_MODE_NONE, "", None, "garbage", "CONCEPT_LEARN", "concept", "scaffolded"],
+    )
+    def test_non_modes_inject_nothing(self, mode: str | None) -> None:
+        # "none"/empty/None and any unknown string are a no-op, so a normal card
+        # and normal review are never touched.
+        assert card_mode_inject_script(mode) == ""
+
+    def test_none_constant_is_not_a_real_mode(self) -> None:
+        assert CARD_MODE_NONE not in CARD_MODES
+
+
+class TestRatingFromEase:
+    """The answer→record mapping fed to speedrun_record_answer (decision D32)."""
+
+    def test_again_demotes(self) -> None:
+        assert V3CardInfo.rating_from_ease(1) == CardAnswer.AGAIN
+
+    @pytest.mark.parametrize(
+        "ease,rating",
+        [
+            (1, CardAnswer.AGAIN),
+            (2, CardAnswer.HARD),
+            (3, CardAnswer.GOOD),
+            (4, CardAnswer.EASY),
+        ],
+    )
+    def test_each_ease_maps_to_its_rating(
+        self, ease: int, rating: CardAnswer.Rating.V
+    ) -> None:
+        assert V3CardInfo.rating_from_ease(ease) == rating

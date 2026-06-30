@@ -12,6 +12,7 @@ a normal card or a broken template can never trap the learner.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 # Matches anki.speedrun.notetypes.APPLICATION_NOTETYPE_NAME (the Phase 1
@@ -87,3 +88,40 @@ def parse_pick_signal(url: str) -> ScaffoldPick | None:
     return ScaffoldPick(
         level=parts[0], correct=len(parts) > 1 and parts[1] == "1", raw=url
     )
+
+
+# Card-mode injection (decision D31, spec-mastery-progression §5)
+##############################################################################
+# The engine resolves each Speedrun card's mode from its topic's state; the
+# reviewer injects it as ``window.speedrunCardMode`` before the card's own JS
+# runs, and the state-aware templates render against it. "none" (a non-Speedrun
+# card, or an application card suppressed below "hierarchy") injects nothing.
+
+# get_speedrun_card_mode's value for "not a Speedrun card / nothing to inject".
+CARD_MODE_NONE = "none"
+
+# The modes the engine can resolve (spec §2), used as an allow-list: an
+# unexpected backend value can then never inject arbitrary markup into the
+# webview. Anything outside this set ("none", "", None, …) is a no-op.
+CARD_MODES = frozenset(
+    {
+        "concept_learn",
+        "concept_practice",
+        "application_scaffolded",
+        "application_unscaffolded",
+    }
+)
+
+
+def card_mode_inject_script(mode: str | None) -> str:
+    """Build the ``<script>`` that sets ``window.speedrunCardMode``, or ``""``
+    when there is nothing to inject.
+
+    Fails open: only a known Speedrun mode yields a script; a non-Speedrun
+    "none", an empty/None value, or any unrecognised string returns ``""``, so a
+    normal card (and normal review) is never touched. ``json.dumps`` quotes the
+    value, so a stray mode string can't break out of the script tag.
+    """
+    if mode not in CARD_MODES:
+        return ""
+    return f"<script>window.speedrunCardMode = {json.dumps(mode)};</script>"
