@@ -24,7 +24,7 @@
 | [B016](#b016) | Topic queue leaves `active_decks` pointing at its deck | bug | open |
 | [B017](#b017) | Memory score refinements (range semantics, scope, tests) | issue | open |
 | [B018](#b018) | Markdown not dprint-clean fails `just check` (check:format) | issue | known-gap |
-| [B019](#b019) | Learn shows due reviews only (new/learning excluded) | issue | open |
+| [B019](#b019) | Learn shows due reviews only (new/learning excluded) | issue | fixed |
 | [B020](#b020) | Scaffold pick-signal format reconciliation | issue | open |
 | [B021](#b021) | No automated UI regression test (dashboard + Qt Learn flow) | refactor | open |
 | [B022](#b022) | Gate lacks a manual reveal-anyway override (D19 tension) | issue | open |
@@ -197,11 +197,11 @@
 <a id="b019"></a>
 ### B019: Learn shows due reviews only (new/learning excluded)
 
-- **Type:** issue · **Status:** open · **Severity:** medium
+- **Type:** issue · **Status:** fixed · **Severity:** medium
 - **Discovered:** 2026-06-30, Phase 3b (gap G2).
-- **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` (gathers Review entries only); `qt/aqt/reviewer.py` Learn mode.
-- **Context:** the topic-grouped queue serves due **review** cards; new/learning cards are excluded, so freshly seeded Speedrun cards don't appear in Learn until graduated (study once via Practice first). Hurts the first-run demo.
-- **Next:** decide whether Learn should include new cards (gather new + review into the topic blocks) for the Wednesday demo; if so, extend the queue gather.
+- **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs`; `qt/aqt/reviewer.py` Learn mode.
+- **Context:** the topic-grouped queue served due **review** cards only, so freshly seeded (new) Speedrun cards didn't appear in Learn until graduated.
+- **Resolution:** the queue now gathers New + due Review + interday Learning and threads each card's real `QueueEntryKind` through ordering into the returned `QueuedCard` (per-kind counts too). New cards are grouped, tagged `New`, and answer/undo-equivalent to the default new-card path (9/9 Rust tests incl. `new_cards_are_included...` + `answering_new_card...`, plus the new-card pylib e2e). Merged to `main`. (Intraday learning steps stay in the default queue by design.)
 
 <a id="b020"></a>
 ### B020: Scaffold pick-signal format reconciliation
