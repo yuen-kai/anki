@@ -19,6 +19,7 @@
 | [B011](#b011) | `cargo build -p anki` fails standalone (use `cargo test`) | issue | known-gap |
 | [B012](#b012) | Committed tree not dprint/rustfmt-clean (`just fix-fmt` rewrites files) | refactor | open |
 | [B013](#b013) | Topic-queue perf unbenchmarked (O(n) get_note vs p95<100ms) | issue | open |
+| [B014](#b014) | Sandbox blocks tsx IPC pipe in `just test-py` build | issue | known-gap |
 
 ---
 
@@ -135,6 +136,15 @@
 - **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` (one `get_note` per due card).
 - **Context:** the queue does O(n) per-card note reads to resolve topic tags; the PRD targets p95 < 100 ms for next-card and dashboard on a 50k-card deck ([`prd-speedrun`](prd-speedrun.md) §7), which this path has not been measured against.
 - **Next:** benchmark on the 50k deck; if needed, batch the tag lookups (single query) before Phase 4/mobile, where it also ships.
+
+<a id="b014"></a>
+### B014 — Sandbox blocks tsx IPC pipe (`just test-py` build step)
+
+- **Type:** issue · **Status:** known-gap (environmental) · **Severity:** low
+- **Discovered:** 2026-06-30, Phase 2a integration.
+- **Ref:** `ts/tools/markpure.ts` run via `just _test-py` (tsx `createIpcServer`).
+- **Context:** `just test-py` rebuilds the generated TS lib; tsx tries to `listen` on a Unix socket in `$TMPDIR` and the sandbox denies it (`EPERM`), failing the build before pytest runs. Same class as B008 (sandbox-only, not our code). The Rust/rsbridge rebuild itself succeeded first.
+- **Workaround:** run `just test-py` with the sandbox disabled. `cargo test` for Rust is unaffected.
 
 ---
 
