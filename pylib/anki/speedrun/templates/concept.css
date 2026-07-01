@@ -2,28 +2,36 @@
    to articulate the shared idea, then the reveal. One accent, used sparingly. */
 
 .card {
-  background: #f6f6f3;
+  /* Cool clinical neutral, deliberately not the warm-cream + serif default. */
+  background: #e9eeec;
   padding: 0;
 }
 
 .speedrun {
-  --sr-ink: #1f2328;
-  --sr-muted: #5b636e;
+  --sr-ink: #16201d;
+  --sr-muted: #556862;
   --sr-surface: #ffffff;
-  --sr-line: #e3e3dd;
+  --sr-line: #d6e0dc;
   --sr-accent: #0e7c66;
   --sr-warn: #9a5b00;
-  --sr-radius: 7px;
+  --sr-radius: 10px;
 
   box-sizing: border-box;
-  max-width: 760px;
+  max-width: 700px;
   margin: 0 auto;
-  padding: 20px 18px 28px;
+  padding: 30px 22px 40px;
   text-align: left;
   color: var(--sr-ink);
-  font-size: 17px;
-  line-height: 1.5;
+  /* Deliberate sans for dense scientific prose; system-first so it renders the
+     same offline on desktop Qt and AnkiDroid, where web fonts can't be relied on. */
+  font-family: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.62;
+  letter-spacing: -0.003em;
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .speedrun *,
@@ -39,10 +47,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  margin: 0 0 18px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  margin: 0 0 22px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--sr-muted);
 }
@@ -73,7 +81,7 @@
 }
 
 .sr-case {
-  padding: 16px 16px 18px;
+  padding: 18px 20px 20px;
 }
 
 .sr-case + .sr-case {
@@ -81,18 +89,18 @@
 }
 
 .sr-case__label {
-  margin: 0 0 8px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--sr-accent);
 }
 
 .sr-case__body {
   margin: 0;
-  font-size: 16px;
-  line-height: 1.55;
+  font-size: 15.5px;
+  line-height: 1.6;
 }
 
 /* Practice mode shows a single cue case, so the contrast grid collapses to one
@@ -101,17 +109,23 @@
   grid-template-columns: 1fr;
 }
 
+/* The pivot of the card: articulate the shared idea. Set as the one clear
+   focal line, marked with the accent so the eye lands on the ask. */
 .sr-prompt {
-  margin: 20px 0 14px;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.45;
+  margin: 26px 0 16px;
+  padding-left: 14px;
+  border-left: 3px solid var(--sr-accent);
+  font-size: 18px;
+  font-weight: 620;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
 }
 
 .sr-answer__label {
   display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--sr-muted);
 }
 
@@ -147,16 +161,17 @@
 }
 
 .sr-reveal__label {
-  margin: 0 0 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
+  margin: 0 0 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--sr-muted);
 }
 
 .sr-your-answer {
-  font-size: 16px;
+  font-size: 15.5px;
+  line-height: 1.6;
 }
 
 .sr-blank {
@@ -165,8 +180,8 @@
 }
 
 .sr-concept__body {
-  font-size: 16px;
-  line-height: 1.55;
+  font-size: 15.5px;
+  line-height: 1.62;
 }
 
 @media (max-width: 620px) {
@@ -180,14 +195,14 @@
 }
 
 .nightMode .card {
-  background: #1a1c1f;
+  background: #101513;
 }
 
 .nightMode .speedrun {
-  --sr-ink: #e7e9ec;
-  --sr-muted: #9aa1ab;
-  --sr-surface: #24272b;
-  --sr-line: #3a3e44;
+  --sr-ink: #e6ece9;
+  --sr-muted: #91a39d;
+  --sr-surface: #1a201e;
+  --sr-line: #2e3835;
   --sr-accent: #4fd1ac;
   --sr-warn: #e0a35a;
 }
