@@ -82,6 +82,22 @@ class Scheduler(SchedulerBaseWithLegacy):
         abstains — estimate/range are 0 and abstain_reason says what's missing."""
         return self.col._backend.get_memory_score(deck_id=deck_id)
 
+    def get_performance_score(self, *, deck_id: DeckId) -> scheduler_pb2.ScoreEnvelope:
+        """Speedrun honest Performance score for a deck: weighted accuracy over
+        graded reviews of SpeedrunApplication (exam-style) cards, as the full
+        evidence envelope. Distinct from Memory (recall of a taught fact); this
+        measures getting application questions right. Read-only; abstains under
+        the give-up rule (too few application attempts or too little coverage)."""
+        return self.col._backend.get_performance_score(deck_id=deck_id)
+
+    def get_readiness_score(self, *, deck_id: DeckId) -> scheduler_pb2.ScoreEnvelope:
+        """Speedrun honest Readiness score for a deck: the Performance score
+        projected onto the 472-528 MCAT scale with a coverage-widened range, as
+        the full evidence envelope (format "points"). Abstains whenever
+        Performance abstains; a projection from practice, not calibrated to real
+        exam outcomes yet. Read-only."""
+        return self.col._backend.get_readiness_score(deck_id=deck_id)
+
     def get_speedrun_card_mode(self, *, card_id: CardId) -> str:
         """Speedrun mastery progression: the card's active mode, resolved from
         its topic's state and note type. One of "concept_learn",

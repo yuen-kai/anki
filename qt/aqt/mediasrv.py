@@ -764,6 +764,8 @@ exposed_backend_list = [
     "simulate_fsrs_review",
     "simulate_fsrs_workload",
     "get_memory_score",
+    "get_performance_score",
+    "get_readiness_score",
     "get_speedrun_progress",
     # DeckConfigService
     "get_ignored_before_count",

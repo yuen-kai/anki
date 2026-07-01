@@ -11,11 +11,18 @@
 //! - [`memory_score`]: the honest Memory score — aggregated FSRS retrievability
 //!   over in-scope cards, with an evidence envelope and the give-up rule (Phase
 //!   2b).
+//! - [`scores`]: the shared evidence envelope for the Performance and Readiness
+//!   scores, so all three render identically and are never blended (D33).
+//! - [`performance_score`]: accuracy over application (exam-style) cards (D33).
+//! - [`readiness_score`]: Performance projected onto the 472-528 scale (D33).
 //! - [`progression`]: the per-topic four-state mastery lifecycle
 //!   (learning → practicing → hierarchy → mastering), its state-aware card-mode
 //!   resolution and its config-backed transitions (decisions D30–D32).
 
 pub mod card_signals;
 pub mod memory_score;
+pub mod performance_score;
 pub mod progression;
+pub mod readiness_score;
+pub mod scores;
 pub mod taxonomy;

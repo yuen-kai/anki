@@ -275,6 +275,24 @@ impl crate::services::SchedulerService for Collection {
         })
     }
 
+    fn get_performance_score(
+        &mut self,
+        input: scheduler::GetSpeedrunScoreRequest,
+    ) -> Result<scheduler::ScoreEnvelope> {
+        Ok(score_envelope_to_proto(
+            self.get_performance_score(input.deck_id.into())?,
+        ))
+    }
+
+    fn get_readiness_score(
+        &mut self,
+        input: scheduler::GetSpeedrunScoreRequest,
+    ) -> Result<scheduler::ScoreEnvelope> {
+        Ok(score_envelope_to_proto(
+            self.get_readiness_score(input.deck_id.into())?,
+        ))
+    }
+
     fn get_speedrun_card_mode(
         &mut self,
         input: anki_proto::cards::CardId,
@@ -520,6 +538,26 @@ fn fsrs_review_proto_to_fsrs(review: anki_proto::scheduler::FsrsReview) -> FSRSR
     FSRSReview {
         delta_t: review.delta_t,
         rating: review.rating,
+    }
+}
+
+/// Map the shared Rust [`ScoreEnvelope`](crate::speedrun::scores::ScoreEnvelope)
+/// (Performance / Readiness) onto its protobuf form.
+fn score_envelope_to_proto(
+    score: crate::speedrun::scores::ScoreEnvelope,
+) -> scheduler::ScoreEnvelope {
+    scheduler::ScoreEnvelope {
+        estimate: score.estimate,
+        range_low: score.range_low,
+        range_high: score.range_high,
+        coverage_pct: score.coverage_pct,
+        confidence: score.confidence.as_str().to_string(),
+        updated_at_secs: score.updated_at_secs,
+        reasons: score.reasons,
+        abstained: score.abstained,
+        abstain_reason: score.abstain_reason,
+        graded_reviews: score.graded_reviews,
+        format: score.format.as_str().to_string(),
     }
 }
 

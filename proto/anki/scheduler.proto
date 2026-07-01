@@ -25,6 +25,16 @@ service SchedulerService {
   // over in-scope taxonomy cards, with the full evidence envelope and the
   // give-up rule. Read-only; reads existing FSRS/revlog state only.
   rpc GetMemoryScore(GetMemoryScoreRequest) returns (MemoryScore);
+  // Speedrun honest Performance score for a deck: weighted accuracy over graded
+  // reviews of SpeedrunApplication (exam-style) cards mapped to in-scope topics,
+  // with the same evidence envelope + give-up rule. Distinct from Memory (recall
+  // of a taught fact): this measures getting an application question right.
+  rpc GetPerformanceScore(GetSpeedrunScoreRequest) returns (ScoreEnvelope);
+  // Speedrun honest Readiness score for a deck: the Performance score projected
+  // onto the 472-528 MCAT scale with a coverage-widened range. Abstains whenever
+  // Performance abstains; a projection from practice, not calibrated to real
+  // exam outcomes yet (that is the Sunday milestone).
+  rpc GetReadinessScore(GetSpeedrunScoreRequest) returns (ScoreEnvelope);
   // Speedrun mastery progression (decisions D30-D32): the per-topic four-state
   // lifecycle learning → practicing → hierarchy → mastering. These read/write
   // only the per-topic state map in the collection config; scheduling and undo
@@ -222,6 +232,40 @@ message MemoryScore {
   string abstain_reason = 9;
   // Total scheduling-affecting revlog entries over the in-scope cards.
   uint32 graded_reviews = 10;
+}
+
+// A deck-scoped Speedrun score request (Performance / Readiness).
+message GetSpeedrunScoreRequest {
+  int64 deck_id = 1;
+}
+
+// The shared Speedrun evidence envelope (spec-scores §4) for the Performance and
+// Readiness scores. Same contract as MemoryScore; `format` tells the UI how to
+// render the numbers. When `abstained` is true the give-up rule fired:
+// estimate/range are 0 and `abstain_reason` names the failed condition(s).
+message ScoreEnvelope {
+  // The point estimate, in the units named by `format`.
+  float estimate = 1;
+  // The likely range (low/high), in the same units as `estimate`.
+  float range_low = 2;
+  float range_high = 3;
+  // Fraction of in-scope taxonomy topics with evidence for this score.
+  float coverage_pct = 4;
+  // "low" | "medium" | "high".
+  string confidence = 5;
+  // When the score was computed (unix seconds).
+  int64 updated_at_secs = 6;
+  // Top human-readable drivers, e.g. "coverage 62%", "weak: Kinetics".
+  repeated string reasons = 7;
+  // True when the give-up rule fired and no number is shown.
+  bool abstained = 8;
+  // The failed give-up condition(s) and what clears them; empty when eligible.
+  string abstain_reason = 9;
+  // Graded attempts backing the score (the score's own scope).
+  uint32 graded_reviews = 10;
+  // How to render the numbers: "ratio" (probability 0..1) or "points" (the
+  // 472-528 MCAT integer scale).
+  string format = 11;
 }
 
 message SpeedrunRecordAnswerRequest {
