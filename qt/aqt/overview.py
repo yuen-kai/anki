@@ -251,47 +251,30 @@ class Overview:
 
     def _table(self) -> str:
         counts = list(self.mw.col.sched.counts())
-        current_did = self.mw.col.decks.get_current_id()
-        deck_node = self.mw.col.sched.deck_due_tree(current_did)
-
         but = self.mw.button
-        if self.mw.col.v3_scheduler():
-            assert deck_node is not None
-            buried_new = deck_node.new_count - counts[0]
-            buried_learning = deck_node.learn_count - counts[1]
-            buried_review = deck_node.review_count - counts[2]
-        else:
-            buried_new = buried_learning = buried_review = 0
-        buried_label = tr.studying_counts_differ()
 
-        def number_row(title: str, klass: str, count: int, buried_count: int) -> str:
-            buried = f"{buried_count:+}" if buried_count else ""
+        def count_cell(label: str, klass: str, count: int) -> str:
             return f"""
-<tr>
-    <td>{title}:</td>
-    <td>
-        <b>
-            <span class={klass}>{count}</span>
-            <span class=bury-count title="{buried_label}">{buried}</span>
-        </b>
-    </td>
-</tr>
-"""
+<div class="study-count">
+    <span class="study-count__n {klass}">{count}</span>
+    <span class="study-count__label">{label}</span>
+</div>"""
+
+        counts_html = (
+            count_cell(tr.actions_new(), "new-count", counts[0])
+            + count_cell(tr.scheduling_learning(), "learn-count", counts[1])
+            + count_cell(tr.studying_to_review(), "review-count", counts[2])
+        )
 
         # One Study button: the progression unifies blocked->mixed, so the
         # learner no longer picks a mode (decision D30, supersedes D20). Autofocus
         # keeps Enter starting the session.
         study = but("study", tr.studying_study(), id="study", extra=" autofocus")
         return f"""
-<table width=400 cellpadding=5>
-<tr><td align=center valign=top>
-<table cellspacing=5>
-{number_row(tr.actions_new(), "new-count", counts[0], buried_new)}
-{number_row(tr.scheduling_learning(), "learn-count", counts[1], buried_learning)}
-{number_row(tr.studying_to_review(), "review-count", counts[2], buried_review)}
-</table>
-</td><td align=center>
-{study}</td></tr></table>"""
+<div class="study">
+    <div class="study-counts">{counts_html}</div>
+    {study}
+</div>"""
 
     _body = """
 <center>
