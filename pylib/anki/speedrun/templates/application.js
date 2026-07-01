@@ -30,6 +30,33 @@
   // unknown, or a wrong-family value) keeps the safe scaffolded default.
   var unscaffolded = window.speedrunCardMode === "application_unscaffolded";
 
+  // Draw the topic breadcrumb the reviewer injects as window.speedrunTopicPath
+  // (foundation -> leaf). textContent only, never innerHTML, so an authored
+  // label can render no markup; the "›" separators come from CSS. An absent or
+  // empty path leaves the element hidden. Runs on both sides and in every mode.
+  function renderBreadcrumb() {
+    var nav = document.getElementById("sr-breadcrumb");
+    if (!nav) return;
+    var raw = Array.isArray(window.speedrunTopicPath) ? window.speedrunTopicPath : [];
+    var labels = raw.filter(function (label) {
+      return typeof label === "string" && label;
+    });
+    nav.textContent = "";
+    if (!labels.length) {
+      nav.hidden = true;
+      return;
+    }
+    labels.forEach(function (label) {
+      var item = document.createElement("span");
+      item.className = "sr-breadcrumb__item";
+      item.textContent = label;
+      nav.appendChild(item);
+    });
+    nav.hidden = false;
+  }
+
+  renderBreadcrumb();
+
   function parseJSON(id, fallback) {
     var el = document.getElementById(id);
     if (!el) return fallback;

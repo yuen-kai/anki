@@ -125,3 +125,26 @@ def card_mode_inject_script(mode: str | None) -> str:
     if mode not in CARD_MODES:
         return ""
     return f"<script>window.speedrunCardMode = {json.dumps(mode)};</script>"
+
+
+def card_context_inject_script(mode: str | None, path: list[str] | None) -> str:
+    """Build the ``<script>`` that sets ``window.speedrunCardMode`` and
+    ``window.speedrunTopicPath`` (the breadcrumb labels) before the card's own
+    JS runs, or ``""`` when there is nothing to inject.
+
+    Additive + fail-open, like :func:`card_mode_inject_script`: an unknown mode
+    contributes nothing, a missing/empty path contributes nothing, and when
+    neither applies the result is ``""`` so a normal card is never touched. Both
+    values go through ``json.dumps``, so neither a stray mode nor a label can
+    break out of the script tag. The template reads the path with ``textContent``
+    only, so even a hostile label can render no markup.
+    """
+    statements = []
+    if mode in CARD_MODES:
+        statements.append(f"window.speedrunCardMode = {json.dumps(mode)};")
+    labels = [label for label in (path or []) if isinstance(label, str) and label]
+    if labels:
+        statements.append(f"window.speedrunTopicPath = {json.dumps(labels)};")
+    if not statements:
+        return ""
+    return f"<script>{' '.join(statements)}</script>"

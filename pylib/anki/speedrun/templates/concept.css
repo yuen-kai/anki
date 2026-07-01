@@ -32,6 +32,36 @@
   box-sizing: border-box;
 }
 
+/* Topic breadcrumb: where this card sits in the AAMC hierarchy. Quiet by
+   default, the current (leaf) topic carries the accent. Separators are drawn in
+   CSS so the script only ever writes plain label text. */
+.sr-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0 0 18px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sr-muted);
+}
+
+.sr-breadcrumb[hidden] {
+  display: none;
+}
+
+.sr-breadcrumb__item + .sr-breadcrumb__item::before {
+  content: "›";
+  margin: 0 8px;
+  color: var(--sr-muted);
+  font-weight: 400;
+}
+
+.sr-breadcrumb__item:last-child {
+  color: var(--sr-accent);
+}
+
 .sr-cases {
   display: grid;
   grid-template-columns: 1fr 1fr;

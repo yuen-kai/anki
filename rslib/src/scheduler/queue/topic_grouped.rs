@@ -779,6 +779,42 @@ mod tests {
         );
     }
 
+    /// Button-merge fallback (spec-mastery-progression §6): a deck with no
+    /// Speedrun topics leaves every card unmapped, so the blocked phase never
+    /// triggers and nothing is suppressed — the topic-grouped queue serves
+    /// exactly the same actionable cards as the default queue. This is what lets
+    /// the single "Study" button behave like normal study on a normal deck.
+    #[test]
+    fn non_speedrun_deck_matches_default_queue() {
+        let mut col = Collection::new();
+        let a = add_review_card(&mut col, None, 5.0, 30);
+        let b = add_review_card(&mut col, Some("not::a::taxonomy::tag"), 50.0, 3);
+        let c = add_new_card(&mut col, None);
+
+        let mut topic_ids = queue_ids(&mut col);
+        topic_ids.sort();
+
+        let mut default_ids: Vec<CardId> = col
+            .get_queued_cards(100, false)
+            .unwrap()
+            .cards
+            .iter()
+            .map(|qc| qc.card.id)
+            .collect();
+        default_ids.sort();
+
+        let mut expected = vec![a, b, c];
+        expected.sort();
+        assert_eq!(
+            topic_ids, expected,
+            "all actionable cards are served (no blocked phase, no suppression)"
+        );
+        assert_eq!(
+            topic_ids, default_ids,
+            "no Speedrun topics: Study serves the same set as the default queue"
+        );
+    }
+
     /// Answers `cid` with Good through the standard `answer_card` path using
     /// the provided scheduling states, and returns the resulting interval.
     /// The card is answered out-of-queue (`from_queue: false`) because the

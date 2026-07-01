@@ -283,6 +283,17 @@ impl crate::services::SchedulerService for Collection {
         Ok(self.get_speedrun_card_mode(cid)?.to_string().into())
     }
 
+    fn get_speedrun_card_context(
+        &mut self,
+        input: anki_proto::cards::CardId,
+    ) -> Result<scheduler::SpeedrunCardContext> {
+        let (mode, path) = self.get_speedrun_card_context(input.into())?;
+        Ok(scheduler::SpeedrunCardContext {
+            mode: mode.to_string(),
+            path,
+        })
+    }
+
     fn speedrun_record_answer(
         &mut self,
         input: scheduler::SpeedrunRecordAnswerRequest,

@@ -91,6 +91,17 @@ class Scheduler(SchedulerBaseWithLegacy):
         window.speedrunCardMode before render."""
         return self.col._backend.get_speedrun_card_mode(card_id)
 
+    def get_speedrun_card_context(
+        self, *, card_id: CardId
+    ) -> scheduler_pb2.SpeedrunCardContext:
+        """Speedrun mastery progression: the card's render context — its active
+        mode (as get_speedrun_card_mode) plus its taxonomy hierarchy path as
+        display labels (foundation -> leaf, e.g. "Biomolecules", "Enzymes",
+        "Inhibition"), empty for a card with no taxonomy topic. The reviewer
+        injects these as window.speedrunCardMode and window.speedrunTopicPath
+        before render, so the templates can show the breadcrumb."""
+        return self.col._backend.get_speedrun_card_context(card_id)
+
     def speedrun_record_answer(
         self, *, card_id: CardId, rating: CardAnswer.Rating.V
     ) -> str:

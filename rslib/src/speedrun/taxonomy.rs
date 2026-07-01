@@ -26,6 +26,7 @@
 //!
 //! Everything here is pure: no I/O, no collection access, no protobuf.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 /// A node in the MCAT topic tree: a foundation, a content category, or a topic.
@@ -111,6 +112,29 @@ pub fn seed_taxonomy() -> Vec<TopicNode> {
     }
 
     nodes
+}
+
+/// The display-label path from the foundation (root) down to `topic_id`, e.g.
+/// `["Biomolecules", "Enzymes", "Inhibition"]` for an enzyme-inhibition leaf.
+///
+/// The taxonomy's own labels are the single source of truth, so the reviewer
+/// breadcrumb never re-spells a topic. Walks `parent_id` up to the root and
+/// reverses; an id absent from the tree (an unmapped or stale tag) yields an
+/// empty path, which the template renders as no breadcrumb.
+pub fn topic_path_labels(topic_id: &str) -> Vec<String> {
+    let nodes = seed_taxonomy();
+    let by_id: HashMap<&str, &TopicNode> = nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+    let mut labels = Vec::new();
+    let mut current = by_id.get(topic_id).copied();
+    while let Some(node) = current {
+        labels.push(node.label.clone());
+        current = node
+            .parent_id
+            .as_deref()
+            .and_then(|parent| by_id.get(parent).copied());
+    }
+    labels.reverse();
+    labels
 }
 
 /// Node-based coverage: the fraction of distinct in-scope topics that have at
@@ -310,6 +334,40 @@ mod tests {
             format!("{FOUNDATION_ID}::enzymes"),
         ];
         assert_eq!(weighted_coverage(&nodes, &structural), 0.0);
+    }
+
+    #[test]
+    fn topic_path_labels_walks_root_to_leaf() {
+        // A leaf returns foundation -> category -> topic, in display order, all
+        // sourced from the taxonomy's own labels.
+        assert_eq!(
+            topic_path_labels("mcat::biomolecules::enzymes::inhibition"),
+            vec!["Biomolecules", "Enzymes", "Inhibition"]
+        );
+        assert_eq!(
+            topic_path_labels("mcat::biomolecules::amino_acids::pka_titration"),
+            vec!["Biomolecules", "Amino Acids", "pKa & Titration"]
+        );
+
+        // A structural (non-leaf) id still resolves its own partial path.
+        assert_eq!(
+            topic_path_labels("mcat::biomolecules::enzymes"),
+            vec!["Biomolecules", "Enzymes"]
+        );
+        assert_eq!(topic_path_labels("mcat::biomolecules"), vec!["Biomolecules"]);
+
+        // An unknown id (unmapped/stale tag) yields no breadcrumb.
+        assert!(topic_path_labels("mcat::biomolecules::enzymes::nope").is_empty());
+        assert!(topic_path_labels("not_a_taxonomy_id").is_empty());
+
+        // Every seed leaf produces a three-level path whose last label is the
+        // node's own, so the breadcrumb is always well-formed.
+        for node in seed_taxonomy().iter().filter(|n| n.in_scope) {
+            let path = topic_path_labels(&node.id);
+            assert_eq!(path.len(), 3, "{} should be 3 levels deep", node.id);
+            assert_eq!(path.first().map(String::as_str), Some(FOUNDATION_LABEL));
+            assert_eq!(path.last(), Some(&node.label));
+        }
     }
 
     #[test]

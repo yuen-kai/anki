@@ -94,12 +94,13 @@ class Overview:
     ############################################################
 
     def _linkHandler(self, url: str) -> bool:
-        if url in {"study", "practice"}:
-            # Practice: the normal interleaved review queue (decision D2/D20).
-            self._start_session(learn=False)
-        elif url == "learn":
-            # Learn: the topic-grouped (blocked) queue for this deck.
-            self._start_session(learn=True)
+        if url in {"study", "learn", "practice"}:
+            # One Study button runs the mastery progression: the state-aware
+            # topic-grouped queue, which falls back to the normal queue when the
+            # deck has no Speedrun topics (decisions D26, D30-D32, supersedes the
+            # Learn/Practice split in D20). "learn"/"practice" stay as aliases so
+            # older callers still start a session.
+            self._start_session()
         elif url == "anki":
             print("anki menu")
         elif url == "opts":
@@ -124,9 +125,16 @@ class Overview:
             openLink(url)
         return False
 
-    def _start_session(self, *, learn: bool) -> None:
+    def _start_session(self) -> None:
+        """Start study, running the Speedrun mastery progression.
+
+        Arms the reviewer's state-aware topic-grouped queue for the current
+        deck. It serves the blocked->mixed progression for Speedrun topics and
+        falls back to the normal queue when the deck has none, so one button
+        covers both (decisions D30-D32).
+        """
         deck_id = self.mw.col.decks.get_current_id()
-        self.mw.reviewer.set_speedrun_learn_deck(deck_id if learn else None)
+        self.mw.reviewer.set_speedrun_learn_deck(deck_id)
         self.mw.col.startTimebox()
         self.mw.moveToState("review")
         if self.mw.state == "overview":
@@ -264,11 +272,10 @@ class Overview:
 </tr>
 """
 
-        # Two modes, plain labels, no marketing (decision D20). Practice keeps
-        # the autofocus so Enter still starts a normal review session.
-        study = but("learn", tr.studying_learn(), id="learn") + but(
-            "practice", tr.studying_practice(), id="practice", extra=" autofocus"
-        )
+        # One Study button: the progression unifies blocked->mixed, so the
+        # learner no longer picks a mode (decision D30, supersedes D20). Autofocus
+        # keeps Enter starting the session.
+        study = but("study", tr.studying_study(), id="study", extra=" autofocus")
         return f"""
 <table width=400 cellpadding=5>
 <tr><td align=center valign=top>
