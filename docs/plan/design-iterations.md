@@ -4,6 +4,12 @@
 
 ---
 
+### 2026-06-30: One Speedrun visual identity across cards + menu
+
+- **Category:** visual identity · **Status:** applied · **Prompted by:** user feedback ("no ui frontend polish"; "rework the menu to be modern / beginner-friendly").
+- **Change:** replaced the browser-default serif-on-cream look (the exact AI cluster the UI directive bans) with one deliberate identity applied across every Speedrun surface: a system-first sans (renders offline on desktop + AnkiDroid), a cool clinical neutral ground, one teal product accent (`#0e7c66` / dark `#4fd1ac`) spent with restraint, and an intentional type scale. Surfaces: the study cards (concept + application), the deck study screen (labelled count cards over a teal Study action), the home deck list (one calm elevated card, tabular counts, the current deck marked in teal), and the dashboard (the topics ladder now leads and is the signature; scores follow). Each surface was verified by rendering it in headless Chromium; the deck list + dashboard were parallelized with subagents.
+- **Ref:** `pylib/anki/speedrun/templates/*.css`, `qt/aqt/overview.py` + `qt/aqt/data/web/css/overview.scss`, `qt/aqt/data/web/css/deckbrowser.scss`, `ts/routes/speedrun-dashboard/*`.
+
 ### 2026-06-30: Concept prompt asks for the shared concept, not the difference
 
 - **Category:** pedagogy · **Status:** applied · **Prompted by:** user feedback during planning.
