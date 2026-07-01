@@ -23,7 +23,7 @@
 | U1 | Show the topic's hierarchy (breadcrumb) on the card, at least when learning | done | `GetSpeedrunCardContext` RPC + `taxonomy::topic_path_labels`; reviewer injects `window.speedrunTopicPath`; templates render it; tests: rust `topic_path_labels_walks_root_to_leaf`, node breadcrumb checks (184), qt 53 |
 | U2 | Merge the Learn and Practice buttons into one | done | `overview.py` single Study button (`tr.studying_study()` -> `_start_session()`, state-aware queue w/ fallback); D20 superseded by D30; qt `test_speedrun.py` (53) |
 | U3 | A UI listing all topics and which of the 4 stages each is at | done | Topics section on the dashboard: `get_speedrun_progress` (now carries the hierarchy `path`, web-exposed) → `buildTopicsView` groups by category + a per-topic 4-stage mastery track + ladder summary. Tests: `lib.test.ts` (3), rust `progress_lists_covered_topics_with_states` |
-| U4 | `frontend-design` polish pass on the Speedrun UI (dashboard, cards, Study entry, topics view) | todo | after U1/U2/U3 + F1-F3 land; follow the `frontend-design` skill (distinct identity, type, signature element) |
+| U4 | `frontend-design` polish pass on the Speedrun UI (dashboard, cards, Study entry, topics view) | done | Unified the whole surface on one product accent (the cards' teal, theme-aware) across dashboard tiles + topics ladder; fixed the Study button losing its primary style after the merge (`overview.scss` `#study`); window title `Speedrun: <deck>`. Build + svelte/ts check + vitest green. Live visual QA pass still open ([B029](backlog.md#b029): no browser in this sandbox) |
 
 ## Correctness fixes from the progression review (binding)
 

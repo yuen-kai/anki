@@ -127,8 +127,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             border: 2px solid var(--border-subtle);
         }
         &.occupied::after {
-            background: var(--accent-card);
-            border-color: var(--accent-card);
+            background: var(--sr-accent, var(--accent-card));
+            border-color: var(--sr-accent, var(--accent-card));
         }
     }
     .rung-count {
@@ -200,7 +200,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: 2px;
         background: var(--border-subtle);
         &.filled {
-            background: var(--accent-card);
+            background: var(--sr-accent, var(--accent-card));
         }
     }
     .stage-label {

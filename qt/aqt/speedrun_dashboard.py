@@ -44,7 +44,7 @@ class SpeedrunDashboardDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.web)
         self.setLayout(layout)
-        self.setWindowTitle(f"Scores: {self._deck['name']}")
+        self.setWindowTitle(f"Speedrun: {self._deck['name']}")
         self.show()
 
     def reject(self) -> None:

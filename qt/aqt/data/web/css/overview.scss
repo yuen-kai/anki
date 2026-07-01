@@ -37,11 +37,8 @@ h3 {
     text-align: center;
 }
 
-#learn {
-    @include button.base();
-    margin-inline-end: 0.5em;
-}
-
-#practice {
+// One Study button now runs the mastery progression (D30, supersedes the
+// Learn/Practice split). Primary, since it is the deck's main action.
+#study {
     @include button.base($primary: true);
 }

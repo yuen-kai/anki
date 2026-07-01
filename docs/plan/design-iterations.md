@@ -28,6 +28,13 @@
 - **Change:** the two-button Learn/Practice split is gone. One **Study** button arms the state-aware topic-grouped queue, which serves blocked→mixed for Speedrun topics and falls back to the normal queue otherwise, so the learner never picks a mode. `learn`/`practice` remain as link aliases for older callers.
 - **Ref:** [D30](decisions.md#d30) supersedes [D20](decisions.md#d20); `qt/aqt/overview.py`, `ftl` `studying-study`.
 
+### 2026-06-30: One product accent across the whole Speedrun surface
+
+- **Category:** visual identity · **Status:** applied · **Prompted by:** the U4 `frontend-design` polish pass.
+- **Change:** the dashboard and topics ladder inherited Anki's default accent while the study cards used a distinct teal (`#0e7c66` / dark `#4fd1ac`). Unified everything on that one teal (a theme-aware `--sr-accent` on the dashboard root, inherited by the tiles and the ladder), so dashboard, topics, and cards read as one product. Also fixed the **Study** button losing its primary style after the button merge (the SCSS still targeted `#learn`/`#practice`, not `#study`) and renamed the dashboard window to `Speedrun: <deck>` now that it shows more than scores.
+- **Note:** the changes are verified structurally (build + svelte/ts check + vitest); a live visual QA pass is still open ([B029](backlog.md#b029)) because this sandbox has no browser.
+- **Ref:** `ts/routes/speedrun-dashboard/*`, `qt/aqt/data/web/css/overview.scss`, `qt/aqt/speedrun_dashboard.py`.
+
 ### 2026-06-30: Topics view = a four-stage mastery ladder
 
 - **Category:** UX · **Status:** applied · **Prompted by:** user feedback ("a UI listing all topics and which of the 4 stages each is at").

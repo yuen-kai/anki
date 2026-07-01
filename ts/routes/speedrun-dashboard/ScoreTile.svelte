@@ -96,7 +96,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     // The one accent, spent only on the live score: a hairline along the top.
     .tile.live {
-        box-shadow: inset 0 3px 0 0 var(--accent-card);
+        box-shadow: inset 0 3px 0 0 var(--sr-accent, var(--accent-card));
     }
 
     // Deferred scores recede: same card, quieter text, no accent.

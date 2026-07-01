@@ -34,6 +34,7 @@
 | [B026](#b026) | Blocked precedence can starve graduated topics' due reviews | issue | fixed |
 | [B027](#b027) | `window.speedrunCardMode` leaks across cards (no reset) | bug | fixed |
 | [B028](#b028) | `speedrun_record_answer` mutates state for any tagged card | bug | fixed |
+| [B029](#b029) | Speedrun UI has no live visual QA pass (no browser in sandbox) | issue | open |
 
 ---
 
@@ -284,6 +285,14 @@
 - **Ref:** `rslib/src/speedrun/progression.rs` `speedrun_record_answer`; the reviewer records on every answer.
 - **Context:** `card_topic` is tag-based ([D23](decisions.md#d23)), so once a real deck tagged a non-Speedrun card with a leaf id, `Again` on that plain card demoted the topic (and `Good` could advance it). Asymmetric: advancement was scoped to the active Speedrun note kind, demotion was not. Latent today (the seed uses only Speedrun note types).
 - **Fixed:** 2026-06-30. `speedrun_record_answer` early-returns when `note_kind == Other`, so only Speedrun notes move their topic's state. Test `record_answer_ignores_non_speedrun_note_kind`.
+
+<a id="b029"></a>
+### B029: Speedrun UI has no live visual QA pass
+
+- **Type:** issue · **Status:** open · **Severity:** low
+- **Discovered:** 2026-06-30, U4 polish.
+- **Context:** the U4 design pass (unified accent, topics ladder, Study button, copy) is verified structurally (build, svelte/ts type-check, vitest, node template tests) but was never rendered and eyeballed: this sandbox has no browser and the Playwright chromium install fails on a lock-file update (same class of sandbox block as [B014](#b014)), and the Qt window can't be captured here.
+- **Next:** with the app running (`just run`), open Tools → Speedrun dashboard on the seeded MCAT deck and review the dashboard (scores + topics ladder), a concept card, and an application card in light + dark; adjust spacing/accent as needed. Or install Playwright chromium outside the sandbox and screenshot `speedrun-dashboard/<deckId>` off the running mediasrv (`:40000`).
 
 ---
 

@@ -65,6 +65,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: var(--canvas);
         color: var(--fg);
         font-size: var(--font-size);
+
+        // Speedrun's one product accent, the same teal the study cards use, so
+        // the dashboard, the topics ladder, and the cards read as one product
+        // instead of inheriting Anki's default. Children inherit it.
+        --sr-accent: #0e7c66;
+    }
+    :global(.night-mode) .dashboard {
+        --sr-accent: #4fd1ac;
     }
     .inner {
         max-width: 70rem;
