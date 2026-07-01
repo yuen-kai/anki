@@ -24,6 +24,7 @@
 | U2 | Merge the Learn and Practice buttons into one | done | `overview.py` single Study button (`tr.studying_study()` -> `_start_session()`, state-aware queue w/ fallback); D20 superseded by D30; qt `test_speedrun.py` (53) |
 | U3 | A UI listing all topics and which of the 4 stages each is at | done | Topics section on the dashboard: `get_speedrun_progress` (now carries the hierarchy `path`, web-exposed) → `buildTopicsView` groups by category + a per-topic 4-stage mastery track + ladder summary. Tests: `lib.test.ts` (3), rust `progress_lists_covered_topics_with_states` |
 | U4 | `frontend-design` polish pass on the Speedrun UI (dashboard, cards, Study entry, topics view) | done | Unified the whole surface on one product accent (the cards' teal, theme-aware) across dashboard tiles + topics ladder; fixed the Study button losing its primary style after the merge (`overview.scss` `#study`); window title `Speedrun: <deck>`. Build + svelte/ts check + vitest green. Live visual QA pass still open ([B029](backlog.md#b029): no browser in this sandbox) |
+| U5 | Scores dashboard reachable within the app, not the topbar | done | [D34](decisions.md#d34): a **Scores** action on the deck overview's bottom bar (`overview.py`, `tr.studying_scores()`); the Tools-menu entry removed from `main.py` |
 
 ## Three scores: Memory / Performance / Readiness (brief §4, [D33](decisions.md#d33))
 

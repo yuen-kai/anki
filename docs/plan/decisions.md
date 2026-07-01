@@ -307,6 +307,14 @@
 - **Considered:** keeping them deferred ([D10](#d10); rejected, the brief wants three real scores now); an AI grader for Performance (that is the Friday paraphrase-test validation; the honest Wednesday signal is real application accuracy, no model needed); a blended "overall" number (forbidden, [D7](#d7)).
 - **Gaps / risks:** Performance measures *practiced* application items, not yet *unseen* ones, so it can partly echo Memory until the paraphrase test (Friday); the score says so in its reasons. Readiness is a linear projection, not calibrated to real MCAT outcomes until Sunday; it says so too. Give-up thresholds (30 application attempts, 50% coverage) are tunable guesses. Persisting per-attempt `AttemptLog` (spec §8) is still deferred ([D25](#d25)); both scores read existing revlog.
 
+<a id="d34"></a>
+### D34: Score dashboard opens from the deck overview, not the Tools menu
+
+- **Status:** resolved
+- **Chose:** open a deck's score dashboard from a **Scores** action on the deck overview's bottom bar (beside Options), and remove the Tools-menu entry. The dashboard is per-deck, so it belongs on the deck you are looking at, and it is far more discoverable there than buried in the topbar.
+- **Considered:** keeping the Tools menu item (topbar, not per-deck-contextual, easy to miss); a loud button next to Study (the bottom bar is already where per-deck actions live, so Scores sits with Options / Custom study instead of competing with the primary Study action).
+- **Gaps / risks:** the action also shows on filtered decks (the score then covers the filtered cards; acceptable); `speedrun_dashboard.show_speedrun_dashboard_for_current_deck` is now unused but kept as a small public helper.
+
 ---
 
 <sub>Created with the `iris-plan` skill by Iris Cai · maintained with `iris-log`.</sub>

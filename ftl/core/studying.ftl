@@ -38,6 +38,7 @@ studying-please-run-toolsempty-cards = Please run Tools>Empty Cards
 studying-practice = Practice
 studying-record-own-voice = Record Own Voice
 studying-replay-own-voice = Replay Own Voice
+studying-scores = Scores
 studying-show-answer = Show Answer
 studying-space = Space
 studying-study = Study

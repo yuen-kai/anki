@@ -105,6 +105,12 @@ class Overview:
             print("anki menu")
         elif url == "opts":
             display_options_for_deck(self.mw.col.decks.current())
+        elif url == "scores":
+            # Speedrun: open this deck's score dashboard from inside the deck,
+            # rather than the Tools menu (decision D34).
+            import aqt.speedrun_dashboard
+
+            aqt.speedrun_dashboard.show_speedrun_dashboard(self.mw.col.decks.current())
         elif url == "cram":
             aqt.dialogs.open("FilteredDeckConfigDialog", self.mw)
         elif url == "refresh":
@@ -305,6 +311,8 @@ class Overview:
     def _renderBottom(self) -> None:
         links = [
             ["O", "opts", tr.actions_options()],
+            # Speedrun: this deck's Memory / Performance / Readiness dashboard.
+            ["", "scores", tr.studying_scores()],
         ]
         is_dyn = self.mw.col.decks.current()["dyn"]
         if is_dyn:
