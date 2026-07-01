@@ -5,153 +5,222 @@
 @use "../../../../../ts/lib/sass/card-counts";
 @use "../../../../../ts/lib/sass/elevation" as *;
 
-table {
-    padding: 1rem;
-
-    .fancy & {
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--border-radius-medium);
-
-        @include elevation(1, $opacity-boost: -0.08);
-        &:hover {
-            @include elevation(2);
-        }
-        background: var(--canvas-glass);
-    }
+/* Speedrun product accent (teal), spent with restraint: the current deck and
+   active affordances only. The soft variant reuses the study-card values so the
+   home screen and the cards read as one product. */
+:root {
+    --sr-accent: #0e7c66;
+    --sr-accent-soft: #e3efeb;
 }
-
-a.deck {
-    color: color(fg);
-    text-decoration: none;
-    min-width: 5em;
-    display: inline-block;
-}
-
-a.deck:hover {
-    text-decoration: underline;
-}
-
-th {
-    border-bottom: 1px solid color(border-subtle);
-    padding-bottom: 5px;
-}
-
-tr.deck td {
-    padding: 1px 12px;
-    border-bottom: 1px solid var(--border-subtle);
-
-    .fancy & {
-        border: unset;
-        padding: 4px 12px;
-    }
-}
-
-tr.top-level-drag-row td {
-    border-bottom: 1px solid transparent;
-}
-
-td {
-    white-space: nowrap;
-}
-
-tr.drag-hover td {
-    border-bottom: 1px solid color(border);
+.nightMode {
+    --sr-accent: #4fd1ac;
+    --sr-accent-soft: #17302a;
 }
 
 body {
-    margin: 2em 1em 1em 1em;
+    margin: 28px 16px 20px;
     -webkit-user-select: none;
+    color: color(fg);
+    /* System-first sans, same stack as the study cards; renders offline. */
+    font-family: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
 }
 
-.current,
-tr:hover:not(.top-level-drag-row) {
-    td {
-        background: color(border-subtle);
-        &:first-child {
-            border-top-left-radius: prop(border-radius-medium);
-            border-bottom-left-radius: prop(border-radius-medium);
-        }
-        &:last-child {
-            border-top-right-radius: prop(border-radius-medium);
-            border-bottom-right-radius: prop(border-radius-medium);
-        }
-        .gears {
-            visibility: visible;
-        }
-    }
-}
-[dir="rtl"] {
-    .current,
-    tr:hover:not(.top-level-drag-row) {
-        td {
-            background: color(canvas-inset);
-            &:first-child {
-                border-top-left-radius: 0;
-                border-bottom-left-radius: 0;
-                border-top-right-radius: prop(border-radius-medium);
-                border-bottom-right-radius: prop(border-radius-medium);
-            }
-            &:last-child {
-                border-top-right-radius: 0;
-                border-bottom-right-radius: 0;
-                border-top-left-radius: prop(border-radius-medium);
-                border-bottom-left-radius: prop(border-radius-medium);
-            }
-        }
+table {
+    margin: 0 auto;
+
+    /* Default (non-minimalist) mode gathers the list into one calm card. */
+    .fancy & {
+        padding: 6px 8px;
+        background: var(--canvas-elevated);
+        border: 1px solid color(border-subtle);
+        border-radius: prop(border-radius-medium);
+        @include elevation(1, $opacity-boost: -0.1);
     }
 }
 
-.decktd {
-    min-width: 15em;
-    max-width: calc(100vw - 300px);
-    overflow: hidden;
+/* Column header row, kept as a quiet eyebrow rather than a loud table head. */
+th {
+    padding: 2px 12px 9px;
+    border-bottom: 1px solid color(border-subtle);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: color(fg-subtle);
+    white-space: nowrap;
+}
+
+th[align="start"] {
+    padding-inline-start: 14px;
+    text-align: start;
 }
 
 .count {
-    min-width: 4em;
+    min-width: 4.5em;
     text-align: right;
 }
 
 .optscol {
-    width: 2em;
+    width: 2.5em;
+}
+
+/* Deck rows read as clean, tappable rows. */
+tr.deck td {
+    padding-block: 11px;
+    padding-inline: 12px;
+    transition: background-color 120ms ease;
+}
+
+tr.deck td.decktd {
+    min-width: 15em;
+    max-width: calc(100vw - 300px);
+    overflow: hidden;
+    padding-inline-start: 11px;
+    /* Reserved so the current-deck marker never nudges the row sideways. */
+    border-inline-start: 3px solid transparent;
+}
+
+/* Only the minimalist mode (no card) needs per-row separators. */
+body:not(.fancy) tr.deck td {
+    border-bottom: 1px solid color(border-subtle);
+}
+
+a.deck {
+    display: inline-block;
+    min-width: 5em;
+    color: color(fg);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.003em;
+    text-decoration: none;
+}
+
+a.deck:hover {
+    color: var(--sr-accent);
+    text-decoration: none;
 }
 
 .collapse {
-    color: color(fg);
-    text-decoration: none;
     display: inline-block;
-    width: 1em;
+    width: 1.2em;
+    color: color(fg-subtle);
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+}
+
+a.collapse:hover {
+    color: var(--sr-accent);
 }
 
 .filtered {
     color: color(fg-link) !important;
 }
 
+/* Due counts: right-aligned, tabular so digits line up column to column. Zero
+   counts stay muted via the shared .zero-count colour. */
+tr.deck td[align="end"] {
+    min-width: 4.5em;
+    text-align: right;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+}
+
+td.opts {
+    text-align: center;
+}
+
 .gears {
-    width: 1em;
-    height: 1em;
+    width: 15px;
+    height: 15px;
     opacity: 0.5;
-    padding-top: 0.2em;
     cursor: pointer;
     visibility: hidden;
+    vertical-align: middle;
 }
 
-.nightMode {
-    .gears {
-        filter: invert(180);
+.gears:hover {
+    opacity: 0.9;
+}
+
+.nightMode .gears {
+    filter: invert(1);
+}
+
+/* Highlight shared by hover and the current deck: a soft rounded fill with the
+   gear revealed. A smaller radius than the container, deliberately. */
+.current,
+tr:hover:not(.top-level-drag-row) {
+    td {
+        &:first-child {
+            border-start-start-radius: prop(border-radius);
+            border-end-start-radius: prop(border-radius);
+        }
+        &:last-child {
+            border-start-end-radius: prop(border-radius);
+            border-end-end-radius: prop(border-radius);
+        }
+        .gears {
+            visibility: visible;
+        }
     }
 }
 
-.callout {
-    background: color(border);
-    padding: 1em;
-    margin: 1em;
+tr.deck:hover:not(.current) td {
+    background: color(border-subtle);
+}
 
-    div {
-        margin: 1em;
-    }
+/* Current deck: the one place the accent lands, a soft teal fill plus an
+   inline-start marker echoing the accent edge on the study cards. */
+tr.deck.current td {
+    background: var(--sr-accent-soft);
+}
+
+tr.deck.current td.decktd {
+    border-inline-start-color: var(--sr-accent);
+}
+
+/* Drag and drop: a teal drop-target line, drawn with a shadow so nothing
+   shifts as you drag over a row. */
+tr.top-level-drag-row td {
+    height: 6px;
+    border-bottom: 1px solid transparent;
+}
+
+tr.drag-hover td {
+    box-shadow: inset 0 -2px 0 var(--sr-accent);
 }
 
 #studiedToday {
-    margin: 2em 0;
+    margin: 18px 0 0;
+    color: color(fg-subtle);
+    font-size: 12.5px;
+    text-align: center;
+}
+
+/* v3 scheduler upgrade notice (rarely shown on modern collections). */
+.callout {
+    max-width: 32em;
+    margin: 1.25em auto;
+    padding: 1em 1.25em;
+    background: var(--canvas-elevated);
+    border: 1px solid color(border-subtle);
+    border-radius: prop(border-radius-medium);
+
+    div {
+        margin: 0.5em 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    tr.deck td {
+        transition: none;
+    }
+}
+
+.reduce-motion tr.deck td {
+    transition: none;
 }
