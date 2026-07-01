@@ -62,43 +62,75 @@ def _build(
     return notetype
 
 
+def _template_assets(name: str) -> tuple[str, str, str]:
+    """Current ``(qfmt, afmt, css)`` for a Speedrun note type, read from
+    ``templates/``. The single source of truth for both first install and the
+    refresh of an already-installed note type."""
+    if name == CONCEPT_NOTETYPE_NAME:
+        js = _asset("concept.js")
+        # The back includes {{FrontSide}}, so the front's <script> carries over.
+        return (
+            _inline_script(_asset("concept_front.html"), js),
+            _asset("concept_back.html"),
+            _asset("concept.css"),
+        )
+    js = _asset("application.js")
+    # The back is standalone (no {{FrontSide}}), so it needs its own <script>.
+    return (
+        _inline_script(_asset("application_front.html"), js),
+        _inline_script(_asset("application_back.html"), js),
+        _asset("application.css"),
+    )
+
+
 def concept_notetype(col: anki.collection.Collection) -> NotetypeDict:
     """Build (without saving) the SpeedrunConcept note type."""
-    js = _asset("concept.js")
-    # The back includes {{FrontSide}}, so the front's <script> carries over.
-    return _build(
-        col,
-        CONCEPT_NOTETYPE_NAME,
-        CONCEPT_FIELDS,
-        "Concept",
-        qfmt=_inline_script(_asset("concept_front.html"), js),
-        afmt=_asset("concept_back.html"),
-        css=_asset("concept.css"),
-    )
+    qfmt, afmt, css = _template_assets(CONCEPT_NOTETYPE_NAME)
+    return _build(col, CONCEPT_NOTETYPE_NAME, CONCEPT_FIELDS, "Concept", qfmt, afmt, css)
 
 
 def application_notetype(col: anki.collection.Collection) -> NotetypeDict:
     """Build (without saving) the SpeedrunApplication note type."""
-    js = _asset("application.js")
-    # The back is standalone (no {{FrontSide}}), so it needs its own <script>.
+    qfmt, afmt, css = _template_assets(APPLICATION_NOTETYPE_NAME)
     return _build(
-        col,
-        APPLICATION_NOTETYPE_NAME,
-        APPLICATION_FIELDS,
-        "Scaffold",
-        qfmt=_inline_script(_asset("application_front.html"), js),
-        afmt=_inline_script(_asset("application_back.html"), js),
-        css=_asset("application.css"),
+        col, APPLICATION_NOTETYPE_NAME, APPLICATION_FIELDS, "Scaffold", qfmt, afmt, css
     )
+
+
+def _refresh_templates(col: anki.collection.Collection, notetype: NotetypeDict) -> bool:
+    """Update an existing Speedrun note type's card template + CSS to the current
+    assets, leaving its id, fields, and notes untouched, so template and styling
+    changes in the fork reach a collection that installed the note type earlier.
+
+    A no-op (returns False) when the stored template already matches, so a synced
+    collection isn't churned on every load. The fork owns these note types, so
+    its templates stay authoritative over local edits.
+    """
+    qfmt, afmt, css = _template_assets(notetype["name"])
+    template = notetype["tmpls"][0]
+    if (
+        notetype.get("css") == css
+        and template.get("qfmt") == qfmt
+        and template.get("afmt") == afmt
+    ):
+        return False
+    notetype["css"] = css
+    template["qfmt"] = qfmt
+    template["afmt"] = afmt
+    col.models.update_dict(notetype)
+    return True
 
 
 def install_speedrun_notetypes(
     col: anki.collection.Collection,
 ) -> dict[str, NotetypeId]:
-    """Create the two note types if absent; return ``name -> id`` for both.
+    """Create the two note types if absent, else refresh an existing one's card
+    template + CSS to the current assets; return ``name -> id`` for both.
 
-    Idempotent: an existing note type with the same name is left untouched and
-    its id returned, so re-running on a synced collection is safe.
+    Idempotent on content: re-running never duplicates a note type, and it only
+    writes when the fork's template actually changed, so it stays safe on a
+    synced collection while still delivering card design updates to an old
+    install.
     """
     builders = {
         CONCEPT_NOTETYPE_NAME: concept_notetype,
@@ -108,6 +140,9 @@ def install_speedrun_notetypes(
     for name, builder in builders.items():
         existing = col.models.id_for_name(name)
         if existing is not None:
+            notetype = col.models.get(existing)
+            assert notetype is not None
+            _refresh_templates(col, notetype)
             result[name] = existing
             continue
         col.models.add_dict(builder(col))

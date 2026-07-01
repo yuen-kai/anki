@@ -234,3 +234,31 @@ def test_topic_grouped_queue_is_state_aware():
         assert structure_concept in served, "graduated topics are mixed in"
     finally:
         col.close()
+
+
+def test_install_refreshes_existing_notetype_templates():
+    """Re-installing over a note type that a prior session created refreshes its
+    card template + CSS to the current assets (so design changes reach an old
+    collection) without duplicating it."""
+    col = getEmptyCol()
+    try:
+        first = install_speedrun_notetypes(col)
+        concept_id = first[CONCEPT_NOTETYPE_NAME]
+
+        # Simulate an old install whose template + CSS are stale.
+        stale = col.models.get(concept_id)
+        assert stale is not None
+        stale["css"] = "/* stale */"
+        # Still a valid template (Anki requires a field replacement), just old.
+        stale["tmpls"][0]["qfmt"] = "<div class='old'>{{CaseA}}</div>"
+        col.models.update_dict(stale)
+
+        second = install_speedrun_notetypes(col)
+        assert second[CONCEPT_NOTETYPE_NAME] == concept_id, "same note type, no dup"
+
+        refreshed = col.models.get(concept_id)
+        assert refreshed is not None
+        assert ".speedrun" in refreshed["css"], "current Speedrun CSS applied"
+        assert "sr-breadcrumb" in refreshed["tmpls"][0]["qfmt"], "current front applied"
+    finally:
+        col.close()
