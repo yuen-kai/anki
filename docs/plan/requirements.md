@@ -20,9 +20,9 @@
 
 | # | Requirement (observable) | Status | Evidence / owner |
 | :-- | :-- | :-- | :-- |
-| U1 | Show the topic's hierarchy (breadcrumb) on the card, at least when learning | building | UX refinement subagent (was missed initially; now tracked + in flight) |
-| U2 | Merge the Learn and Practice buttons into one | building | UX refinement subagent (was missed initially) |
-| U3 | A UI listing all topics and which of the 4 stages each is at | todo | build after U1/U2 (reuses taxonomy labels); data from `get_speedrun_progress` |
+| U1 | Show the topic's hierarchy (breadcrumb) on the card, at least when learning | done | `GetSpeedrunCardContext` RPC + `taxonomy::topic_path_labels`; reviewer injects `window.speedrunTopicPath`; templates render it; tests: rust `topic_path_labels_walks_root_to_leaf`, node breadcrumb checks (184), qt 53 |
+| U2 | Merge the Learn and Practice buttons into one | done | `overview.py` single Study button (`tr.studying_study()` -> `_start_session()`, state-aware queue w/ fallback); D20 superseded by D30; qt `test_speedrun.py` (53) |
+| U3 | A UI listing all topics and which of the 4 stages each is at | todo | next; U1/U2 landed. Reuses taxonomy labels; data from `get_speedrun_progress` |
 | U4 | `frontend-design` polish pass on the Speedrun UI (dashboard, cards, Study entry, topics view) | todo | after U1/U2/U3 + F1-F3 land; follow the `frontend-design` skill (distinct identity, type, signature element) |
 
 ## Correctness fixes from the progression review (binding)
@@ -35,7 +35,7 @@
 
 ## Audit (2026-06-30)
 
-Reconciled the progression restatement + every later message. Initially-missed: **U1, U2** (caught after the user flagged; now in flight). New ask: **U3**. Review-found correctness: **F1, F2, F3**. Everything in the restatement (P1-P9) is built and verified. No other dropped requirement found. Foundation milestones (Phases 1-4) tracked in [README](README.md) + the phase todos.
+Reconciled the progression restatement + every later message. Initially-missed **U1, U2** are now built, merged, and verified green (the refinement subagent's network died mid-run; its finished-but-uncommitted work was salvaged from the worktree, verified, and merged). Remaining: **U3** (topics-state UI), then review-found correctness **F1, F2, F3**, then **U4** polish. Everything in the restatement (P1-P9) is built and verified. No other dropped requirement found. Foundation milestones (Phases 1-4) tracked in [README](README.md) + the phase todos.
 
 ---
 

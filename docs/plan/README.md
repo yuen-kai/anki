@@ -4,13 +4,14 @@
 
 ## What this is
 
-A fork of Anki that adds a desktop + mobile study app for **one exam (MCAT)**, built around three honestly-separated scores (memory / performance / readiness) and an explicit application-teaching flow (Learn vs Practice). Full intent in [`prd-speedrun.md`](prd-speedrun.md).
+A fork of Anki that adds a desktop + mobile study app for **one exam (MCAT)**, built around three honestly-separated scores (memory / performance / readiness) and an explicit application-teaching flow: one **Study** button driven by a four-state per-topic mastery progression. Full intent in [`prd-speedrun.md`](prd-speedrun.md).
 
 ## Current state (2026-06-30)
 
-- **Planning:** complete. PRD + 5 specs + decision log (D1–D21) written and frozen.
+- **Planning:** complete. PRD + 6 specs + decision log (D1–D32) written and frozen.
 - **Build bring-up:** base Anki runs on desktop (`just run`, after installing `n2`); base AnkiDroid runs on an arm64 emulator. Zero source edits. Anki HEAD `b00308e`.
 - **Implementation:** Phase 1 merged to `main` (AAMC taxonomy Rust module + Learn content layer / note types + seed). Integrated tests green: 4 Rust (`cargo test -p anki speedrun`) + 22 Python (`python3 -m unittest test_speedrun_content`). Code-reviewed (no Critical; 2 Important fixes landed: concept-seed idempotency, `</script>` JSON hardening). Phase 2a merged: topic-grouped Learn queue + `GetTopicGroupedQueue` RPC (10 Rust tests green on `main`; full pylib + aqt suite green; reviewed (no Critical, ready for 2b; perf B013 + undo-proof B015 tracked). Phase 2b merged: honest Memory score (`GetMemoryScore`) + give-up rule + the topic-queue undo proof (Rust memory_score 6 + topic_grouped 7 green on `main`; pylib/aqt green; reviewed; closing gate: all code checks pass (clippy, cross-language tests, mypy, rustfmt), only pre-existing markdown dprint residue remains, B018). **Phase 2 closed.** Phase 3 merged: Memory dashboard (Tools menu), Learn/Practice deck entry, and the fail-open application-card answer gate (28 gating tests; integrated verify green; reviewed, ready to close, no Critical; follow-ups B022-B024). **Desktop slice (Phases 1-3) complete.** **Phase 4 done:** the modified engine runs inside AnkiDroid on the emulator with the new RPCs verified on-device ([B001](backlog.md) resolved, [D29](decisions.md#d29)). **All four phases complete.** Remaining (tracked, non-blocking): B025 (AnkiDroid UI calls the new RPCs + on-device Speedrun review), desktop clean-machine installer, plus the Friday/Sunday milestones (AI, sync, evals). (B019 Learn-surfaces-new-cards: fixed.)
+- **Post-phase (mastery progression):** the four-state per-topic progression is merged. The two Learn/Practice buttons are now **one Study button** and each card shows its **topic breadcrumb** (U1/U2), merged + verified on `main`: Rust 32 speedrun + 12 topic-queue, 184 template checks, pylib 36 + qt 53, all green. Remaining UX: **U3** (a view of all topics + their 4-stage state), then correctness **F1-F3** ([B026-B028](backlog.md)), then **U4** (`frontend-design` polish). Tracked in [requirements.md](requirements.md).
 
 ## Doc map
 
@@ -19,7 +20,7 @@ A fork of Anki that adds a desktop + mobile study app for **one exam (MCAT)**, b
 | `README.md` (this) | Front door + current state + authority order | living |
 | [`prd-speedrun.md`](prd-speedrun.md) | User-facing contract | frozen |
 | [`spec-*.md`](.) | Implementation design (taxonomy, engine queue, study model, scores, mobile) | frozen |
-| [`decisions.md`](decisions.md) | Decision log D1–D21 (Chose / Considered / Gaps) | append-only |
+| [`decisions.md`](decisions.md) | Decision log D1–D32 (Chose / Considered / Gaps) | append-only |
 | [`design-iterations.md`](design-iterations.md) | Dated, feedback-driven design changes | append-only |
 | [`backlog.md`](backlog.md) | Bugs / refactors / open issues | updated in place |
 | [`requirements.md`](requirements.md) | Requirements ledger (every ask → status), reconcile before "done" | living |
@@ -36,7 +37,7 @@ The PRD/specs are frozen initial plans. Where a decision conflicts with them, th
 ## Overrides since the plan
 
 - spec-scores §7/§9.5 said `AttemptLog` persists from Wednesday → deferred to Phase 3/Friday ([D25](decisions.md#d25)); the Memory score uses revlog in the interim.
-- spec-study-model §4-§6 (flat Learn/Practice two-mode model) → superseded by the four-state mastery progression ([D30](decisions.md#d30)/[D31](decisions.md#d31)/[D32](decisions.md#d32), [`spec-mastery-progression`](spec-mastery-progression.md)); merged + verified on `main` (Rust + templates + pylib/aqt green; review running).
+- spec-study-model §4-§6 (flat Learn/Practice two-mode model) → superseded by the four-state mastery progression ([D30](decisions.md#d30)/[D31](decisions.md#d31)/[D32](decisions.md#d32), [`spec-mastery-progression`](spec-mastery-progression.md)); merged + verified on `main`. The two-button Learn/Practice entry ([D20](decisions.md#d20)) is superseded by a single Study button ([D30](decisions.md#d30)); each card now shows its topic breadcrumb (U1/U2), merged + verified.
 
 ---
 
