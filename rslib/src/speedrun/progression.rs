@@ -47,6 +47,7 @@ use crate::search::SearchNode;
 use crate::search::SortMode;
 use crate::speedrun::card_signals::card_topic;
 use crate::speedrun::card_signals::leaf_topic_weights;
+use crate::speedrun::taxonomy::topic_path_labels;
 
 /// Collection-config key holding the per-topic state map (D32).
 pub(crate) const TOPIC_STATE_CONFIG_KEY: &str = "speedrun_topic_state";
@@ -254,10 +255,14 @@ impl Collection {
         Ok(())
     }
 
-    /// The active card mode for a card (spec §5): resolve its note kind and its
-    /// topic's state, then map to one of the mode strings. A non-Speedrun card,
-    /// or a card with no taxonomy topic, resolves against the default state.
-    pub(crate) fn get_speedrun_card_mode(&mut self, card_id: CardId) -> Result<&'static str> {
+    /// Resolve a card's note kind, its taxonomy topic (if any) and that topic's
+    /// mastery state in a single lookup — the shared core of both the card-mode
+    /// and card-context resolution. A non-Speedrun card short-circuits to
+    /// `(Other, None, default)` without a (pointless) topic lookup.
+    fn speedrun_card_kind_topic_state(
+        &mut self,
+        card_id: CardId,
+    ) -> Result<(NoteKind, Option<String>, TopicState)> {
         let card = self.storage.get_card(card_id)?.or_not_found(card_id)?;
         let note = self
             .storage
@@ -265,13 +270,39 @@ impl Collection {
             .or_not_found(card.note_id)?;
         let kind = self.note_kind(&note)?;
         if kind == NoteKind::Other {
-            return Ok(MODE_NONE);
+            return Ok((kind, None, TopicState::default()));
         }
         let leaf_weights = leaf_topic_weights();
-        let state = card_topic(&note.tags, &leaf_weights)
-            .map(|topic| self.speedrun_topic_state(&topic))
+        let topic = card_topic(&note.tags, &leaf_weights);
+        let state = topic
+            .as_deref()
+            .map(|topic| self.speedrun_topic_state(topic))
             .unwrap_or_default();
+        Ok((kind, topic, state))
+    }
+
+    /// The active card mode for a card (spec §5): resolve its note kind and its
+    /// topic's state, then map to one of the mode strings. A non-Speedrun card,
+    /// or a card with no taxonomy topic, resolves against the default state.
+    pub(crate) fn get_speedrun_card_mode(&mut self, card_id: CardId) -> Result<&'static str> {
+        let (kind, _topic, state) = self.speedrun_card_kind_topic_state(card_id)?;
         Ok(resolve_card_mode(kind, state))
+    }
+
+    /// A card's full render context (spec §5): its active mode plus the display
+    /// labels of its taxonomy hierarchy path (foundation → leaf, e.g.
+    /// `["Biomolecules", "Enzymes", "Inhibition"]`), so the reviewer can inject
+    /// both `window.speedrunCardMode` and `window.speedrunTopicPath` for the
+    /// breadcrumb. The path is empty for a non-Speedrun card or one with no
+    /// taxonomy topic, which the template renders as no breadcrumb.
+    pub(crate) fn get_speedrun_card_context(
+        &mut self,
+        card_id: CardId,
+    ) -> Result<(&'static str, Vec<String>)> {
+        let (kind, topic, state) = self.speedrun_card_kind_topic_state(card_id)?;
+        let mode = resolve_card_mode(kind, state);
+        let path = topic.as_deref().map(topic_path_labels).unwrap_or_default();
+        Ok((mode, path))
     }
 
     /// Record an answer against the card's topic and return the topic's new
@@ -735,6 +766,53 @@ mod tests {
         let basic_nt = col.basic_notetype();
         let basic = add_card(&mut col, &basic_nt, Some(KINETICS));
         assert_eq!(col.get_speedrun_card_mode(basic).unwrap(), MODE_NONE);
+    }
+
+    #[test]
+    fn card_context_carries_mode_and_hierarchy_path() {
+        let mut col = Collection::new();
+        let concept_nt = add_notetype_named(&mut col, "SpeedrunConcept");
+        let app_nt = add_notetype_named(&mut col, "SpeedrunApplication");
+        let concept = add_card(&mut col, &concept_nt, Some(KINETICS));
+        let app = add_card(&mut col, &app_nt, Some(KINETICS));
+
+        // The breadcrumb path is the topic's taxonomy labels, regardless of
+        // state; the mode tracks the topic state as usual.
+        let (mode, path) = col.get_speedrun_card_context(concept).unwrap();
+        assert_eq!(mode, MODE_CONCEPT_LEARN);
+        assert_eq!(path, vec!["Biomolecules", "Enzymes", "Kinetics"]);
+
+        // A suppressed application card (mode none) still reports its path; the
+        // queue is what withholds it, not the context.
+        let (mode, path) = col.get_speedrun_card_context(app).unwrap();
+        assert_eq!(mode, MODE_NONE);
+        assert_eq!(path, vec!["Biomolecules", "Enzymes", "Kinetics"]);
+
+        // Advancing the topic changes only the mode, not the breadcrumb.
+        col.set_speedrun_topic_state(KINETICS, TopicState::Hierarchy)
+            .unwrap();
+        let (mode, path) = col.get_speedrun_card_context(app).unwrap();
+        assert_eq!(mode, MODE_APPLICATION_SCAFFOLDED);
+        assert_eq!(path, vec!["Biomolecules", "Enzymes", "Kinetics"]);
+    }
+
+    #[test]
+    fn card_context_is_empty_for_non_speedrun_and_unmapped_cards() {
+        let mut col = Collection::new();
+        let concept_nt = add_notetype_named(&mut col, "SpeedrunConcept");
+
+        // A Speedrun card with no taxonomy tag: a real mode, but no breadcrumb.
+        let untagged = add_card(&mut col, &concept_nt, None);
+        let (mode, path) = col.get_speedrun_card_context(untagged).unwrap();
+        assert_eq!(mode, MODE_CONCEPT_LEARN);
+        assert!(path.is_empty(), "no topic -> no breadcrumb");
+
+        // A non-Speedrun card is fully neutral even if it carries a taxonomy tag.
+        let basic_nt = col.basic_notetype();
+        let basic = add_card(&mut col, &basic_nt, Some(KINETICS));
+        let (mode, path) = col.get_speedrun_card_context(basic).unwrap();
+        assert_eq!(mode, MODE_NONE);
+        assert!(path.is_empty());
     }
 
     #[test]

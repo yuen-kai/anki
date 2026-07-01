@@ -207,6 +207,7 @@ function runTemplate(source, { document, window, sessionStorage }) {
 
 function conceptFront() {
   return el("div", { class: "speedrun sr-concept", attrs: { "data-side": "front" } }, [
+    el("nav", { class: "sr-breadcrumb", id: "sr-breadcrumb", hidden: true }),
     el("div", { class: "sr-cases" }, [
       el("section", { class: "sr-case sr-case--a" }, [
         el("h2", { class: "sr-case__label", text: "Case A" }),
@@ -244,6 +245,18 @@ const SAMPLE_STEPS = [
 const SAMPLE_PATH = ["F", "C", "T"];
 const SAMPLE_FB = { F2: "wrong foundation", C2: "wrong category", T2: "wrong topic" };
 
+// The taxonomy hierarchy labels the reviewer injects as window.speedrunTopicPath
+// for the breadcrumb (mirrors rslib topic_path_labels: foundation -> leaf).
+const TOPIC_PATH = ["Biomolecules", "Enzymes", "Inhibition"];
+
+// Labels of the breadcrumb items the template rendered, in order.
+function breadcrumbLabels(document) {
+  return document
+    .getElementById("sr-breadcrumb")
+    .querySelectorAll(".sr-breadcrumb__item")
+    .map((item) => item.textContent);
+}
+
 function appJsonScripts() {
   return [
     el("script", { id: "sr-steps", attrs: { type: "application/json" }, text: JSON.stringify(SAMPLE_STEPS) }),
@@ -254,6 +267,7 @@ function appJsonScripts() {
 
 function appFront() {
   return el("div", { class: "speedrun sr-app", attrs: { "data-side": "front" } }, [
+    el("nav", { class: "sr-breadcrumb", id: "sr-breadcrumb", hidden: true }),
     el("div", { class: "sr-problem", text: "the problem" }),
     el("div", { class: "sr-scaffold" }, [
       el("ol", { class: "sr-trail", id: "sr-trail" }),
@@ -267,6 +281,7 @@ function appFront() {
 
 function appBack() {
   return el("div", { class: "speedrun sr-app sr-app--answer", attrs: { "data-side": "back" } }, [
+    el("nav", { class: "sr-breadcrumb", id: "sr-breadcrumb", hidden: true }),
     el("div", { class: "sr-problem", text: "the problem" }),
     el("ol", { class: "sr-trail sr-trail--final", id: "sr-trail" }),
     el("hr", { class: "sr-rule", id: "answer" }),
@@ -304,13 +319,17 @@ function check(name, cond, detail) {
 function testConceptLearn(modeValue, label) {
   const front = conceptFront();
   const document = makeDocument([front]);
-  const window = { speedrunCardMode: modeValue };
+  // The learning card is the required breadcrumb case: inject a path too.
+  const window = { speedrunCardMode: modeValue, speedrunTopicPath: TOPIC_PATH };
   runTemplate(CONCEPT_JS, { document, window, sessionStorage: makeSessionStorage() });
 
   check(`${label}: both cases visible`, document.querySelector(".sr-case--b").hidden === false);
   check(`${label}: comparison prompt visible`, document.querySelector(".sr-prompt").hidden === false);
   check(`${label}: case A label unchanged`, document.querySelector(".sr-case--a .sr-case__label").textContent === "Case A");
   check(`${label}: not flagged practice`, document.querySelector(".sr-concept").classList.contains("sr-concept--practice") === false);
+  // The breadcrumb renders from window.speedrunTopicPath in every concept mode.
+  check(`${label}: breadcrumb visible`, document.getElementById("sr-breadcrumb").hidden === false);
+  check(`${label}: breadcrumb labels`, breadcrumbLabels(document).join("|") === TOPIC_PATH.join("|"));
 }
 
 function testConceptPractice() {
@@ -414,6 +433,68 @@ function testApplicationUnscaffolded() {
   check("application_unscaffolded: solution shown", back.querySelector(".sr-solution").textContent === "the solution");
 }
 
+// --- breadcrumb tests -----------------------------------------------------
+
+function testBreadcrumb() {
+  // Absent path: the element stays hidden, so a non-Speedrun render (or a card
+  // with no topic) shows no breadcrumb at all.
+  let doc = makeDocument([conceptFront()]);
+  runTemplate(CONCEPT_JS, {
+    document: doc,
+    window: { speedrunCardMode: "concept_learn" },
+    sessionStorage: makeSessionStorage(),
+  });
+  check("breadcrumb: hidden when path absent", doc.getElementById("sr-breadcrumb").hidden === true);
+  check("breadcrumb: no items when path absent", breadcrumbLabels(doc).length === 0);
+
+  // An empty array is treated the same as absent.
+  doc = makeDocument([conceptFront()]);
+  runTemplate(CONCEPT_JS, {
+    document: doc,
+    window: { speedrunCardMode: "concept_learn", speedrunTopicPath: [] },
+    sessionStorage: makeSessionStorage(),
+  });
+  check("breadcrumb: hidden when path empty", doc.getElementById("sr-breadcrumb").hidden === true);
+
+  // Non-string / empty entries are filtered; only real labels render.
+  doc = makeDocument([conceptFront()]);
+  runTemplate(CONCEPT_JS, {
+    document: doc,
+    window: { speedrunCardMode: "concept_learn", speedrunTopicPath: ["A", "", null, 3, "B"] },
+    sessionStorage: makeSessionStorage(),
+  });
+  check("breadcrumb: filters non-strings", breadcrumbLabels(doc).join("|") === "A|B");
+
+  // Application card, question side: breadcrumb renders the same way.
+  doc = makeDocument([appFront()]);
+  runTemplate(APPLICATION_JS, {
+    document: doc,
+    window: { speedrunCardMode: "application_scaffolded", speedrunTopicPath: TOPIC_PATH },
+    sessionStorage: makeSessionStorage(),
+  });
+  check("breadcrumb: application front visible", doc.getElementById("sr-breadcrumb").hidden === false);
+  check("breadcrumb: application front labels", breadcrumbLabels(doc).join("|") === TOPIC_PATH.join("|"));
+
+  // Application card, answer side: still rendered (useful context on the back).
+  doc = makeDocument([appBack()]);
+  runTemplate(APPLICATION_JS, {
+    document: doc,
+    window: { speedrunCardMode: "application_scaffolded", speedrunTopicPath: TOPIC_PATH },
+    sessionStorage: makeSessionStorage(),
+  });
+  check("breadcrumb: application back visible", doc.getElementById("sr-breadcrumb").hidden === false);
+  check("breadcrumb: application back labels", breadcrumbLabels(doc).join("|") === TOPIC_PATH.join("|"));
+
+  // Even an unscaffolded (mastering) card shows the breadcrumb.
+  doc = makeDocument([appFront()]);
+  runTemplate(APPLICATION_JS, {
+    document: doc,
+    window: { speedrunCardMode: "application_unscaffolded", speedrunTopicPath: TOPIC_PATH },
+    sessionStorage: makeSessionStorage(),
+  });
+  check("breadcrumb: unscaffolded still shows path", doc.getElementById("sr-breadcrumb").hidden === false);
+}
+
 // --- no-network / no-model audit -----------------------------------------
 
 const JS_FORBIDDEN = [
@@ -466,15 +547,15 @@ function audit() {
 
 function structuralAudit() {
   const cf = readFileSync(join(TEMPLATES, "concept_front.html"), "utf8");
-  ["sr-concept", "sr-case--a", "sr-case--b", "sr-prompt", "sr-answer__label", 'id="sr-similarity"'].forEach((hook) =>
+  ["sr-concept", "sr-case--a", "sr-case--b", "sr-prompt", "sr-answer__label", 'id="sr-similarity"', 'id="sr-breadcrumb"'].forEach((hook) =>
     check(`concept_front.html has ${hook}`, cf.includes(hook)),
   );
   const af = readFileSync(join(TEMPLATES, "application_front.html"), "utf8");
-  ["sr-app", "sr-scaffold", 'id="sr-trail"', 'id="sr-level"'].forEach((hook) =>
+  ["sr-app", "sr-scaffold", 'id="sr-trail"', 'id="sr-level"', 'id="sr-breadcrumb"'].forEach((hook) =>
     check(`application_front.html has ${hook}`, af.includes(hook)),
   );
   const ab = readFileSync(join(TEMPLATES, "application_back.html"), "utf8");
-  ["sr-app--answer", 'id="sr-trail"', "sr-solution"].forEach((hook) =>
+  ["sr-app--answer", 'id="sr-trail"', "sr-solution", 'id="sr-breadcrumb"'].forEach((hook) =>
     check(`application_back.html has ${hook}`, ab.includes(hook)),
   );
 }
@@ -493,6 +574,8 @@ testApplicationScaffolded("totally-unknown", "application fallback (unknown mode
 testApplicationScaffolded("concept_practice", "application fallback (wrong-family mode)");
 testApplicationUnscaffolded();
 
+testBreadcrumb();
+
 audit();
 structuralAudit();
 
@@ -501,4 +584,6 @@ if (failures.length) {
   failures.forEach((f) => console.error("  - " + f));
   process.exit(1);
 }
-console.log(`OK: ${passed} checks passed across 4 modes + fallback, gate probe, and no-network audit`);
+console.log(
+  `OK: ${passed} checks passed across 4 modes + fallback, the topic breadcrumb, gate probe, and no-network audit`,
+);

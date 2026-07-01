@@ -1368,20 +1368,24 @@ timerStopped = false;
     setFlag = set_flag_on_current_card
 
 
-def _inject_speedrun_card_mode(text: str, card: Card, kind: str) -> str:
-    """card_will_show filter: prepend ``window.speedrunCardMode`` so the
-    state-aware Speedrun templates know which mode to render before their own JS
-    runs (decision D31, spec-mastery-progression §5).
+def _inject_speedrun_card_context(text: str, card: Card, kind: str) -> str:
+    """card_will_show filter: prepend ``window.speedrunCardMode`` and
+    ``window.speedrunTopicPath`` so the state-aware Speedrun templates know which
+    mode to render and can draw the topic breadcrumb before their own JS runs
+    (decision D31, spec-mastery-progression §5).
 
-    Additive + fail-open: a non-Speedrun card (mode "none"), a scheduler without
-    the Speedrun RPC, or any error leaves the card HTML untouched, so normal
-    review and non-Speedrun cards are never affected.
+    Additive + fail-open: a non-Speedrun card (mode "none", empty path), a
+    scheduler without the Speedrun RPC, or any error leaves the card HTML
+    untouched, so normal review and non-Speedrun cards are never affected.
     """
     try:
-        get_mode = getattr(card.col.sched, "get_speedrun_card_mode", None)
-        if get_mode is None:
+        get_context = getattr(card.col.sched, "get_speedrun_card_context", None)
+        if get_context is None:
             return text
-        script = aqt.speedrun.card_mode_inject_script(get_mode(card_id=card.id))
+        context = get_context(card_id=card.id)
+        script = aqt.speedrun.card_context_inject_script(
+            context.mode, list(context.path)
+        )
         if script:
             return script + text
     except Exception:
@@ -1389,7 +1393,7 @@ def _inject_speedrun_card_mode(text: str, card: Card, kind: str) -> str:
     return text
 
 
-gui_hooks.card_will_show.append(_inject_speedrun_card_mode)
+gui_hooks.card_will_show.append(_inject_speedrun_card_context)
 
 
 # if the last element is a comment, then the RUN_STATE_MUTATION code

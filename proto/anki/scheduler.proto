@@ -35,6 +35,12 @@ service SchedulerService {
   // "application_unscaffolded", or "none" (non-Speedrun card, or an application
   // card whose topic is still below the hierarchy state and is suppressed).
   rpc GetSpeedrunCardMode(cards.CardId) returns (generic.String);
+  // The card's render context for the state-aware templates: its active mode
+  // (as GetSpeedrunCardMode) plus its taxonomy hierarchy path as display labels
+  // (foundation -> leaf, e.g. "Biomolecules", "Enzymes", "Inhibition"), empty
+  // for a card with no taxonomy topic. The reviewer injects both as
+  // window.speedrunCardMode / window.speedrunTopicPath before render.
+  rpc GetSpeedrunCardContext(cards.CardId) returns (SpeedrunCardContext);
   // Record an answer against the card's topic and return the topic's new state.
   // Again demotes the topic one state (never below learning); any other rating
   // advances one state once the topic's active-mode cards clear the mastery
@@ -222,6 +228,18 @@ message SpeedrunRecordAnswerRequest {
   int64 card_id = 1;
   // The button the learner pressed; AGAIN demotes, the rest can advance.
   CardAnswer.Rating rating = 2;
+}
+
+// A card's render context for the state-aware Speedrun templates
+// (GetSpeedrunCardContext).
+message SpeedrunCardContext {
+  // The active card mode, as GetSpeedrunCardMode (one of "concept_learn",
+  // "concept_practice", "application_scaffolded", "application_unscaffolded",
+  // or "none").
+  string mode = 1;
+  // The taxonomy hierarchy path as display labels, foundation -> leaf (e.g.
+  // "Biomolecules", "Enzymes", "Inhibition"); empty for a card with no topic.
+  repeated string path = 2;
 }
 
 // Per-topic mastery progress for a deck (GetSpeedrunProgress), for the

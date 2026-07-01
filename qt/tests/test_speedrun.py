@@ -26,6 +26,7 @@ from aqt.speedrun import (
     GATE_INCOMPLETE,
     SCAFFOLD_COMPLETE,
     ScaffoldPick,
+    card_context_inject_script,
     card_mode_inject_script,
     gate_blocks_answer,
     is_application_note_type,
@@ -142,6 +143,54 @@ class TestCardModeInjectScript:
 
     def test_none_constant_is_not_a_real_mode(self) -> None:
         assert CARD_MODE_NONE not in CARD_MODES
+
+
+class TestCardContextInjectScript:
+    """The mode+path inject string the reviewer prepends for the breadcrumb."""
+
+    def test_mode_and_path_both_inject(self) -> None:
+        # Both globals are set, json-quoted so neither can escape the tag; the
+        # template reads the path with textContent only.
+        script = card_context_inject_script(
+            "concept_learn", ["Biomolecules", "Enzymes", "Inhibition"]
+        )
+        assert script == (
+            "<script>"
+            'window.speedrunCardMode = "concept_learn"; '
+            'window.speedrunTopicPath = ["Biomolecules", "Enzymes", "Inhibition"];'
+            "</script>"
+        )
+
+    def test_known_mode_without_path_injects_only_mode(self) -> None:
+        assert (
+            card_context_inject_script("concept_practice", [])
+            == '<script>window.speedrunCardMode = "concept_practice";</script>'
+        )
+        assert (
+            card_context_inject_script("concept_practice", None)
+            == '<script>window.speedrunCardMode = "concept_practice";</script>'
+        )
+
+    def test_path_without_known_mode_injects_only_path(self) -> None:
+        # A suppressed application card (mode "none") can still carry a path.
+        assert (
+            card_context_inject_script(CARD_MODE_NONE, ["Biomolecules", "Enzymes"])
+            == '<script>window.speedrunTopicPath = ["Biomolecules", "Enzymes"];</script>'
+        )
+
+    @pytest.mark.parametrize("mode", [CARD_MODE_NONE, "", None, "garbage"])
+    def test_nothing_to_inject_is_empty(self, mode: str | None) -> None:
+        # Neither a known mode nor a usable path: a normal card is never touched.
+        assert card_context_inject_script(mode, None) == ""
+        assert card_context_inject_script(mode, []) == ""
+
+    def test_non_string_path_entries_are_dropped(self) -> None:
+        # Defensive: only real, non-empty labels render.
+        assert (
+            card_context_inject_script("concept_learn", ["A", "", None, 3, "B"])  # type: ignore[list-item]
+            == '<script>window.speedrunCardMode = "concept_learn"; '
+            'window.speedrunTopicPath = ["A", "B"];</script>'
+        )
 
 
 class TestRatingFromEase:

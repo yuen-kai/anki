@@ -15,6 +15,33 @@
   // or a wrong-family value) stays on the safe concept-learn default.
   var practice = window.speedrunCardMode === "concept_practice";
 
+  // Draw the topic breadcrumb the reviewer injects as window.speedrunTopicPath
+  // (foundation -> leaf). textContent only, never innerHTML, so an authored
+  // label can render no markup; the "›" separators come from CSS. An absent or
+  // empty path leaves the element hidden, so a non-Speedrun render shows nothing.
+  function renderBreadcrumb() {
+    var nav = document.getElementById("sr-breadcrumb");
+    if (!nav) return;
+    var raw = Array.isArray(window.speedrunTopicPath) ? window.speedrunTopicPath : [];
+    var labels = raw.filter(function (label) {
+      return typeof label === "string" && label;
+    });
+    nav.textContent = "";
+    if (!labels.length) {
+      nav.hidden = true;
+      return;
+    }
+    labels.forEach(function (label) {
+      var item = document.createElement("span");
+      item.className = "sr-breadcrumb__item";
+      item.textContent = label;
+      nav.appendChild(item);
+    });
+    nav.hidden = false;
+  }
+
+  renderBreadcrumb();
+
   function read() {
     try {
       return sessionStorage.getItem(STORE_KEY) || "";

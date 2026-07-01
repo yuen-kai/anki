@@ -143,6 +143,75 @@ def test_card_modes_and_state_transitions():
         col.close()
 
 
+def test_card_context_exposes_mode_and_breadcrumb_path():
+    col = getEmptyCol()
+    try:
+        concept_nt, _app_nt = _notetypes(col)
+        concept = _add_card(col, concept_nt, KINETICS)
+
+        # The context carries the same mode as get_speedrun_card_mode plus the
+        # taxonomy hierarchy labels for the reviewer breadcrumb (root -> leaf).
+        context = col.sched.get_speedrun_card_context(card_id=concept)
+        assert context.mode == "concept_learn"
+        assert list(context.path) == ["Biomolecules", "Enzymes", "Kinetics"]
+
+        # A Speedrun card with no taxonomy tag has a mode but no breadcrumb.
+        untagged = col.new_note(concept_nt)
+        untagged.fields[0] = "q"
+        col.add_note(untagged, DEFAULT_DECK)
+        untagged_context = col.sched.get_speedrun_card_context(
+            card_id=untagged.cards()[0].id
+        )
+        assert untagged_context.mode == "concept_learn"
+        assert list(untagged_context.path) == []
+
+        # A non-Speedrun card is fully neutral even with a taxonomy tag.
+        basic_nt = col.models.by_name("Basic")
+        assert basic_nt is not None
+        basic = col.new_note(basic_nt)
+        basic.fields[0] = "front"
+        basic.tags.append(KINETICS)
+        col.add_note(basic, DEFAULT_DECK)
+        basic_context = col.sched.get_speedrun_card_context(
+            card_id=basic.cards()[0].id
+        )
+        assert basic_context.mode == "none"
+        assert list(basic_context.path) == []
+    finally:
+        col.close()
+
+
+def test_study_queue_falls_back_on_non_speedrun_deck():
+    """The merged Study button always runs the topic-grouped queue; on a deck
+    with no Speedrun topics it must serve the same cards as the normal queue."""
+    col = getEmptyCol()
+    try:
+        basic_nt = col.models.by_name("Basic")
+        assert basic_nt is not None
+        ids = set()
+        for i in range(3):
+            note = col.new_note(basic_nt)
+            note.fields[0] = f"q{i}"
+            col.add_note(note, DEFAULT_DECK)
+            ids.add(note.cards()[0].id)
+
+        sched = cast(V3Scheduler, col.sched)
+        topic_served = {
+            qc.card.id
+            for qc in sched.get_topic_grouped_queue(
+                deck_id=DEFAULT_DECK, fetch_limit=0
+            ).cards
+        }
+        default_served = {
+            qc.card.id for qc in sched.get_queued_cards(fetch_limit=100).cards
+        }
+
+        assert topic_served == ids, "every non-Speedrun card is served"
+        assert topic_served == default_served, "same set as the default queue"
+    finally:
+        col.close()
+
+
 def test_topic_grouped_queue_is_state_aware():
     col = getEmptyCol()
     try:

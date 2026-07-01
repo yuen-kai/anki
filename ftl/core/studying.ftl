@@ -40,6 +40,7 @@ studying-record-own-voice = Record Own Voice
 studying-replay-own-voice = Replay Own Voice
 studying-show-answer = Show Answer
 studying-space = Space
+studying-study = Study
 studying-study-now = Study Now
 studying-suspend = Suspend
 studying-suspend-note = Suspend Note
