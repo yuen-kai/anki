@@ -1,7 +1,16 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import type { MemoryScore, SpeedrunProgress } from "@generated/anki/scheduler_pb";
+import type {
+    MemoryScore,
+    ScoreEnvelope as ProtoScoreEnvelope,
+    SpeedrunProgress,
+} from "@generated/anki/scheduler_pb";
+
+// How a score's numbers are rendered: "ratio" is a probability in [0, 1]
+// (Memory, Performance); "points" is a whole score on the 472-528 MCAT scale
+// (Readiness).
+export type ScoreFormat = "ratio" | "points";
 
 // The Speedrun evidence envelope (spec-scores §4): the single shape every score
 // is rendered as. There is no bare-number path; when `abstained` is true the
@@ -17,6 +26,7 @@ export interface ScoreEnvelope {
     abstained: boolean;
     abstainReason: string;
     gradedReviews: number;
+    format: ScoreFormat;
 }
 
 export function envelopeFromMemoryScore(score: MemoryScore): ScoreEnvelope {
@@ -32,11 +42,31 @@ export function envelopeFromMemoryScore(score: MemoryScore): ScoreEnvelope {
         abstained: score.abstained,
         abstainReason: score.abstainReason,
         gradedReviews: score.gradedReviews,
+        // Memory is a probability.
+        format: "ratio",
     };
 }
 
-// Performance and Readiness have no backend yet (PRD §6, spec-scores §7): their
-// tiles abstain by construction and explain when the score will exist.
+// The Performance and Readiness scores share the ScoreEnvelope proto, carrying
+// their own `format` (ratio vs points).
+export function envelopeFromScoreEnvelope(score: ProtoScoreEnvelope): ScoreEnvelope {
+    return {
+        estimate: score.estimate,
+        rangeLow: score.rangeLow,
+        rangeHigh: score.rangeHigh,
+        coveragePct: score.coveragePct,
+        confidence: score.confidence,
+        updatedAtSecs: Number(score.updatedAtSecs),
+        reasons: score.reasons,
+        abstained: score.abstained,
+        abstainReason: score.abstainReason,
+        gradedReviews: score.gradedReviews,
+        format: score.format === "points" ? "points" : "ratio",
+    };
+}
+
+// A tile that has no backing score yet: abstains by construction and explains
+// when the score will exist.
 export function deferredEnvelope(abstainReason: string): ScoreEnvelope {
     return {
         estimate: 0,
@@ -49,15 +79,18 @@ export function deferredEnvelope(abstainReason: string): ScoreEnvelope {
         abstained: true,
         abstainReason,
         gradedReviews: 0,
+        format: "ratio",
     };
 }
 
-export function formatEstimate(value: number): string {
-    return value.toFixed(2);
+export function formatEstimate(value: number, format: ScoreFormat): string {
+    return format === "points" ? `${Math.round(value)}` : value.toFixed(2);
 }
 
-export function formatRange(low: number, high: number): string {
-    return `${low.toFixed(2)} to ${high.toFixed(2)}`;
+export function formatRange(low: number, high: number, format: ScoreFormat): string {
+    return format === "points"
+        ? `${Math.round(low)} to ${Math.round(high)}`
+        : `${low.toFixed(2)} to ${high.toFixed(2)}`;
 }
 
 export function formatCoverage(fraction: number): string {

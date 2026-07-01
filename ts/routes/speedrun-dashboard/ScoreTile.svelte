@@ -44,9 +44,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </div>
     {:else}
         <div class="value">
-            <span class="estimate">{formatEstimate(envelope.estimate)}</span>
+            <span class="estimate">{formatEstimate(envelope.estimate, envelope.format)}</span>
             <span class="range">
-                likely {formatRange(envelope.rangeLow, envelope.rangeHigh)}
+                likely {formatRange(envelope.rangeLow, envelope.rangeHigh, envelope.format)}
             </span>
         </div>
 

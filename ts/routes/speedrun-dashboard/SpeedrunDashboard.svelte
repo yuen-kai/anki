@@ -9,17 +9,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     export let memory: ScoreEnvelope | null;
     export let memoryError: string | null = null;
+    export let performance: ScoreEnvelope | null = null;
+    export let performanceError: string | null = null;
+    export let readiness: ScoreEnvelope | null = null;
+    export let readinessError: string | null = null;
     export let topics: TopicsView = buildTopicsView(null);
     export let topicsError: string | null = null;
-
-    // Designed but not built yet (PRD §6): each says when it will exist and why
-    // it depends on the one before it.
-    const performance = deferredEnvelope(
-        "The performance score arrives in the Friday milestone, once a model can grade new, exam-style questions.",
-    );
-    const readiness = deferredEnvelope(
-        "The readiness score arrives in the Friday milestone. It maps performance onto the 472 to 528 scale, so it follows performance.",
-    );
 </script>
 
 <div class="dashboard">
@@ -42,14 +37,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <ScoreTile
                 name="Performance"
                 question="Will you get a new, exam-style question right?"
-                live={false}
-                envelope={performance}
+                live={true}
+                envelope={performance ?? deferredEnvelope("")}
+                error={performanceError}
             />
             <ScoreTile
                 name="Readiness"
                 question="What would you score on the 472 to 528 scale today?"
-                live={false}
-                envelope={readiness}
+                live={true}
+                envelope={readiness ?? deferredEnvelope("")}
+                error={readinessError}
             />
         </div>
 
