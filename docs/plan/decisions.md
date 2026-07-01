@@ -299,6 +299,14 @@
 - **Considered:** a new DB table (schema migration, heavier); deriving state purely from card data (harder to express four states + demotion); count-only gates (rejected, per [D4](#d4)).
 - **Gaps / risks:** thresholds untuned; a config write per transition (small JSON, fine); cross-device sync of the map is automatic via config but untested.
 
+<a id="d33"></a>
+### D33: Build Performance + Readiness on Wednesday from real data (supersedes D10)
+
+- **Status:** resolved (supersedes [D10](#d10))
+- **Chose:** build and show all three scores now (the brief's §4: "Build and show all three"), each separate, each with the shared evidence envelope + give-up rule ([D7](#d7), [D9](#d9)). **Performance** = exam-weight-weighted accuracy over graded `SpeedrunApplication` (exam-style) card attempts, a construct deliberately distinct from Memory's FSRS recall. **Readiness** = project Performance onto the 472-528 scale with a coverage-widened range, abstaining whenever Performance does. A shared `ScoreEnvelope` proto carries a `format` hint (`ratio` for Memory/Performance, `points` for Readiness) so the tiles render each correctly.
+- **Considered:** keeping them deferred ([D10](#d10); rejected, the brief wants three real scores now); an AI grader for Performance (that is the Friday paraphrase-test validation; the honest Wednesday signal is real application accuracy, no model needed); a blended "overall" number (forbidden, [D7](#d7)).
+- **Gaps / risks:** Performance measures *practiced* application items, not yet *unseen* ones, so it can partly echo Memory until the paraphrase test (Friday); the score says so in its reasons. Readiness is a linear projection, not calibrated to real MCAT outcomes until Sunday; it says so too. Give-up thresholds (30 application attempts, 50% coverage) are tunable guesses. Persisting per-attempt `AttemptLog` (spec §8) is still deferred ([D25](#d25)); both scores read existing revlog.
+
 ---
 
 <sub>Created with the `iris-plan` skill by Iris Cai · maintained with `iris-log`.</sub>

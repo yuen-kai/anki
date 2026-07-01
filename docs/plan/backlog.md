@@ -35,6 +35,7 @@
 | [B027](#b027) | `window.speedrunCardMode` leaks across cards (no reset) | bug | fixed |
 | [B028](#b028) | `speedrun_record_answer` mutates state for any tagged card | bug | fixed |
 | [B029](#b029) | Speedrun UI has no live visual QA pass (no browser in sandbox) | issue | open |
+| [B030](#b030) | Performance/Readiness validation (paraphrase test, calibration) deferred | issue | open |
 
 ---
 
@@ -293,6 +294,14 @@
 - **Discovered:** 2026-06-30, U4 polish.
 - **Context:** the U4 design pass (unified accent, topics ladder, Study button, copy) is verified structurally (build, svelte/ts type-check, vitest, node template tests) but was never rendered and eyeballed: this sandbox has no browser and the Playwright chromium install fails on a lock-file update (same class of sandbox block as [B014](#b014)), and the Qt window can't be captured here.
 - **Next:** with the app running (`just run`), open Tools → Speedrun dashboard on the seeded MCAT deck and review the dashboard (scores + topics ladder), a concept card, and an application card in light + dark; adjust spacing/accent as needed. Or install Playwright chromium outside the sandbox and screenshot `speedrun-dashboard/<deckId>` off the running mediasrv (`:40000`).
+
+<a id="b030"></a>
+### B030: Performance/Readiness validation (paraphrase test + calibration) deferred
+
+- **Type:** issue · **Status:** open · **Severity:** medium
+- **Discovered:** 2026-06-30, [D33](decisions.md#d33) (building all three scores now).
+- **Context:** Performance is honest but measures *practiced* application items, so until the **paraphrase test** (30 cards x 2 reworded questions, spec-scores §7) it can partly echo Memory rather than proving transfer. Readiness is a linear projection onto 472-528, not **calibrated** against real outcomes (Brier/log-loss on held-out reviews, spec-scores §10) until Sunday. Both scores already state these caveats in their `reasons`, and the give-up thresholds (30 application attempts, 50% coverage) are tunable guesses.
+- **Next (Friday/Sunday):** implement the paraphrase test and report the recall-vs-reworded gap; add the calibration chart + report the Readiness projection's error against held-out data; retune thresholds once real study histories exist.
 
 ---
 

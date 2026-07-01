@@ -38,6 +38,7 @@ The PRD/specs are frozen initial plans. Where a decision conflicts with them, th
 
 - spec-scores §7/§9.5 said `AttemptLog` persists from Wednesday → deferred to Phase 3/Friday ([D25](decisions.md#d25)); the Memory score uses revlog in the interim.
 - spec-study-model §4-§6 (flat Learn/Practice two-mode model) → superseded by the four-state mastery progression ([D30](decisions.md#d30)/[D31](decisions.md#d31)/[D32](decisions.md#d32), [`spec-mastery-progression`](spec-mastery-progression.md)); merged + verified on `main`. The two-button Learn/Practice entry ([D20](decisions.md#d20)) is superseded by a single Study button ([D30](decisions.md#d30)); each card now shows its topic breadcrumb (U1/U2), merged + verified.
+- spec-scores §3/§7/§11 deferred Performance + Readiness to Friday/Sunday ([D10](decisions.md#d10)) → superseded by [D33](decisions.md#d33): both are built now from real data (Performance = application-card accuracy; Readiness = a 472-528 projection), each honest with the give-up rule. Only the paraphrase-test validation (Friday) + calibration (Sunday) stay deferred, and the scores say so in their reasons.
 
 ---
 
