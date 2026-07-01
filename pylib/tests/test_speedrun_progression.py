@@ -172,9 +172,7 @@ def test_card_context_exposes_mode_and_breadcrumb_path():
         basic.fields[0] = "front"
         basic.tags.append(KINETICS)
         col.add_note(basic, DEFAULT_DECK)
-        basic_context = col.sched.get_speedrun_card_context(
-            card_id=basic.cards()[0].id
-        )
+        basic_context = col.sched.get_speedrun_card_context(card_id=basic.cards()[0].id)
         assert basic_context.mode == "none"
         assert list(basic_context.path) == []
     finally:
