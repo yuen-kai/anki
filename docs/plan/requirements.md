@@ -29,13 +29,13 @@
 
 | # | Requirement | Status | Ref |
 | :-- | :-- | :-- | :-- |
-| F1 | Reset `window.speedrunCardMode` between cards (no leak) | todo | [B027](backlog.md#b027); post-UX fix pass |
-| F2 | `speedrun_record_answer` ignores non-Speedrun note types | todo | [B028](backlog.md#b028); post-UX fix pass |
-| F3 | The single Study flow must not starve graduated topics' due reviews | todo | [B026](backlog.md#b026); post-UX fix pass |
+| F1 | Reset `window.speedrunCardMode` between cards (no leak) | done | [B027](backlog.md#b027) fixed: `card_context_inject_script` always resets both globals; qt test `test_nothing_to_inject_resets_both_globals` |
+| F2 | `speedrun_record_answer` ignores non-Speedrun note types | done | [B028](backlog.md#b028) fixed: early-return on `note_kind == Other`; rust test `record_answer_ignores_non_speedrun_note_kind` |
+| F3 | The single Study flow must not starve graduated topics' due reviews | done | [B026](backlog.md#b026) fixed: blocked phase also serves graduated due reviews; rust test `blocked_phase_serves_graduated_reviews_but_withholds_other_new_topics` |
 
 ## Audit (2026-06-30)
 
-Reconciled the progression restatement + every later message. Initially-missed **U1, U2** are now built, merged, and verified green (the refinement subagent's network died mid-run; its finished-but-uncommitted work was salvaged from the worktree, verified, and merged). Remaining: **U3** (topics-state UI), then review-found correctness **F1, F2, F3**, then **U4** polish. Everything in the restatement (P1-P9) is built and verified. No other dropped requirement found. Foundation milestones (Phases 1-4) tracked in [README](README.md) + the phase todos.
+Reconciled the progression restatement + every later message. Initially-missed **U1, U2** are built, merged, and verified green (the refinement subagent's network died mid-run; its finished-but-uncommitted work was salvaged from the worktree, verified, and merged). Review-found correctness **F1, F2, F3** are now fixed + tested. Remaining: **U3** (topics-state UI), then **U4** polish. Everything in the restatement (P1-P9) is built and verified. No other dropped requirement found. Foundation milestones (Phases 1-4) tracked in [README](README.md) + the phase todos.
 
 ---
 

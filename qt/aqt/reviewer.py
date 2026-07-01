@@ -1374,9 +1374,11 @@ def _inject_speedrun_card_context(text: str, card: Card, kind: str) -> str:
     mode to render and can draw the topic breadcrumb before their own JS runs
     (decision D31, spec-mastery-progression §5).
 
-    Additive + fail-open: a non-Speedrun card (mode "none", empty path), a
-    scheduler without the Speedrun RPC, or any error leaves the card HTML
-    untouched, so normal review and non-Speedrun cards are never affected.
+    Additive + fail-open: in a Speedrun collection every card gets a small script
+    that resets both globals (to values or null), so a prior card's mode or
+    breadcrumb never leaks onto a later "none" card (B027). A scheduler without
+    the Speedrun RPC, or any error, leaves the card HTML untouched, so a plain
+    build and normal review are never affected.
     """
     try:
         get_context = getattr(card.col.sched, "get_speedrun_card_context", None)

@@ -319,6 +319,12 @@ impl Collection {
             .storage
             .get_note(card.note_id)?
             .or_not_found(card.note_id)?;
+        // card_topic is tag-based (D23), so a real deck could tag a non-Speedrun
+        // card with a leaf id. Only Speedrun notes drive their topic's state, or
+        // an `Again` on a plain tagged card would demote it (B028).
+        if self.note_kind(&note)? == NoteKind::Other {
+            return Ok(TopicState::default());
+        }
         let leaf_weights = leaf_topic_weights();
         let Some(topic) = card_topic(&note.tags, &leaf_weights) else {
             return Ok(TopicState::default());
@@ -695,6 +701,30 @@ mod tests {
         assert_eq!(
             col.speedrun_record_answer(cid, Rating::Good).unwrap(),
             TopicState::Learning
+        );
+    }
+
+    #[test]
+    fn record_answer_ignores_non_speedrun_note_kind() {
+        // A non-Speedrun (Basic) card tagged with a real taxonomy leaf: tag-based
+        // card_topic would resolve KINETICS, but the note kind is Other, so an
+        // answer must never move the topic's state (B028).
+        let mut col = Collection::new();
+        col.set_speedrun_topic_state(KINETICS, TopicState::Hierarchy)
+            .unwrap();
+        let basic_nt = col.basic_notetype();
+        let cid = add_card(&mut col, &basic_nt, Some(KINETICS));
+        log_reviews(&mut col, cid, &[1]); // an Again that would otherwise demote
+
+        assert_eq!(
+            col.speedrun_record_answer(cid, Rating::Again).unwrap(),
+            TopicState::default(),
+            "a non-Speedrun card is a no-op regardless of tags"
+        );
+        assert_eq!(
+            col.speedrun_topic_state(KINETICS),
+            TopicState::Hierarchy,
+            "the topic's stored state is untouched (not demoted)"
         );
     }
 

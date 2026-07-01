@@ -1,6 +1,6 @@
 # Spec: Mastery progression (the per-topic learning lifecycle)
 
-> The study model, restructured. One AAMC hierarchy (Foundation → Content Category → Topic) sorts the cards, *is* the principle → concept → procedure ladder the learner walks in application problems, and is the map progress is tracked against. A topic is learned **blocked** (one hierarchy block at a time), then **mixed** into the interleaved pool, and from there each topic climbs a four-state lifecycle whose cards **upgrade** to match the state, with the scaffold fading at the end. This supersedes the flat two-mode (Learn/Practice) model. Companions: [`spec-engine-topic-queue`](spec-engine-topic-queue.md), [`spec-topic-taxonomy`](spec-topic-taxonomy.md), [`spec-study-model`](spec-study-model.md) (superseded for §4-§6), [`spec-scores`](spec-scores.md). Decisions: [D30](decisions.md#d30), [D31](decisions.md#d31), [D32](decisions.md#d32). Status: built + verified on `main` (Rust 28+11, templates 164, pylib/aqt green); review running.
+> The study model, restructured. One AAMC hierarchy (Foundation → Content Category → Topic) sorts the cards, *is* the principle → concept → procedure ladder the learner walks in application problems, and is the map progress is tracked against. A topic is learned **blocked** (one hierarchy block at a time), then **mixed** into the interleaved pool, and from there each topic climbs a four-state lifecycle whose cards **upgrade** to match the state, with the scaffold fading at the end. This supersedes the flat two-mode (Learn/Practice) model. Companions: [`spec-engine-topic-queue`](spec-engine-topic-queue.md), [`spec-topic-taxonomy`](spec-topic-taxonomy.md), [`spec-study-model`](spec-study-model.md) (superseded for §4-§6), [`spec-scores`](spec-scores.md). Decisions: [D30](decisions.md#d30), [D31](decisions.md#d31), [D32](decisions.md#d32). Status: built + verified on `main` (Rust 33+13, templates 184, pylib 36 / qt 42 green); single Study button + topic breadcrumb (U1/U2) and correctness fixes F1-F3 ([B026-B028](backlog.md)) landed.
 >
 > **Authority:** current design (supersedes the two-mode model in `spec-study-model` §4-§6). For current truth read `AGENTS.md`/`README` + the decision log.
 
@@ -58,7 +58,7 @@ Per-topic state in the **collection config** (a JSON map `topic_id → { state, 
 ## 6. Selection (blocked vs mixed) in the queue
 
 Extends the topic-grouped queue ([`spec-engine-topic-queue`](spec-engine-topic-queue.md)):
-- If any topic is in `learning`, serve that one block (blocked) until it graduates.
+- If any topic is in `learning`, serve that one highest-priority block (blocked first-exposure) **plus** already-graduated topics' due reviews and interday-learning, so blocking a new topic never starves earlier topics' retention ([B026](backlog.md#b026); there is no separate Practice pass to catch them under the single Study button). Other learning topics' new first-exposures stay withheld. This holds until the block graduates.
 - Otherwise serve the mixed pool: graduated topics interleaved, each card in the mode its topic's state dictates, application cards suppressed for topics below `hierarchy`.
 - Ordering within still uses weakness × exam-weight; the hierarchy is the grouping key.
 

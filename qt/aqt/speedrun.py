@@ -113,38 +113,30 @@ CARD_MODES = frozenset(
 )
 
 
-def card_mode_inject_script(mode: str | None) -> str:
-    """Build the ``<script>`` that sets ``window.speedrunCardMode``, or ``""``
-    when there is nothing to inject.
-
-    Fails open: only a known Speedrun mode yields a script; a non-Speedrun
-    "none", an empty/None value, or any unrecognised string returns ``""``, so a
-    normal card (and normal review) is never touched. ``json.dumps`` quotes the
-    value, so a stray mode string can't break out of the script tag.
-    """
-    if mode not in CARD_MODES:
-        return ""
-    return f"<script>window.speedrunCardMode = {json.dumps(mode)};</script>"
-
-
 def card_context_inject_script(mode: str | None, path: list[str] | None) -> str:
     """Build the ``<script>`` that sets ``window.speedrunCardMode`` and
-    ``window.speedrunTopicPath`` (the breadcrumb labels) before the card's own
-    JS runs, or ``""`` when there is nothing to inject.
+    ``window.speedrunTopicPath`` (the breadcrumb labels) before the card's own JS
+    runs.
 
-    Additive + fail-open, like :func:`card_mode_inject_script`: an unknown mode
-    contributes nothing, a missing/empty path contributes nothing, and when
-    neither applies the result is ``""`` so a normal card is never touched. Both
-    values go through ``json.dumps``, so neither a stray mode nor a label can
-    break out of the script tag. The template reads the path with ``textContent``
-    only, so even a hostile label can render no markup.
+    Every card the reviewer hook sees resets *both* globals: to the card's own
+    values when it has them, else to ``null``. Card content is swapped in place
+    without a page reload, so a previous Speedrun card's mode or breadcrumb would
+    otherwise leak onto a later ``none`` card and, e.g., render it unscaffolded
+    with the gate open (B027). A collection with no Speedrun RPC never calls this,
+    so a plain build is untouched.
+
+    Fail-open + injection-safe: an unknown mode and a missing/empty path both
+    resolve to ``null`` (never arbitrary markup), and both values go through
+    ``json.dumps`` so neither a stray mode nor a label can break out of the
+    script tag. The template reads the path with ``textContent`` only, so even a
+    hostile label renders no markup.
     """
-    statements = []
-    if mode in CARD_MODES:
-        statements.append(f"window.speedrunCardMode = {json.dumps(mode)};")
+    mode_value = mode if mode in CARD_MODES else None
     labels = [label for label in (path or []) if isinstance(label, str) and label]
-    if labels:
-        statements.append(f"window.speedrunTopicPath = {json.dumps(labels)};")
-    if not statements:
-        return ""
-    return f"<script>{' '.join(statements)}</script>"
+    path_value = labels or None
+    return (
+        "<script>"
+        f"window.speedrunCardMode = {json.dumps(mode_value)}; "
+        f"window.speedrunTopicPath = {json.dumps(path_value)};"
+        "</script>"
+    )

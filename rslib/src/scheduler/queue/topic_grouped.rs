@@ -20,10 +20,11 @@
 //!
 //! - **Suppression:** a `SpeedrunApplication` card is dropped while its topic is
 //!   below `hierarchy` (no applying before the concept is in hand).
-//! - **Blocked vs mixed:** if any in-scope topic is still `learning`, only that
-//!   single highest-priority learning block is served (blocked first-exposure);
-//!   otherwise the whole mixed pool is served, graduated topics ordered by
-//!   block priority as before.
+//! - **Blocked vs mixed:** if any in-scope topic is still `learning`, the single
+//!   highest-priority learning block is served (blocked first-exposure) together
+//!   with already-graduated topics' due reviews, so blocking a new topic never
+//!   starves earlier topics' retention (B026); otherwise the whole mixed pool is
+//!   served, ordered by block priority as before.
 //!
 //! Both are pure presentation: no card is mutated and the state map is only
 //! read, so FSRS scheduling and undo stay untouched.
@@ -318,12 +319,20 @@ fn order_cards(
 }
 
 /// Apply the state-aware selection (spec-mastery-progression §6): if any mapped
-/// in-scope topic in the servable set is still `learning`, serve only that one
-/// highest-priority learning block (blocked first-exposure); otherwise serve
-/// the whole mixed pool unchanged. `ordered` is already block-priority ordered,
-/// so the first mapped `learning` card marks the highest-priority learning
-/// topic. Unmapped cards never trigger the blocked phase and are excluded from
-/// it (a learning block is a single mapped topic).
+/// in-scope topic in the servable set is still `learning`, serve the single
+/// highest-priority learning block (blocked first-exposure) **plus** the due
+/// maintenance of already-graduated topics; otherwise serve the whole mixed pool
+/// unchanged. `ordered` is already block-priority ordered, so the first mapped
+/// `learning` card marks the highest-priority learning topic, and the retained
+/// cards keep that order.
+///
+/// The one blocked block is the only first-exposure study served: other learning
+/// topics' cards stay withheld so the learner takes on one new topic at a time.
+/// But a graduated topic's due reviews and interday-learning cards keep flowing
+/// (B026), because with the single Study button there is no separate Practice
+/// pass to catch them, so blocking a new topic must never starve retention of
+/// earlier ones. Unmapped cards never trigger the blocked phase and are excluded
+/// from it (a learning block is a single mapped topic).
 fn select_blocked_or_mixed(ordered: Vec<QueueCardData>) -> Vec<QueueCardData> {
     let blocked_topic = ordered.iter().find_map(|d| match &d.topic {
         Some(topic) if d.state == TopicState::Learning => Some(topic.clone()),
@@ -332,7 +341,14 @@ fn select_blocked_or_mixed(ordered: Vec<QueueCardData>) -> Vec<QueueCardData> {
     match blocked_topic {
         Some(topic) => ordered
             .into_iter()
-            .filter(|d| d.topic.as_deref() == Some(topic.as_str()))
+            .filter(|d| {
+                d.topic.as_deref() == Some(topic.as_str())
+                    || (d.state != TopicState::Learning
+                        && matches!(
+                            d.kind,
+                            QueueEntryKind::Review | QueueEntryKind::Learning
+                        ))
+            })
             .collect(),
         None => ordered,
     }
@@ -755,11 +771,13 @@ mod tests {
 
         // Graduating KINETICS doesn't open the pool — STRUCTURE/PKA are still
         // learning, so the queue blocks on the next-heaviest (STRUCTURE 0.15).
+        // But KINETICS is now graduated, so its due review keeps flowing as
+        // maintenance (B026) ahead of the STRUCTURE block by priority (0.18).
         graduate(&mut col, &[KINETICS], TopicState::Practicing);
         assert_eq!(
             queue_topics(&mut col, &of),
-            vec![STRUCTURE.to_string()],
-            "still blocked while any topic is learning"
+            vec![KINETICS.to_string(), STRUCTURE.to_string()],
+            "blocked on STRUCTURE, but graduated KINETICS' due review isn't starved"
         );
 
         // Once nothing is learning, the mixed pool serves every block by
@@ -776,6 +794,35 @@ mod tests {
             runs,
             vec![KINETICS.to_string(), STRUCTURE.to_string(), PKA.to_string()],
             "mixed: all graduated blocks served in priority order"
+        );
+    }
+
+    /// B026: while a new topic is blocked, a *graduated* topic's due review keeps
+    /// flowing (retention isn't starved), but another *learning* topic's new
+    /// first-exposure card stays withheld (one new topic at a time).
+    #[test]
+    fn blocked_phase_serves_graduated_reviews_but_withholds_other_new_topics() {
+        let mut col = Collection::new();
+        // KINETICS: graduated, with a weak due review that must keep flowing.
+        let kin_review = add_review_card(&mut col, Some(KINETICS), 1.0, 60);
+        graduate(&mut col, &[KINETICS], TopicState::Hierarchy);
+        // STRUCTURE + PKA are both still learning. STRUCTURE (0.15) outranks PKA
+        // (0.12), so STRUCTURE is the single blocked first-exposure block.
+        let structure_new = add_new_card(&mut col, Some(STRUCTURE));
+        let pka_new = add_new_card(&mut col, Some(PKA));
+
+        let ids = queue_ids(&mut col);
+        assert!(
+            ids.contains(&kin_review),
+            "a graduated topic's due review is not starved by the blocked phase"
+        );
+        assert!(
+            ids.contains(&structure_new),
+            "the single highest-priority learning block is served"
+        );
+        assert!(
+            !ids.contains(&pka_new),
+            "another learning topic's new card stays withheld"
         );
     }
 

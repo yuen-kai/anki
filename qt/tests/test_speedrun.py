@@ -27,7 +27,6 @@ from aqt.speedrun import (
     SCAFFOLD_COMPLETE,
     ScaffoldPick,
     card_context_inject_script,
-    card_mode_inject_script,
     gate_blocks_answer,
     is_application_note_type,
     parse_pick_signal,
@@ -119,34 +118,15 @@ class TestReviewerGateWiring:
         assert reviewer._speedrun_answer_gate_active() is False
 
 
-class TestCardModeInjectScript:
-    """The mode→inject string builder the reviewer prepends before render."""
+class TestCardContextInjectScript:
+    """The mode+path inject string the reviewer prepends for the breadcrumb.
 
-    @pytest.mark.parametrize("mode", sorted(CARD_MODES))
-    def test_known_mode_sets_the_window_variable(self, mode: str) -> None:
-        # The template reads window.speedrunCardMode, so the value injected must
-        # match get_speedrun_card_mode exactly (json-quoted so it can't escape
-        # the tag).
-        assert (
-            card_mode_inject_script(mode)
-            == f'<script>window.speedrunCardMode = "{mode}";</script>'
-        )
-
-    @pytest.mark.parametrize(
-        "mode",
-        [CARD_MODE_NONE, "", None, "garbage", "CONCEPT_LEARN", "concept", "scaffolded"],
-    )
-    def test_non_modes_inject_nothing(self, mode: str | None) -> None:
-        # "none"/empty/None and any unknown string are a no-op, so a normal card
-        # and normal review are never touched.
-        assert card_mode_inject_script(mode) == ""
+    Every call resets *both* globals (to values or ``null``), so a prior card's
+    mode/breadcrumb never leaks onto a later ``none`` card (B027).
+    """
 
     def test_none_constant_is_not_a_real_mode(self) -> None:
         assert CARD_MODE_NONE not in CARD_MODES
-
-
-class TestCardContextInjectScript:
-    """The mode+path inject string the reviewer prepends for the breadcrumb."""
 
     def test_mode_and_path_both_inject(self) -> None:
         # Both globals are set, json-quoted so neither can escape the tag; the
@@ -161,28 +141,31 @@ class TestCardContextInjectScript:
             "</script>"
         )
 
-    def test_known_mode_without_path_injects_only_mode(self) -> None:
-        assert (
-            card_context_inject_script("concept_practice", [])
-            == '<script>window.speedrunCardMode = "concept_practice";</script>'
-        )
-        assert (
-            card_context_inject_script("concept_practice", None)
-            == '<script>window.speedrunCardMode = "concept_practice";</script>'
-        )
+    def test_known_mode_without_path_nulls_the_path(self) -> None:
+        for path in ([], None):
+            assert (
+                card_context_inject_script("concept_practice", path)
+                == '<script>window.speedrunCardMode = "concept_practice"; '
+                "window.speedrunTopicPath = null;</script>"
+            )
 
-    def test_path_without_known_mode_injects_only_path(self) -> None:
-        # A suppressed application card (mode "none") can still carry a path.
+    def test_path_without_known_mode_nulls_the_mode(self) -> None:
+        # A suppressed application card (mode "none") can still carry a path; the
+        # mode resets to null so a previous card's mode can't linger.
         assert (
             card_context_inject_script(CARD_MODE_NONE, ["Biomolecules", "Enzymes"])
-            == '<script>window.speedrunTopicPath = ["Biomolecules", "Enzymes"];</script>'
+            == "<script>window.speedrunCardMode = null; "
+            'window.speedrunTopicPath = ["Biomolecules", "Enzymes"];</script>'
         )
 
     @pytest.mark.parametrize("mode", [CARD_MODE_NONE, "", None, "garbage"])
-    def test_nothing_to_inject_is_empty(self, mode: str | None) -> None:
-        # Neither a known mode nor a usable path: a normal card is never touched.
-        assert card_context_inject_script(mode, None) == ""
-        assert card_context_inject_script(mode, []) == ""
+    def test_nothing_to_inject_resets_both_globals(self, mode: str | None) -> None:
+        # B027: a none/unknown card with no path still emits a reset so the prior
+        # card's mode and breadcrumb can't leak (card content swaps without a
+        # page reload). Never returns "".
+        reset = "<script>window.speedrunCardMode = null; window.speedrunTopicPath = null;</script>"
+        assert card_context_inject_script(mode, None) == reset
+        assert card_context_inject_script(mode, []) == reset
 
     def test_non_string_path_entries_are_dropped(self) -> None:
         # Defensive: only real, non-empty labels render.
