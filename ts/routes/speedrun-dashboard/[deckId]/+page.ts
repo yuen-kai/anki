@@ -1,8 +1,13 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
-import { getMemoryScore } from "@generated/backend";
+import { getMemoryScore, getSpeedrunProgress } from "@generated/backend";
 
-import { envelopeFromMemoryScore, type ScoreEnvelope } from "../lib";
+import {
+    buildTopicsView,
+    envelopeFromMemoryScore,
+    type ScoreEnvelope,
+    type TopicsView,
+} from "../lib";
 import type { PageLoad } from "./$types";
 
 export const load = (async ({ params }) => {
@@ -17,5 +22,15 @@ export const load = (async ({ params }) => {
         memoryError = err instanceof Error ? err.message : String(err);
     }
 
-    return { memory, memoryError };
+    let topics: TopicsView = buildTopicsView(null);
+    let topicsError: string | null = null;
+    try {
+        topics = buildTopicsView(
+            await getSpeedrunProgress({ did: deckId }, { alertOnError: false }),
+        );
+    } catch (err) {
+        topicsError = err instanceof Error ? err.message : String(err);
+    }
+
+    return { memory, memoryError, topics, topicsError };
 }) satisfies PageLoad;

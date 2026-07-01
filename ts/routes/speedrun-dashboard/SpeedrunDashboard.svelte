@@ -3,11 +3,14 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    import { deferredEnvelope, type ScoreEnvelope } from "./lib";
+    import { buildTopicsView, deferredEnvelope, type ScoreEnvelope, type TopicsView } from "./lib";
     import ScoreTile from "./ScoreTile.svelte";
+    import TopicsProgress from "./TopicsProgress.svelte";
 
     export let memory: ScoreEnvelope | null;
     export let memoryError: string | null = null;
+    export let topics: TopicsView = buildTopicsView(null);
+    export let topicsError: string | null = null;
 
     // Designed but not built yet (PRD §6): each says when it will exist and why
     // it depends on the one before it.
@@ -49,6 +52,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 envelope={readiness}
             />
         </div>
+
+        <TopicsProgress view={topics} error={topicsError} />
     </div>
 </div>
 

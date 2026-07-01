@@ -28,6 +28,12 @@
 - **Change:** the two-button Learn/Practice split is gone. One **Study** button arms the state-aware topic-grouped queue, which serves blocked→mixed for Speedrun topics and falls back to the normal queue otherwise, so the learner never picks a mode. `learn`/`practice` remain as link aliases for older callers.
 - **Ref:** [D30](decisions.md#d30) supersedes [D20](decisions.md#d20); `qt/aqt/overview.py`, `ftl` `studying-study`.
 
+### 2026-06-30: Topics view = a four-stage mastery ladder
+
+- **Category:** UX · **Status:** applied · **Prompted by:** user feedback ("a UI listing all topics and which of the 4 stages each is at").
+- **Change:** the dashboard gained a Topics section. Its signature is a per-topic four-segment track filled left to right up to the topic's current rung (learning → practicing → applying → mastering), grouped under the real AAMC hierarchy, with a ladder summary counting topics on each rung. The internal `hierarchy` state is shown to the learner as **Applying** (the mechanism name isn't a stage a student recognises). One accent, spent on the track and the occupied rungs.
+- **Ref:** `ts/routes/speedrun-dashboard/TopicsProgress.svelte`, `lib.ts` `buildTopicsView`; `proto` `TopicProgress.path`.
+
 ### 2026-06-30: Topic breadcrumb on the card
 
 - **Category:** UX · **Status:** applied · **Prompted by:** user feedback ("show the topic/hierarchy when learning").

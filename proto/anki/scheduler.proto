@@ -250,6 +250,10 @@ message SpeedrunProgress {
     string topic_id = 1;
     // "learning" | "practicing" | "hierarchy" | "mastering".
     string state = 2;
+    // The taxonomy hierarchy path as display labels, foundation -> leaf (e.g.
+    // "Biomolecules", "Enzymes", "Kinetics"), so the topics view can group by
+    // the hierarchy and label each topic without re-spelling the taxonomy.
+    repeated string path = 3;
   }
   repeated TopicProgress topics = 1;
 }

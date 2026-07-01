@@ -9,4 +9,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let data: PageData;
 </script>
 
-<SpeedrunDashboard memory={data.memory} memoryError={data.memoryError} />
+<SpeedrunDashboard
+    memory={data.memory}
+    memoryError={data.memoryError}
+    topics={data.topics}
+    topicsError={data.topicsError}
+/>

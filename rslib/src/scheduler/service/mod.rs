@@ -312,6 +312,7 @@ impl crate::services::SchedulerService for Collection {
             .into_iter()
             .map(
                 |(topic_id, state)| scheduler::speedrun_progress::TopicProgress {
+                    path: crate::speedrun::taxonomy::topic_path_labels(&topic_id),
                     topic_id,
                     state: state.as_str().to_string(),
                 },
