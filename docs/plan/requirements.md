@@ -29,12 +29,12 @@
 
 | # | Requirement (observable) | Status | Evidence |
 | :-- | :-- | :-- | :-- |
-| S1 | All three scores built and shown separately, never blended into one number | building | Memory live; Performance + Readiness engine ([scores-engine subagent](329650e7-9e60-4276-8f62-c86be14d557e)) + dashboard ([scores-ui subagent](d987ecec-b0a8-429a-ad67-f08161d21a0f)); no "overall" number anywhere |
+| S1 | All three scores built and shown separately, never blended into one number | done | Memory + Performance + Readiness all live on the dashboard as separate tiles; no "overall" number anywhere. (Subagents were billing-blocked; built directly.) |
 | S2 | Memory: chance of recalling a taught fact | done | `memory_score.rs` (FSRS retrievability), live tile |
-| S3 | Performance: chance of getting a new exam-style question right | building | `performance_score.rs`: exam-weight-weighted accuracy over `SpeedrunApplication` attempts; distinct from Memory |
-| S4 | Readiness: projected 472-528 score with a range + a confidence note tied to coverage | building | `readiness_score.rs`: Performance projected onto 472-528, coverage-widened range; reasons lead with "covered X% of topics" |
-| S5 | Every score carries the full envelope: estimate, range, coverage %, how-sure, updated-at, main reasons, give-up rule | done (M) / building (P,R) | shared `ScoreEnvelope` (Rust + proto + `ScoreEnvelope` TS interface); `format` hint (ratio/points) so Readiness renders as points |
-| S6 | Give-up rule written down; show no score when data is thin | done | Memory: `graded_reviews >= 200 AND coverage >= 50%`; Performance: `>= 30 application attempts AND >= 50% coverage`; Readiness inherits Performance. All abstain with a reason naming the shortfall |
+| S3 | Performance: chance of getting a new exam-style question right | done | `performance_score.rs`: exam-weight-weighted accuracy over `SpeedrunApplication` attempts, distinct from Memory; 6 rust tests + 2 python e2e; live tile |
+| S4 | Readiness: projected 472-528 score with a range + a confidence note tied to coverage | done | `readiness_score.rs`: Performance projected onto 472-528, coverage-widened range; reasons lead with "covered X% of topics"; 4 rust tests + 2 python e2e; live tile (points format) |
+| S5 | Every score carries the full envelope: estimate, range, coverage %, how-sure, updated-at, main reasons, give-up rule | done | shared `ScoreEnvelope` (Rust + proto + TS interface) rendered by one `ScoreTile`; `format` hint (ratio/points) so Readiness renders as whole points |
+| S6 | Give-up rule written down; show no score when data is thin | done | Memory: `graded_reviews >= 200 AND coverage >= 50%`; Performance: `>= 30 application attempts AND >= 50% coverage`; Readiness inherits Performance. All abstain with a reason naming the shortfall (tested) |
 
 ## Correctness fixes from the progression review (binding)
 
