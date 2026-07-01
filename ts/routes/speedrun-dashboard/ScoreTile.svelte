@@ -16,17 +16,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let name: string;
     export let question: string;
     export let envelope: ScoreEnvelope;
-    // Memory is computed live; Performance and Readiness are deferred placeholders.
+    // Whether this score is computed live. Drives the abstain wording only:
+    // a live score is "not enough data yet", a deferred one "not available yet".
     export let live: boolean;
     export let error: string | null = null;
 
+    // The accent is spent only when the tile carries a real number. An abstaining
+    // or errored tile stays quiet, so the teal always means "here is a result".
+    $: delivered = !error && !envelope.abstained;
     $: drivers = driverReasons(envelope.reasons);
     $: updated = formatUpdated(envelope.updatedAtSecs);
 </script>
 
-<section class="tile" class:live class:deferred={!live}>
+<section class="tile" class:delivered>
     <header>
-        <h2>{name}</h2>
+        <h3>{name}</h3>
         <p class="question">{question}</p>
     </header>
 
@@ -92,35 +96,34 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .tile {
         display: flex;
         flex-direction: column;
-        gap: 0.85rem;
+        gap: 0.9rem;
         min-width: 0;
-        padding: 1.2rem 1.35rem 1.35rem;
+        padding: 1.2rem 1.3rem 1.35rem;
         background: var(--canvas-elevated);
         border: 1px solid var(--border-subtle);
-        border-radius: var(--border-radius-medium, 12px);
+        border-radius: 10px;
     }
 
-    // The one accent, spent only on the live score: a hairline along the top.
-    .tile.live {
-        box-shadow: inset 0 3px 0 0 var(--sr-accent, var(--accent-card));
-    }
-
-    // Deferred scores recede: same card, quieter text, no accent.
-    .tile.deferred {
-        color: var(--fg-subtle);
+    // The one accent on a score: a hairline along the top, clipped to the rounded
+    // corner. Present only on a delivered tile.
+    .tile.delivered {
+        box-shadow: inset 0 2px 0 0 var(--sr-accent, var(--accent-card));
     }
 
     header {
-        h2 {
+        h3 {
             margin: 0;
             font-size: 1.05rem;
-            font-weight: 600;
+            font-weight: 640;
+            line-height: 1.2;
+            letter-spacing: -0.006em;
             border: none;
         }
         .question {
-            margin: 0.2rem 0 0;
-            font-size: 0.85rem;
-            line-height: 1.35;
+            margin: 0.25rem 0 0;
+            max-width: 34ch;
+            font-size: 0.82rem;
+            line-height: 1.4;
             color: var(--fg-subtle);
         }
     }
@@ -132,10 +135,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         gap: 0.1rem 0.6rem;
     }
     .estimate {
-        font-size: 2.6rem;
+        font-size: 2.5rem;
         font-weight: 650;
         line-height: 1;
-        letter-spacing: -0.01em;
+        letter-spacing: -0.02em;
         font-variant-numeric: tabular-nums;
     }
     .range {
@@ -147,7 +150,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .meta {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.55rem 1rem;
+        gap: 0.6rem 1rem;
         margin: 0;
         .stat dt {
             font-size: 0.75rem;
@@ -163,8 +166,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .reasons {
         .reasons-label {
-            margin: 0 0 0.3rem;
-            font-size: 0.75rem;
+            margin: 0 0 0.35rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
             color: var(--fg-subtle);
         }
         ul {
@@ -173,7 +179,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         li {
             font-size: 0.9rem;
-            margin-bottom: 0.15rem;
+            line-height: 1.4;
+            margin-bottom: 0.2rem;
         }
     }
 
