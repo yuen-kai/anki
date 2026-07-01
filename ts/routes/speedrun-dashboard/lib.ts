@@ -1,11 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import type {
-    MemoryScore,
-    ScoreEnvelope as ProtoScoreEnvelope,
-    SpeedrunProgress,
-} from "@generated/anki/scheduler_pb";
+import type { MemoryScore, ScoreEnvelope as ProtoScoreEnvelope, SpeedrunProgress } from "@generated/anki/scheduler_pb";
 
 // How a score's numbers are rendered: "ratio" is a probability in [0, 1]
 // (Memory, Performance); "points" is a whole score on the 472-528 MCAT scale

@@ -68,7 +68,10 @@ impl ScoreEnvelope {
             return (estimate, estimate);
         }
         let half = Z_95 * (p * (1.0 - p) / n as f32).sqrt();
-        ((estimate - half).clamp(0.0, 1.0), (estimate + half).clamp(0.0, 1.0))
+        (
+            (estimate - half).clamp(0.0, 1.0),
+            (estimate + half).clamp(0.0, 1.0),
+        )
     }
 
     /// A silent (numberless) envelope: the give-up rule fired. Coverage and the
@@ -95,10 +98,10 @@ impl ScoreEnvelope {
     }
 }
 
-/// Two-band confidence from a graded count and coverage: `High` needs both at or
-/// above the high thresholds, `Medium` both at or above the medium ones, else
-/// `Low`. Shared so the Performance and Readiness scores band the same way; the
-/// thresholds themselves are each score's own tunable constants.
+/// Two-band confidence from a graded count and coverage: `High` needs both at
+/// or above the high thresholds, `Medium` both at or above the medium ones,
+/// else `Low`. Shared so the Performance and Readiness scores band the same
+/// way; the thresholds themselves are each score's own tunable constants.
 pub(crate) fn confidence_from(
     graded: u32,
     coverage: f32,

@@ -15,9 +15,9 @@
 //!   scores, so all three render identically and are never blended (D33).
 //! - [`performance_score`]: accuracy over application (exam-style) cards (D33).
 //! - [`readiness_score`]: Performance projected onto the 472-528 scale (D33).
-//! - [`progression`]: the per-topic four-state mastery lifecycle
-//!   (learning → practicing → hierarchy → mastering), its state-aware card-mode
-//!   resolution and its config-backed transitions (decisions D30–D32).
+//! - [`progression`]: the per-topic four-state mastery lifecycle (learning →
+//!   practicing → hierarchy → mastering), its state-aware card-mode resolution
+//!   and its config-backed transitions (decisions D30–D32).
 
 pub mod card_signals;
 pub mod memory_score;

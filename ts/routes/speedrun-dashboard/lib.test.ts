@@ -4,13 +4,7 @@
 import { ScoreEnvelope, SpeedrunProgress } from "@generated/anki/scheduler_pb";
 import { expect, test } from "vitest";
 
-import {
-    buildTopicsView,
-    envelopeFromScoreEnvelope,
-    formatEstimate,
-    formatRange,
-    stageIndex,
-} from "./lib";
+import { buildTopicsView, envelopeFromScoreEnvelope, formatEstimate, formatRange, stageIndex } from "./lib";
 
 test("envelopeFromScoreEnvelope carries every field including the format", () => {
     const env = envelopeFromScoreEnvelope(

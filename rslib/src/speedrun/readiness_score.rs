@@ -12,8 +12,8 @@
 //!
 //! - `estimate` = `472 + performance · 56`, rounded to a whole score.
 //! - `range` = the Performance interval projected the same way, then widened by
-//!   `(1 - coverage) · COVERAGE_WIDENING_POINTS` on each side and clamped to the
-//!   scale, so a thinly-covered deck reads as a wider, less certain band.
+//!   `(1 - coverage) · COVERAGE_WIDENING_POINTS` on each side and clamped to
+//!   the scale, so a thinly-covered deck reads as a wider, less certain band.
 //! - `coverage_pct`, `graded_reviews`, `confidence` pass through from
 //!   Performance; `format` is `points` so the UI renders whole scores.
 //!
@@ -174,12 +174,18 @@ mod tests {
         let app = add_application_notetype(col);
         let mut id = id_base();
         for tag in topics {
-            seed_card(col, &app, tag, &attempts(attempts_each, correct_each), &mut id);
+            seed_card(
+                col,
+                &app,
+                tag,
+                &attempts(attempts_each, correct_each),
+                &mut id,
+            );
         }
     }
 
-    /// An eligible deck yields a whole-number score inside a valid 472-528 band,
-    /// formatted as points.
+    /// An eligible deck yields a whole-number score inside a valid 472-528
+    /// band, formatted as points.
     #[test]
     fn eligible_deck_projects_onto_the_scale() {
         let mut col = Collection::new();
@@ -249,8 +255,8 @@ mod tests {
         );
     }
 
-    /// Perfect application accuracy projects near the top of the scale; all-wrong
-    /// projects near the bottom.
+    /// Perfect application accuracy projects near the top of the scale;
+    /// all-wrong projects near the bottom.
     #[test]
     fn extremes_map_to_scale_ends() {
         let mut top = Collection::new();

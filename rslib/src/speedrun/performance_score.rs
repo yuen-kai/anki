@@ -11,8 +11,8 @@
 //! conflated (D7): Memory reads retrievability, Performance reads graded
 //! application attempts.
 //!
-//! What it computes, over the in-scope `SpeedrunApplication` cards (note carries
-//! a taxonomy-leaf tag, [`card_topic`]):
+//! What it computes, over the in-scope `SpeedrunApplication` cards (note
+//! carries a taxonomy-leaf tag, [`card_topic`]):
 //!
 //! - `estimate` = exam-weight-weighted mean of per-topic accuracy, where a
 //!   topic's accuracy is `correct / attempts` over its graded reviews and
@@ -26,9 +26,9 @@
 //!   Friday milestone).
 //!
 //! **Give-up rule (D9/D33):** eligible ⇔ `graded_reviews ≥
-//! PERF_MIN_GRADED_ATTEMPTS` AND `coverage_pct ≥ PERF_MIN_COVERAGE_PCT`; else it
-//! abstains and names the shortfall. Thresholds are tunable guesses pending real
-//! study histories.
+//! PERF_MIN_GRADED_ATTEMPTS` AND `coverage_pct ≥ PERF_MIN_COVERAGE_PCT`; else
+//! it abstains and names the shortfall. Thresholds are tunable guesses pending
+//! real study histories.
 //!
 //! Read-only: reads existing revlog + note/card state; mutates nothing.
 
@@ -272,8 +272,8 @@ mod tests {
         nt
     }
 
-    /// Add a card of `nt` tagged `tag`, then log one graded review per button in
-    /// `buttons` (1 Again … 4 Easy). `next_id` keeps revlog ids unique.
+    /// Add a card of `nt` tagged `tag`, then log one graded review per button
+    /// in `buttons` (1 Again … 4 Easy). `next_id` keeps revlog ids unique.
     fn seed_card(
         col: &mut Collection,
         nt: &Notetype,
@@ -310,9 +310,7 @@ mod tests {
 
     /// `n` graded attempts, `correct` of them Good — as a button vector.
     fn attempts(n: u32, correct: u32) -> Vec<u8> {
-        (0..n)
-            .map(|i| if i < correct { 3 } else { 1 })
-            .collect()
+        (0..n).map(|i| if i < correct { 3 } else { 1 }).collect()
     }
 
     /// Eligible deck (≥30 application attempts, ≥50% coverage) returns a full
@@ -371,8 +369,8 @@ mod tests {
         assert_eq!(score.format.as_str(), "ratio");
     }
 
-    /// Below 50% coverage (even with many attempts), Performance abstains and the
-    /// reason names the coverage gap.
+    /// Below 50% coverage (even with many attempts), Performance abstains and
+    /// the reason names the coverage gap.
     #[test]
     fn abstains_below_coverage_threshold() {
         let mut col = Collection::new();
@@ -444,8 +442,8 @@ mod tests {
         );
     }
 
-    /// An eligible deck answered entirely wrong is *not* abstaining (the data is
-    /// there) — it honestly scores near zero.
+    /// An eligible deck answered entirely wrong is *not* abstaining (the data
+    /// is there) — it honestly scores near zero.
     #[test]
     fn all_wrong_eligible_scores_near_zero() {
         let mut col = Collection::new();
@@ -459,6 +457,10 @@ mod tests {
 
         assert!(!score.abstained, "enough data → not abstaining");
         assert_eq!(score.graded_reviews, 32);
-        assert!(score.estimate < 1e-4, "all wrong → ~0, got {}", score.estimate);
+        assert!(
+            score.estimate < 1e-4,
+            "all wrong → ~0, got {}",
+            score.estimate
+        );
     }
 }

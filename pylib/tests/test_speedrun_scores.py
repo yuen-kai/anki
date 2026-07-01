@@ -17,7 +17,10 @@ from __future__ import annotations
 from anki.collection import Collection
 from anki.decks import DeckId
 from anki.models import NotetypeDict
-from anki.speedrun.notetypes import APPLICATION_NOTETYPE_NAME, install_speedrun_notetypes
+from anki.speedrun.notetypes import (
+    APPLICATION_NOTETYPE_NAME,
+    install_speedrun_notetypes,
+)
 from anki.utils import int_time
 from tests.shared import getEmptyCol
 

@@ -24,8 +24,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <div class="state">
             <p class="headline">No topics tracked yet</p>
             <p class="detail">
-                Study this deck to start moving its topics up the ladder, from
-                learning to mastering.
+                Study this deck to start moving its topics up the ladder, from learning
+                to mastering.
             </p>
         </div>
     {:else}
