@@ -6,6 +6,7 @@ import type {
     SpeedrunScoreBreakdown,
     SpeedrunScoreBreakdown_TopicStat,
 } from "@generated/anki/scheduler_pb";
+import { goto } from "$app/navigation";
 import {
     getDeckNames,
     speedrunOverviewAction,
@@ -15,7 +16,7 @@ import {
 } from "@generated/backend";
 
 import { gaugePercent, MASTERY_STAGES, type ScoreEnvelope, STAGE_COUNT, stageIndex } from "../speedrun-dashboard/lib";
-import type { Hierarchy, Node } from "../speedrun-hierarchy/lib";
+import { type Hierarchy, isMobileShell, type Node } from "../speedrun-hierarchy/lib";
 
 const enc = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
 
@@ -45,20 +46,31 @@ export async function studySummary(deckId: string): Promise<StudySummary> {
     return dec<StudySummary>(await speedrunStudySummary({ json: enc({ deckId }) }, quiet));
 }
 
-// Arm the topic-grouped queue and hand off to the reviewer (Qt side effect).
+// Start studying. Desktop arms the topic-grouped queue and moves the Qt window
+// to the reviewer; the mobile shell routes to the study session page in-place.
 export async function startStudy(deckId: string): Promise<void> {
+    if (isMobileShell()) {
+        await goto(`/speedrun-review/${deckId}`);
+        return;
+    }
     await speedrunStartStudy({ json: enc({ deckId }) }, quiet);
 }
 
-// The secondary deck-overview actions, preserved in the overflow menu.
+// The secondary deck-overview actions, preserved in the overflow menu. These
+// open Qt dialogs, so they are desktop-only; the mobile shell hides the menu.
 export type OverviewAction = "options" | "customStudy" | "unbury" | "description" | "rebuild" | "empty";
 
 export async function overviewAction(action: OverviewAction): Promise<void> {
     await speedrunOverviewAction({ json: enc({ action }) }, quiet);
 }
 
-// Back to the Decks home.
+// Back to the Decks home. Desktop moves the Qt window to the deck browser; the
+// mobile shell routes to the decks page in-place.
 export async function showDecks(): Promise<void> {
+    if (isMobileShell()) {
+        await goto(`/speedrun-decks`);
+        return;
+    }
     await speedrunShowDecks({ json: enc({}) }, quiet);
 }
 

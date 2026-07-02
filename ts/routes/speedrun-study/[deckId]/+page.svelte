@@ -4,6 +4,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
     import { deferredEnvelope } from "../../speedrun-dashboard/lib";
+    import { isMobileShell } from "../../speedrun-hierarchy/lib";
     import ConceptTree from "../ConceptTree.svelte";
     import {
         deckLeafName,
@@ -25,6 +26,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let menuOpen = false;
     let modalOpen = false;
     let menuWrap: HTMLElement;
+    // The overflow menu's actions open Qt dialogs, so they exist on desktop
+    // only; the mobile shell hides the menu.
+    const showMenu = !isMobileShell();
 
     const message = (err: unknown): string =>
         err instanceof Error ? err.message : String(err);
@@ -93,6 +97,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 Decks
             </button>
             <div class="menu-wrap" bind:this={menuWrap}>
+                {#if showMenu}
                 <button
                     class="more"
                     aria-haspopup="menu"
@@ -101,6 +106,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 >
                     More
                 </button>
+                {/if}
                 {#if menuOpen}
                     <ul class="more-menu" role="menu">
                         <li role="none">

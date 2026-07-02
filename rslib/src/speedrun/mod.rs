@@ -24,7 +24,10 @@
 //! - [`study`]: the bespoke `speedrun-review` study screen's backend — authored
 //!   concepts materialized into FSRS-scheduled cards, plus the per-concept
 //!   mastery store — shared by the desktop and AnkiDroid webviews.
+//! - [`authoring`]: the authoring store CRUD (list decks, get/save/delete the
+//!   hierarchy blob) shared by the desktop and AnkiDroid deck/authoring screens.
 
+pub mod authoring;
 pub mod card_signals;
 pub mod memory_score;
 pub mod performance_score;

@@ -31,27 +31,15 @@ service FrontendService {
   // Save colour picker's custom colour palette
   rpc SaveCustomColours(generic.Empty) returns (generic.Empty);
 
-  // Speedrun authoring screens. JSON payloads (see anki.speedrun.authoring),
-  // handled in Python by mediasrv, no Rust backend impl.
+  // Qt-only Speedrun navigation + dialog actions (desktop). These drive the Qt
+  // window state machine / open Qt dialogs, so they cannot move to the shared
+  // engine; they stay Python handlers in mediasrv. On mobile the SvelteKit
+  // shell degrades them per-platform (client-side routing for navigation; the
+  // dialog affordances are hidden), so no equivalent RPC is needed there.
   //
-  // Request: {} -> Response: [{ deckId, name, todo }]
-  rpc SpeedrunListDecks(generic.Json) returns (generic.Json);
-  // Request: { deckId } -> Response: Hierarchy { deckId, root }
-  rpc SpeedrunGetHierarchy(generic.Json) returns (generic.Json);
-  // Request: Hierarchy { deckId, root } -> Response: { deckId, name }
-  rpc SpeedrunSaveHierarchy(generic.Json) returns (generic.Json);
   // Request: { deckId } -> moves the window to the deck's overview.
   rpc SpeedrunOpenDeck(generic.Json) returns (generic.Json);
-  // Request: { deckId } -> removes the deck and its authored blob.
-  rpc SpeedrunDeleteDeck(generic.Json) returns (generic.Json);
-
-  // Bespoke study screen (bar-less deck overview). JSON payloads handled in
-  // Python by mediasrv, no Rust backend impl.
-  //
-  // Request: { deckId } -> Response: { deckName, new, learn, review,
-  // studiedToday } for that deck's Today's Progress.
-  rpc SpeedrunStudySummary(generic.Json) returns (generic.Json);
-  // Request: { deckId } -> arms the topic-grouped queue and moves to review.
+  // Request: { deckId } -> arms the study session and moves to the reviewer.
   rpc SpeedrunStartStudy(generic.Json) returns (generic.Json);
   // Request: { action } where action is one of options | customStudy | unbury |
   // description | rebuild | empty -> runs the matching deck-overview action.
@@ -59,11 +47,12 @@ service FrontendService {
   // Request: {} -> moves the window back to the decks home (deckBrowser).
   rpc SpeedrunShowDecks(generic.Json) returns (generic.Json);
 
-  // The bespoke card-study screen (speedrun-review route) is driven by the
-  // shared Rust engine, not Python: its RPCs (SpeedrunStudyState /
-  // SpeedrunNextCard / SpeedrunAnswerCard / SpeedrunRecordLearned /
-  // SpeedrunStudyHierarchy) live on SchedulerService (see anki/scheduler.proto)
-  // so desktop and AnkiDroid share one study backend.
+  // The data RPCs the deck/authoring/study screens call (list decks, get/save/
+  // delete hierarchy, study summary) and the card-study screen's RPCs
+  // (SpeedrunStudyState / NextCard / AnswerCard / RecordLearned /
+  // StudyHierarchy) are driven by the shared Rust engine, not Python: they live
+  // on SchedulerService (see anki/scheduler.proto) so desktop and AnkiDroid
+  // share one backend.
 }
 
 service BackendFrontendService {}

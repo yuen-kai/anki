@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { goto } from "$app/navigation";
 import {
     speedrunAnswerCard,
     speedrunNextCard,
@@ -14,6 +15,7 @@ import { MASTERY_STAGES } from "../speedrun-dashboard/lib";
 import {
     type Concept,
     type Hierarchy,
+    isMobileShell,
     type Node,
     openDeck,
     type Problem,
@@ -140,8 +142,13 @@ export async function recordLearned(deckId: string, conceptIds: string[]): Promi
     );
 }
 
-// Leave the study screen for the decks home; the backend moves the window.
+// Leave the study screen for the decks home. Desktop moves the Qt window; the
+// mobile shell routes to the decks page in-place.
 export async function showDecks(): Promise<void> {
+    if (isMobileShell()) {
+        await goto(`/speedrun-decks`);
+        return;
+    }
     await speedrunShowDecks({ json: enc({}) }, quiet);
 }
 

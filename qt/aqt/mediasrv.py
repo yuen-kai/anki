@@ -36,7 +36,6 @@ from anki.scheduler.v3 import (
     SchedulingStatesWithContext,
     SetSchedulingStatesRequest,
 )
-from anki.speedrun import authoring
 from anki.utils import dev_mode
 from aqt.changenotetype import ChangeNotetypeDialog
 from aqt.deckoptions import DeckOptionsDialog, display_options_for_deck
@@ -716,9 +715,13 @@ def save_custom_colours() -> bytes:
     return b""
 
 
-# Speedrun authoring screens: JSON in/out via generic.Json, backed by the
-# Qt-free anki.speedrun.authoring store. The JSON <-> protobuf plumbing lives
-# here so the store stays unit-testable.
+# Speedrun deck/authoring/study-summary DATA RPCs now live in the shared Rust
+# engine (SchedulerService: speedrunListDecks / speedrunGetHierarchy /
+# speedrunSaveHierarchy / speedrunDeleteDeck / speedrunStudySummary — see
+# proto/anki/scheduler.proto, rslib/src/speedrun/authoring.rs), exposed to the
+# frontend via exposed_backend_list below, so desktop and AnkiDroid run the
+# identical authoring backend. Only the Qt-only navigation/dialog actions below
+# stay Python: they drive the Qt window state machine / open Qt dialogs.
 def _speedrun_request() -> Any:
     req = generic_pb2.Json()
     req.ParseFromString(request.data)
@@ -727,25 +730,6 @@ def _speedrun_request() -> Any:
 
 def _speedrun_response(payload: Any) -> bytes:
     return generic_pb2.Json(json=json.dumps(payload).encode()).SerializeToString()
-
-
-def speedrun_list_decks() -> bytes:
-    return _speedrun_response(authoring.list_decks(aqt.mw.col))
-
-
-def speedrun_get_hierarchy() -> bytes:
-    deck_id = str(_speedrun_request().get("deckId", ""))
-    return _speedrun_response(authoring.get_hierarchy(aqt.mw.col, deck_id))
-
-
-def speedrun_save_hierarchy() -> bytes:
-    return _speedrun_response(authoring.save_hierarchy(aqt.mw.col, _speedrun_request()))
-
-
-def speedrun_delete_deck() -> bytes:
-    deck_id = str(_speedrun_request().get("deckId", ""))
-    authoring.delete_deck(aqt.mw.col, deck_id)
-    return _speedrun_response({})
 
 
 def speedrun_open_deck() -> bytes:
@@ -757,29 +741,6 @@ def speedrun_open_deck() -> bytes:
 
     aqt.mw.taskman.run_on_main(handle_on_main)
     return _speedrun_response({"deckId": str(did)})
-
-
-def speedrun_study_summary() -> bytes:
-    """Today's Progress counts for the study screen: the deck's remaining
-    new/learn/review (from the due tree) and how many cards were studied in it
-    today."""
-    did = DeckId(int(_speedrun_request()["deckId"]))
-    col = aqt.mw.col
-    node = col.sched.deck_due_tree(did)
-    if node is None:
-        return _speedrun_response(
-            {"deckName": "", "new": 0, "learn": 0, "review": 0, "studiedToday": 0}
-        )
-    today = col._backend.counts_for_deck_today(did)
-    return _speedrun_response(
-        {
-            "deckName": node.name,
-            "new": node.new_count,
-            "learn": node.learn_count,
-            "review": node.review_count,
-            "studiedToday": today.new + today.review,
-        }
-    )
 
 
 def speedrun_start_study() -> bytes:
@@ -852,12 +813,9 @@ post_handler_list = [
     deck_options_require_close,
     deck_options_ready,
     save_custom_colours,
-    speedrun_list_decks,
-    speedrun_get_hierarchy,
-    speedrun_save_hierarchy,
+    # Qt-only Speedrun navigation/dialog actions (the data RPCs moved to the
+    # shared Rust engine, see exposed_backend_list).
     speedrun_open_deck,
-    speedrun_delete_deck,
-    speedrun_study_summary,
     speedrun_start_study,
     speedrun_overview_action,
     speedrun_show_decks,
@@ -914,6 +872,12 @@ exposed_backend_list = [
     "speedrun_answer_card",
     "speedrun_record_learned",
     "speedrun_study_hierarchy",
+    # SchedulerService: Speedrun deck/authoring store CRUD (shared with AnkiDroid)
+    "speedrun_list_decks",
+    "speedrun_get_hierarchy",
+    "speedrun_save_hierarchy",
+    "speedrun_delete_deck",
+    "speedrun_study_summary",
     # DeckConfigService
     "get_ignored_before_count",
     "get_retention_workload",

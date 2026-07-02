@@ -438,6 +438,34 @@ impl crate::services::SchedulerService for Collection {
         speedrun_json_reply(&self.speedrun_study_hierarchy(deck_id)?)
     }
 
+    fn speedrun_list_decks(&mut self, _input: generic::Json) -> Result<generic::Json> {
+        speedrun_json_reply(&self.speedrun_list_decks()?)
+    }
+
+    fn speedrun_get_hierarchy(&mut self, input: generic::Json) -> Result<generic::Json> {
+        // The create flow sends deckId "new"/"", so the id stays a string here.
+        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
+        speedrun_json_reply(&self.speedrun_get_hierarchy(&req.deck_id)?)
+    }
+
+    fn speedrun_save_hierarchy(&mut self, input: generic::Json) -> Result<generic::Json> {
+        // The request body is the Hierarchy blob itself.
+        let hierarchy: serde_json::Value = serde_json::from_slice(&input.json)?;
+        speedrun_json_reply(&self.speedrun_save_hierarchy(hierarchy)?)
+    }
+
+    fn speedrun_delete_deck(&mut self, input: generic::Json) -> Result<generic::Json> {
+        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
+        self.speedrun_delete_deck(&req.deck_id)?;
+        speedrun_json_reply(&serde_json::json!({}))
+    }
+
+    fn speedrun_study_summary(&mut self, input: generic::Json) -> Result<generic::Json> {
+        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
+        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
+        speedrun_json_reply(&self.speedrun_study_summary(deck_id)?)
+    }
+
     fn custom_study(
         &mut self,
         input: scheduler::CustomStudyRequest,

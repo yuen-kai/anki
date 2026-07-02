@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { goto } from "$app/navigation";
 import {
     speedrunDeleteDeck,
     speedrunGetHierarchy,
@@ -10,6 +11,20 @@ import {
 } from "@generated/backend";
 import { getContext, setContext } from "svelte";
 import type { Writable } from "svelte/store";
+
+// The Speedrun screens run in two hosts: the Qt desktop app (each screen is a
+// separate webview state, so cross-screen navigation is a Qt `moveToState` RPC)
+// and the AnkiDroid shell (one full-window webview running the whole SPA, so
+// navigation is client-side SvelteKit routing). The host tags the mobile shell
+// by setting `window.speedrunPlatform = "mobile"` before the app boots; on
+// desktop it is unset. Navigation helpers branch on this so the same UI drives
+// both without a per-platform build.
+export function isMobileShell(): boolean {
+    return (
+        typeof window !== "undefined"
+        && (window as unknown as { speedrunPlatform?: string }).speedrunPlatform === "mobile"
+    );
+}
 
 // Frontend owns every id; the backend stores the blob verbatim, so these shapes
 // are the single source of truth for the wire format too.
@@ -74,7 +89,13 @@ export async function saveHierarchy(hierarchy: Hierarchy): Promise<SaveResult> {
     return dec<SaveResult>(await speedrunSaveHierarchy({ json: enc(hierarchy) }, quiet));
 }
 
+// Open a deck's study overview. Desktop moves the Qt window to the overview
+// state; the mobile shell routes to the overview page in-place.
 export async function openDeck(deckId: string): Promise<void> {
+    if (isMobileShell()) {
+        await goto(`/speedrun-study/${deckId}`);
+        return;
+    }
     await speedrunOpenDeck({ json: enc({ deckId }) }, quiet);
 }
 

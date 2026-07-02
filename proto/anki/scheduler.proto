@@ -93,6 +93,25 @@ service SchedulerService {
   // SpeedrunStudyHierarchy: { deckId } -> the authored hierarchy blob the screen
   // renders concept content/problems from (read-only), or a fresh empty one.
   rpc SpeedrunStudyHierarchy(generic.Json) returns (generic.Json);
+  // Speedrun authoring store CRUD (the deck/hierarchy screens). Ported from the
+  // desktop-only Python (anki.speedrun.authoring) so desktop and AnkiDroid share
+  // one authoring backend over the same collection config. Each exchanges JSON
+  // (see anki.speedrun.authoring); the bodies match the editor's lib.ts.
+  //
+  // SpeedrunListDecks: {} -> [{ deckId, name, todo }] (top-level decks; replaces
+  // the deck browser).
+  rpc SpeedrunListDecks(generic.Json) returns (generic.Json);
+  // SpeedrunGetHierarchy: { deckId } -> Hierarchy { deckId, root }, or a fresh
+  // empty scaffold (deckId may be "new"/"" for the create flow).
+  rpc SpeedrunGetHierarchy(generic.Json) returns (generic.Json);
+  // SpeedrunSaveHierarchy: Hierarchy { deckId, root } -> { deckId, name }.
+  // Creates/renames the backing Anki deck and persists the blob.
+  rpc SpeedrunSaveHierarchy(generic.Json) returns (generic.Json);
+  // SpeedrunDeleteDeck: { deckId } -> {}; removes the deck and its blob.
+  rpc SpeedrunDeleteDeck(generic.Json) returns (generic.Json);
+  // SpeedrunStudySummary: { deckId } -> { deckName, new, learn, review,
+  // studiedToday } for the study screen's Today's Progress.
+  rpc SpeedrunStudySummary(generic.Json) returns (generic.Json);
   rpc AnswerCard(CardAnswer) returns (collection.OpChanges);
   rpc SchedTimingToday(generic.Empty) returns (SchedTimingTodayResponse);
   rpc StudiedToday(generic.Empty) returns (generic.String);
