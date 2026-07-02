@@ -21,6 +21,9 @@
 //! - [`progression`]: the per-topic four-state mastery lifecycle (learning →
 //!   practicing → hierarchy → mastering), its state-aware card-mode resolution
 //!   and its config-backed transitions (decisions D30–D32).
+//! - [`study`]: the bespoke `speedrun-review` study screen's backend — authored
+//!   concepts materialized into FSRS-scheduled cards, plus the per-concept
+//!   mastery store — shared by the desktop and AnkiDroid webviews.
 
 pub mod card_signals;
 pub mod memory_score;
@@ -29,4 +32,5 @@ pub mod progression;
 pub mod readiness_score;
 pub mod score_breakdown;
 pub mod scores;
+pub mod study;
 pub mod taxonomy;

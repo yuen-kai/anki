@@ -6,13 +6,13 @@ import {
     speedrunNextCard,
     speedrunRecordLearned,
     speedrunShowDecks,
+    speedrunStudyHierarchy,
     speedrunStudyState,
 } from "@generated/backend";
 
 import { MASTERY_STAGES } from "../speedrun-dashboard/lib";
 import {
     type Concept,
-    getHierarchy,
     type Hierarchy,
     type Node,
     openDeck,
@@ -21,8 +21,10 @@ import {
 
 // Re-export the authored shapes and the two exits (deck overview / decks home)
 // so the screen imports everything study-related from one place; the study RPCs
-// never send card/concept content, we look it up here.
-export { getHierarchy, openDeck };
+// never send card/concept content, we look it up here. `getHierarchy` reads the
+// authored blob through the shared Rust engine (below), so the study screen runs
+// unchanged on both desktop and AnkiDroid.
+export { openDeck };
 export type { Concept, Hierarchy, Node, Problem };
 
 // The internal mastery states, low to high. `hierarchy` is the engine's name;
@@ -105,6 +107,13 @@ const dec = <T>(reply: { json: Uint8Array }): T => JSON.parse(new TextDecoder().
 // The screen shows its own inline status/finished states, so it opts out of the
 // backend's global error dialog (same choice as the authoring RPCs).
 const quiet = { alertOnError: false } as const;
+
+// The authored hierarchy (concept content + problems) the screen renders from,
+// read through the shared Rust engine so it resolves on desktop and AnkiDroid
+// alike. Same shape as the authoring store's read.
+export async function getHierarchy(deckId: string): Promise<Hierarchy> {
+    return dec<Hierarchy>(await speedrunStudyHierarchy({ json: enc({ deckId }) }, quiet));
+}
 
 export async function studyState(deckId: string): Promise<StudyStateResponse> {
     return dec<StudyStateResponse>(await speedrunStudyState({ json: enc({ deckId }) }, quiet));

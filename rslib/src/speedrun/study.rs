@@ -1,0 +1,916 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+//! Bespoke Speedrun study backend, shared by desktop and mobile.
+//!
+//! This is the engine behind the animated `speedrun-review` study screen. It
+//! was ported from desktop-only Python (`pylib/anki/speedrun/{study,materialize}.py`)
+//! into the shared Rust layer so both the Qt desktop app and the AnkiDroid fork
+//! drive the same RPCs, over the same backend, with no per-platform study code.
+//!
+//! Two concerns are kept deliberately separate:
+//!
+//! - **FSRS owns *timing*** (when a concept's card is due). Each authored
+//!   concept is *materialized* into one real Anki card of a minimal
+//!   [`ITEM_NOTETYPE_NAME`] note type, keyed by its `ConceptId`, so the standard
+//!   scheduler serves it and [`Collection::grade_now`] grades it with genuine
+//!   FSRS intervals.
+//! - **This module owns *mode*** (what interaction renders): a per-concept
+//!   mastery map in the collection config under [`STUDY_PROGRESS_CONFIG_KEY`],
+//!   the same native-store pattern as the authoring blob. It never produces an
+//!   FSRS interval.
+//!
+//! The mastery states reuse the taxonomy lifecycle
+//! ([`crate::speedrun::progression::TopicState`]); the internal `hierarchy`
+//! state displays as "Applying" in the UI:
+//!
+//! ```text
+//! learning -> practicing -> hierarchy(Applying) -> mastering
+//! ```
+//!
+//! - **Learning is topic-gated**: a concept stays `learning` until every concept
+//!   in its authored leaf node has been seen, at which point they all flip to
+//!   `practicing` together (`record_learned`).
+//! - **Later stages are per-concept**: an answer advances one state once the
+//!   concept's recent ratings clear the mastery signal, or demotes one on
+//!   `Again`. Demotion floors at `practicing`, so a lapse never re-enters the
+//!   topic block (`record_answer`).
+//!
+//! Everything reads/writes the authoring + progress config and the materialized
+//! cards; the RPC surface exchanges JSON so the screen's `lib.ts` is unchanged.
+
+use std::collections::HashMap;
+use std::collections::HashSet;
+
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::json;
+use serde_json::Value;
+
+use crate::config::BoolKey;
+use crate::notetype::Notetype;
+use crate::prelude::*;
+use crate::search::SearchNode;
+use crate::search::SortMode;
+use crate::speedrun::progression::TopicState;
+
+/// Collection-config key holding the per-deck, per-concept mastery map. Shape:
+/// `{ "<deckId>": { "<conceptId>": { state, seen, ratings } } }`. Must match the
+/// legacy desktop key so an existing collection's progress is preserved.
+const STUDY_PROGRESS_CONFIG_KEY: &str = "speedrun_study_progress";
+/// Collection-config key holding the authored hierarchy blob per deck (written
+/// by the authoring editor; read here to drive materialize + learning blocks).
+const AUTHORING_CONFIG_KEY: &str = "speedrun_authoring";
+
+/// The minimal note type each authored concept is mirrored into. Field order is
+/// the contract: `ConceptId` (index 0) keys the card back to the concept, and
+/// `Title` (index 1) is display-only. Must match the legacy desktop note type
+/// so existing materialized cards keep mapping.
+const ITEM_NOTETYPE_NAME: &str = "SpeedrunItem";
+const ITEM_FIELD_CONCEPT_ID: usize = 0;
+const ITEM_FIELD_TITLE: usize = 1;
+const ITEM_QFMT: &str = "<div class=\"speedrun-item\">{{Title}}</div>";
+const ITEM_AFMT: &str = "{{FrontSide}}";
+
+/// Minimum ≥Good rate over a concept's recent ratings needed to advance one
+/// state. Tunable; mirrors `progression.rs`.
+const ACC_THRESHOLD: f32 = 0.8;
+/// Minimum recorded answers before a concept can advance.
+const MIN_REPS: usize = 2;
+/// How many of the most recent ratings feed the advancement signal.
+const MASTERY_REVIEW_WINDOW: usize = 50;
+
+/// Difficulty rating as sent by the screen: 1..4 = Again/Hard/Good/Easy.
+const RATING_AGAIN: i32 = 1;
+const RATING_GOOD: i32 = 3;
+
+/// The mastery ladder, low to high. Advancement walks up one rung; demotion
+/// walks down one but never below index [`PRACTICING_INDEX`] (practicing), so a
+/// lapse never drops a concept back into the learning topic block.
+const LADDER: [TopicState; 4] = [
+    TopicState::Learning,
+    TopicState::Practicing,
+    TopicState::Hierarchy,
+    TopicState::Mastering,
+];
+const PRACTICING_INDEX: usize = 1;
+
+fn ladder_index(state: TopicState) -> usize {
+    LADDER.iter().position(|s| *s == state).unwrap_or(0)
+}
+
+fn advanced(state: TopicState) -> TopicState {
+    LADDER[(ladder_index(state) + 1).min(LADDER.len() - 1)]
+}
+
+fn demoted(state: TopicState) -> TopicState {
+    LADDER[ladder_index(state).saturating_sub(1).max(PRACTICING_INDEX)]
+}
+
+/// True when recent ratings clear the advancement signal: at least [`MIN_REPS`]
+/// of the last [`MASTERY_REVIEW_WINDOW`] answers, with a ≥Good rate of at least
+/// [`ACC_THRESHOLD`].
+fn signal_cleared(ratings: &[i32]) -> bool {
+    let window = if ratings.len() > MASTERY_REVIEW_WINDOW {
+        &ratings[ratings.len() - MASTERY_REVIEW_WINDOW..]
+    } else {
+        ratings
+    };
+    if window.len() < MIN_REPS {
+        return false;
+    }
+    let good = window.iter().filter(|r| **r >= RATING_GOOD).count();
+    good as f32 / window.len() as f32 >= ACC_THRESHOLD
+}
+
+/// One concept's persisted mastery state. Serializes to the same JSON as the
+/// legacy desktop store (`{ state, seen, ratings }`), so an existing
+/// collection's progress round-trips unchanged.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct ConceptEntry {
+    #[serde(default)]
+    state: TopicState,
+    #[serde(default)]
+    seen: bool,
+    #[serde(default)]
+    ratings: Vec<i32>,
+}
+
+/// `conceptId -> entry` for one deck.
+type ConceptMap = HashMap<String, ConceptEntry>;
+/// `deckId -> conceptMap`; the value stored under [`STUDY_PROGRESS_CONFIG_KEY`].
+type StudyProgressStore = HashMap<String, ConceptMap>;
+
+// --- Authored-hierarchy view (read-only, minimal) --------------------------
+//
+// Only the fields the study logic needs are deserialized; unknown fields (the
+// concept `content`, `problems`, etc. that the frontend renders) are ignored.
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct AuthoredConcept {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    title: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct AuthoredNode {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    children: Vec<AuthoredNode>,
+    #[serde(default)]
+    concepts: Vec<AuthoredConcept>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct AuthoredHierarchy {
+    #[serde(default)]
+    root: Option<AuthoredNode>,
+}
+
+fn walk_nodes<'a>(node: &'a AuthoredNode, out: &mut Vec<&'a AuthoredNode>) {
+    out.push(node);
+    for child in &node.children {
+        walk_nodes(child, out);
+    }
+}
+
+impl AuthoredHierarchy {
+    fn all_nodes(&self) -> Vec<&AuthoredNode> {
+        let mut out = Vec::new();
+        if let Some(root) = &self.root {
+            walk_nodes(root, &mut out);
+        }
+        out
+    }
+
+    /// Every node that directly holds concepts (a topic block), in tree order.
+    fn concept_leaves(&self) -> Vec<&AuthoredNode> {
+        self.all_nodes()
+            .into_iter()
+            .filter(|n| !n.concepts.is_empty())
+            .collect()
+    }
+}
+
+/// The non-empty concept ids of a node, in order.
+fn node_concept_ids(node: &AuthoredNode) -> Vec<String> {
+    node.concepts
+        .iter()
+        .filter(|c| !c.id.is_empty())
+        .map(|c| c.id.clone())
+        .collect()
+}
+
+/// The first leaf topic still holding a `learning` concept, as the block to
+/// teach, or `None` when every concept has been learned.
+fn next_learning_block(hierarchy: &AuthoredHierarchy, progress: &ConceptMap) -> Option<Value> {
+    for node in hierarchy.concept_leaves() {
+        let ids = node_concept_ids(node);
+        if ids.is_empty() {
+            continue;
+        }
+        let any_learning = ids.iter().any(|id| {
+            progress
+                .get(id)
+                .map(|e| e.state)
+                .unwrap_or(TopicState::Learning)
+                == TopicState::Learning
+        });
+        if any_learning {
+            let learned = ids
+                .iter()
+                .filter(|id| progress.get(*id).map(|e| e.seen).unwrap_or(false))
+                .count();
+            return Some(json!({
+                "kind": "learning_block",
+                "topicNodeId": node.id,
+                "conceptIds": ids,
+                "learnedCount": learned,
+                "totalCount": ids.len(),
+            }));
+        }
+    }
+    None
+}
+
+/// The outcome of a reconcile pass, for tests and logging.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReconcileOutcome {
+    pub created: usize,
+    pub removed: usize,
+    pub total: usize,
+}
+
+impl Collection {
+    // --- config read/write -------------------------------------------------
+
+    fn speedrun_study_store(&self) -> StudyProgressStore {
+        self.get_config_optional(STUDY_PROGRESS_CONFIG_KEY)
+            .unwrap_or_default()
+    }
+
+    fn speedrun_deck_progress(&self, deck_id: DeckId) -> ConceptMap {
+        self.speedrun_study_store()
+            .remove(&deck_id.0.to_string())
+            .unwrap_or_default()
+    }
+
+    fn save_speedrun_deck_progress(&mut self, deck_id: DeckId, progress: ConceptMap) -> Result<()> {
+        let mut store = self.speedrun_study_store();
+        store.insert(deck_id.0.to_string(), progress);
+        // Non-undoable: the mastery map is bookkeeping beside the FSRS answer,
+        // so it must not push an entry onto the undo stack.
+        self.set_config_json(STUDY_PROGRESS_CONFIG_KEY, &store, false)?;
+        Ok(())
+    }
+
+    fn speedrun_authoring_store(&self) -> HashMap<String, Value> {
+        self.get_config_optional(AUTHORING_CONFIG_KEY)
+            .unwrap_or_default()
+    }
+
+    fn speedrun_authored_hierarchy(&self, deck_id: DeckId) -> AuthoredHierarchy {
+        self.speedrun_authoring_store()
+            .get(&deck_id.0.to_string())
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default()
+    }
+
+    // --- public study logic (JSON-shaped, matching the frontend) -----------
+
+    /// The mastery state of every authored concept in the deck:
+    /// `{ progress: { <conceptId>: { state, seen } } }`. An absent concept
+    /// defaults to learning/unseen, so the screen always gets a complete map.
+    pub(crate) fn speedrun_study_state(&mut self, deck_id: DeckId) -> Result<Value> {
+        let progress = self.speedrun_deck_progress(deck_id);
+        let hierarchy = self.speedrun_authored_hierarchy(deck_id);
+        let mut out = serde_json::Map::new();
+        for node in hierarchy.concept_leaves() {
+            for id in node_concept_ids(node) {
+                let entry = progress.get(&id).cloned().unwrap_or_default();
+                out.insert(
+                    id,
+                    json!({ "state": entry.state.as_str(), "seen": entry.seen }),
+                );
+            }
+        }
+        Ok(json!({ "progress": Value::Object(out) }))
+    }
+
+    /// Reconcile the deck's cards, then return the learning block for the first
+    /// topic still being taught, else the next FSRS-due card, else done.
+    pub(crate) fn speedrun_next_card(&mut self, deck_id: DeckId) -> Result<Value> {
+        self.speedrun_reconcile(deck_id)?;
+        let hierarchy = self.speedrun_authored_hierarchy(deck_id);
+        let progress = self.speedrun_deck_progress(deck_id);
+        if let Some(block) = next_learning_block(&hierarchy, &progress) {
+            return Ok(block);
+        }
+        // No learning block: serve the next FSRS-due card the scheduler would.
+        let Some(card) = self.speedrun_peek_next_card(deck_id)? else {
+            return Ok(json!({ "kind": "done" }));
+        };
+        let note = self
+            .storage
+            .get_note(card.note_id)?
+            .or_not_found(card.note_id)?;
+        let concept_id = self.speedrun_concept_id_for_note(&note)?;
+        // A card served as a review is past learning, so an absent entry means
+        // practicing (never learning).
+        let state = progress
+            .get(&concept_id)
+            .map(|e| e.state)
+            .unwrap_or(TopicState::Practicing);
+        Ok(json!({
+            "kind": "review",
+            "cardId": card.id.0.to_string(),
+            "conceptId": concept_id,
+            "state": state.as_str(),
+        }))
+    }
+
+    /// Mark concepts seen; when every concept in a touched leaf topic is seen,
+    /// flip that whole topic `learning -> practicing` together (topic-gated).
+    /// Returns `{ upgraded, from, to, conceptIds }` — the concepts flipped this
+    /// call (empty until the topic is fully learned).
+    pub(crate) fn speedrun_record_learned(
+        &mut self,
+        deck_id: DeckId,
+        concept_ids: &[String],
+    ) -> Result<Value> {
+        let hierarchy = self.speedrun_authored_hierarchy(deck_id);
+        let mut progress = self.speedrun_deck_progress(deck_id);
+
+        let touched: HashSet<&String> = concept_ids.iter().collect();
+        for id in &touched {
+            progress.entry((*id).clone()).or_default().seen = true;
+        }
+
+        let mut upgraded: Vec<String> = Vec::new();
+        for node in hierarchy.concept_leaves() {
+            let ids = node_concept_ids(node);
+            if ids.is_empty() || !ids.iter().any(|id| touched.contains(id)) {
+                continue;
+            }
+            if !ids
+                .iter()
+                .all(|id| progress.get(id).map(|e| e.seen).unwrap_or(false))
+            {
+                continue;
+            }
+            for id in &ids {
+                let entry = progress.entry(id.clone()).or_default();
+                if entry.state == TopicState::Learning {
+                    entry.state = TopicState::Practicing;
+                    upgraded.push(id.clone());
+                }
+            }
+        }
+
+        self.save_speedrun_deck_progress(deck_id, progress)?;
+
+        if upgraded.is_empty() {
+            Ok(json!({
+                "upgraded": false,
+                "from": TopicState::Learning.as_str(),
+                "to": TopicState::Learning.as_str(),
+                "conceptIds": [],
+            }))
+        } else {
+            Ok(json!({
+                "upgraded": true,
+                "from": TopicState::Learning.as_str(),
+                "to": TopicState::Practicing.as_str(),
+                "conceptIds": upgraded,
+            }))
+        }
+    }
+
+    /// Grade a concept card through real FSRS ([`Collection::grade_now`]) and
+    /// move its mastery state. `rating` 1..4 = Again/Hard/Good/Easy. Returns
+    /// `{ state, upgraded, from, to }`.
+    pub(crate) fn speedrun_answer_card(
+        &mut self,
+        deck_id: DeckId,
+        card_id: CardId,
+        concept_id: &str,
+        rating: i32,
+    ) -> Result<Value> {
+        // grade_now uses 0..3 (Again..Easy); the screen sends 1..4.
+        self.grade_now(&[card_id], rating - 1)?;
+        self.speedrun_record_concept_answer(deck_id, concept_id, rating)
+    }
+
+    /// Record a difficulty rating against a concept and move its mastery state
+    /// (config only — FSRS timing is handled by [`Collection::grade_now`] in
+    /// [`Collection::speedrun_answer_card`]). `Again` demotes one state (floor
+    /// `practicing`); any other rating advances one state once the rolling
+    /// signal clears. Returns `{ state, upgraded, from, to }`.
+    fn speedrun_record_concept_answer(
+        &mut self,
+        deck_id: DeckId,
+        concept_id: &str,
+        rating: i32,
+    ) -> Result<Value> {
+        let mut progress = self.speedrun_deck_progress(deck_id);
+        let mut entry = progress.get(concept_id).cloned().unwrap_or_default();
+
+        // Answers only reach concepts at practicing or above; floor the
+        // effective pre-answer state so a stray learning concept never drops
+        // below practicing.
+        let mut current = entry.state;
+        if ladder_index(current) < PRACTICING_INDEX {
+            current = TopicState::Practicing;
+        }
+
+        entry.ratings.push(rating);
+        if entry.ratings.len() > MASTERY_REVIEW_WINDOW {
+            let excess = entry.ratings.len() - MASTERY_REVIEW_WINDOW;
+            entry.ratings.drain(0..excess);
+        }
+        entry.seen = true;
+
+        let new_state = if rating == RATING_AGAIN {
+            demoted(current)
+        } else if signal_cleared(&entry.ratings) {
+            advanced(current)
+        } else {
+            current
+        };
+        entry.state = new_state;
+        progress.insert(concept_id.to_string(), entry);
+        self.save_speedrun_deck_progress(deck_id, progress)?;
+
+        Ok(json!({
+            "state": new_state.as_str(),
+            "upgraded": ladder_index(new_state) > ladder_index(current),
+            "from": current.as_str(),
+            "to": new_state.as_str(),
+        }))
+    }
+
+    /// The authored hierarchy blob for a deck (the screen renders concept
+    /// content/problems from it), or a fresh empty one seeded with the deck's
+    /// name so the screen always has a root title. Mirrors the desktop
+    /// `authoring.get_hierarchy` read.
+    pub(crate) fn speedrun_study_hierarchy(&mut self, deck_id: DeckId) -> Result<Value> {
+        let key = deck_id.0.to_string();
+        if let Some(blob) = self.speedrun_authoring_store().get(&key) {
+            return Ok(blob.clone());
+        }
+        let title = self
+            .get_deck(deck_id)?
+            .map(|d| d.human_name())
+            .unwrap_or_default();
+        Ok(json!({
+            "deckId": key,
+            "root": { "id": "root", "title": title, "children": [], "concepts": [] },
+        }))
+    }
+
+    // --- materialization ---------------------------------------------------
+
+    /// Ensure exactly one [`ITEM_NOTETYPE_NAME`] card per authored concept in
+    /// the deck (create missing by `ConceptId`, remove orphaned or duplicate),
+    /// and enable FSRS. Idempotent: an unchanged hierarchy is a no-op. This is
+    /// what gives the authored concepts genuine FSRS scheduling.
+    pub(crate) fn speedrun_reconcile(&mut self, deck_id: DeckId) -> Result<ReconcileOutcome> {
+        let hierarchy = self.speedrun_authored_hierarchy(deck_id);
+        // conceptId -> title, first occurrence wins, deterministic order.
+        let mut wanted: Vec<(String, String)> = Vec::new();
+        let mut wanted_ids: HashSet<String> = HashSet::new();
+        for node in hierarchy.all_nodes() {
+            for concept in &node.concepts {
+                if !concept.id.is_empty() && wanted_ids.insert(concept.id.clone()) {
+                    wanted.push((concept.id.clone(), concept.title.clone()));
+                }
+            }
+        }
+
+        let notetype_id = self.speedrun_install_item_notetype()?;
+
+        let mut kept: HashSet<String> = HashSet::new();
+        let mut orphans: Vec<NoteId> = Vec::new();
+        for cid in self.search_cards(SearchNode::from_deck_id(deck_id, true), SortMode::NoOrder)? {
+            let card = self.storage.get_card(cid)?.or_not_found(cid)?;
+            let note = self
+                .storage
+                .get_note(card.note_id)?
+                .or_not_found(card.note_id)?;
+            if note.notetype_id != notetype_id {
+                continue;
+            }
+            let concept_id = note
+                .fields()
+                .get(ITEM_FIELD_CONCEPT_ID)
+                .cloned()
+                .unwrap_or_default();
+            if wanted_ids.contains(&concept_id) && kept.insert(concept_id) {
+                // kept
+            } else {
+                orphans.push(note.id);
+            }
+        }
+
+        let notetype = self.get_notetype(notetype_id)?.or_not_found(notetype_id)?;
+        let mut created = 0;
+        for (concept_id, title) in &wanted {
+            if kept.contains(concept_id) {
+                continue;
+            }
+            let mut note = notetype.new_note();
+            note.set_field(ITEM_FIELD_CONCEPT_ID, concept_id.as_str())?;
+            note.set_field(ITEM_FIELD_TITLE, title.as_str())?;
+            self.add_note(&mut note, deck_id)?;
+            created += 1;
+        }
+
+        if !orphans.is_empty() {
+            self.remove_notes(&orphans)?;
+        }
+
+        if !self.get_config_bool(BoolKey::Fsrs) {
+            self.set_config_bool(BoolKey::Fsrs, true, false)?;
+        }
+
+        Ok(ReconcileOutcome {
+            created,
+            removed: orphans.len(),
+            total: wanted.len(),
+        })
+    }
+
+    /// The `ConceptId` a note maps to, or `""` for any non-`SpeedrunItem` note.
+    fn speedrun_concept_id_for_note(&mut self, note: &Note) -> Result<String> {
+        let item_id = self
+            .get_notetype_by_name(ITEM_NOTETYPE_NAME)?
+            .map(|nt| nt.id);
+        if Some(note.notetype_id) != item_id {
+            return Ok(String::new());
+        }
+        Ok(note
+            .fields()
+            .get(ITEM_FIELD_CONCEPT_ID)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    /// Return the `SpeedrunItem` note type id, creating it if absent.
+    fn speedrun_install_item_notetype(&mut self) -> Result<NotetypeId> {
+        if let Some(nt) = self.get_notetype_by_name(ITEM_NOTETYPE_NAME)? {
+            return Ok(nt.id);
+        }
+        let mut nt = Notetype {
+            name: ITEM_NOTETYPE_NAME.to_string(),
+            ..Default::default()
+        };
+        nt.add_field("ConceptId");
+        nt.add_field("Title");
+        nt.add_template("Item", ITEM_QFMT, ITEM_AFMT);
+        self.add_notetype(&mut nt, true)?;
+        Ok(nt.id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn concept(id: &str) -> Value {
+        json!({
+            "id": id,
+            "title": id.to_uppercase(),
+            "content": format!("about {id}"),
+            "problems": [],
+        })
+    }
+
+    /// Store an authoring blob whose root has one child node per leaf title,
+    /// each holding the given concept ids (mirrors the Python test fixture).
+    fn set_hierarchy(col: &mut Collection, deck_id: &str, leaves: &[(&str, &[&str])]) {
+        let children: Vec<Value> = leaves
+            .iter()
+            .map(|(title, cids)| {
+                json!({
+                    "id": format!("node-{title}"),
+                    "title": title,
+                    "children": [],
+                    "concepts": cids.iter().map(|c| concept(c)).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        let blob = json!({
+            "deckId": deck_id,
+            "root": { "id": "root", "title": "Biochem", "concepts": [], "children": children },
+        });
+        col.set_config(AUTHORING_CONFIG_KEY, &json!({ deck_id: blob }))
+            .unwrap();
+    }
+
+    fn progress_of(col: &mut Collection, deck_id: DeckId) -> Value {
+        col.speedrun_study_state(deck_id).unwrap()["progress"].clone()
+    }
+
+    /// conceptId -> cardId for every SpeedrunItem card in the deck.
+    fn item_cards(col: &mut Collection, deck_id: DeckId) -> HashMap<String, CardId> {
+        let item_id = col
+            .get_notetype_by_name(ITEM_NOTETYPE_NAME)
+            .unwrap()
+            .map(|nt| nt.id);
+        let mut out = HashMap::new();
+        for cid in col
+            .search_cards(SearchNode::from_deck_id(deck_id, true), SortMode::NoOrder)
+            .unwrap()
+        {
+            let card = col.storage.get_card(cid).unwrap().unwrap();
+            let note = col.storage.get_note(card.note_id).unwrap().unwrap();
+            if Some(note.notetype_id) == item_id {
+                out.insert(note.fields()[ITEM_FIELD_CONCEPT_ID].clone(), cid);
+            }
+        }
+        out
+    }
+
+    // --- initial state -----------------------------------------------------
+
+    #[test]
+    fn absent_concept_defaults_to_learning_unseen() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1", "c2"])]);
+        let progress = progress_of(&mut col, DeckId(1));
+        assert_eq!(progress["c1"], json!({ "state": "learning", "seen": false }));
+        assert_eq!(progress["c2"], json!({ "state": "learning", "seen": false }));
+    }
+
+    // --- topic-gated learning flip (ST7) -----------------------------------
+
+    #[test]
+    fn record_learned_is_topic_gated() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1", "c2"])]);
+
+        // Learning one of two concepts marks it seen but does not flip the topic.
+        let first = col
+            .speedrun_record_learned(DeckId(1), &["c1".to_string()])
+            .unwrap();
+        assert_eq!(first["upgraded"], json!(false));
+        assert_eq!(first["conceptIds"], json!([]));
+        let progress = progress_of(&mut col, DeckId(1));
+        assert_eq!(progress["c1"], json!({ "state": "learning", "seen": true }));
+        assert_eq!(progress["c2"], json!({ "state": "learning", "seen": false }));
+
+        // Learning the last concept flips the whole leaf together.
+        let second = col
+            .speedrun_record_learned(DeckId(1), &["c2".to_string()])
+            .unwrap();
+        assert_eq!(second["upgraded"], json!(true));
+        assert_eq!(second["from"], json!("learning"));
+        assert_eq!(second["to"], json!("practicing"));
+        let flipped: HashSet<String> =
+            serde_json::from_value(second["conceptIds"].clone()).unwrap();
+        assert_eq!(
+            flipped,
+            HashSet::from(["c1".to_string(), "c2".to_string()])
+        );
+        let progress = progress_of(&mut col, DeckId(1));
+        assert_eq!(progress["c1"]["state"], json!("practicing"));
+        assert_eq!(progress["c2"]["state"], json!("practicing"));
+    }
+
+    #[test]
+    fn record_learned_only_flips_the_completed_leaf() {
+        let mut col = Collection::new();
+        set_hierarchy(
+            &mut col,
+            "1",
+            &[("Structure", &["a1"]), ("Kinetics", &["b1", "b2"])],
+        );
+
+        let result = col
+            .speedrun_record_learned(DeckId(1), &["a1".to_string()])
+            .unwrap();
+        assert_eq!(result["upgraded"], json!(true));
+        assert_eq!(result["conceptIds"], json!(["a1"]));
+        let progress = progress_of(&mut col, DeckId(1));
+        assert_eq!(progress["a1"]["state"], json!("practicing"));
+        assert_eq!(progress["b1"]["state"], json!("learning"));
+        assert_eq!(progress["b2"]["state"], json!("learning"));
+    }
+
+    #[test]
+    fn next_card_reports_the_first_unfinished_topic_then_reviews() {
+        let mut col = Collection::new();
+        set_hierarchy(
+            &mut col,
+            "1",
+            &[("Structure", &["a1"]), ("Kinetics", &["b1", "b2"])],
+        );
+        col.speedrun_record_learned(DeckId(1), &["a1".to_string()])
+            .unwrap();
+
+        let block = col.speedrun_next_card(DeckId(1)).unwrap();
+        assert_eq!(block["kind"], json!("learning_block"));
+        assert_eq!(block["topicNodeId"], json!("node-Kinetics"));
+        assert_eq!(block["conceptIds"], json!(["b1", "b2"]));
+        assert_eq!(block["learnedCount"], json!(0));
+        assert_eq!(block["totalCount"], json!(2));
+
+        // Once every concept is learned there is no learning block left, so the
+        // scheduler serves a materialized review card instead.
+        col.speedrun_record_learned(DeckId(1), &["b1".to_string(), "b2".to_string()])
+            .unwrap();
+        let next = col.speedrun_next_card(DeckId(1)).unwrap();
+        assert_eq!(next["kind"], json!("review"));
+        // The served card maps back to one of the authored concepts.
+        let served = next["conceptId"].as_str().unwrap().to_string();
+        assert!(["a1", "b1", "b2"].contains(&served.as_str()));
+    }
+
+    // --- per-concept advance / demote (ST8) --------------------------------
+
+    fn practice(col: &mut Collection, deck_id: DeckId, concept_ids: &[&str]) {
+        let ids: Vec<String> = concept_ids.iter().map(|s| s.to_string()).collect();
+        col.speedrun_record_learned(deck_id, &ids).unwrap();
+    }
+
+    #[test]
+    fn record_answer_advances_once_signal_clears() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1", "c2"])]);
+        practice(&mut col, DeckId(1), &["c1", "c2"]);
+
+        // One Good is below MIN_REPS, so the concept stays practicing.
+        let first = col
+            .speedrun_record_concept_answer(DeckId(1), "c1", RATING_GOOD)
+            .unwrap();
+        assert_eq!(
+            first,
+            json!({ "state": "practicing", "upgraded": false, "from": "practicing", "to": "practicing" })
+        );
+
+        // A second Good clears the signal and advances one state (Applying).
+        let second = col
+            .speedrun_record_concept_answer(DeckId(1), "c1", RATING_GOOD)
+            .unwrap();
+        assert_eq!(second["upgraded"], json!(true));
+        assert_eq!(second["from"], json!("practicing"));
+        assert_eq!(second["to"], json!("hierarchy"));
+        assert_eq!(second["state"], json!("hierarchy"));
+    }
+
+    #[test]
+    fn record_answer_demotes_on_again() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1", "c2"])]);
+        practice(&mut col, DeckId(1), &["c1", "c2"]);
+        col.speedrun_record_concept_answer(DeckId(1), "c1", RATING_GOOD)
+            .unwrap();
+        col.speedrun_record_concept_answer(DeckId(1), "c1", RATING_GOOD)
+            .unwrap();
+        assert_eq!(
+            progress_of(&mut col, DeckId(1))["c1"]["state"],
+            json!("hierarchy")
+        );
+
+        let result = col
+            .speedrun_record_concept_answer(DeckId(1), "c1", RATING_AGAIN)
+            .unwrap();
+        assert_eq!(result["from"], json!("hierarchy"));
+        assert_eq!(result["to"], json!("practicing"));
+        assert_eq!(result["upgraded"], json!(false));
+        assert_eq!(result["state"], json!("practicing"));
+    }
+
+    #[test]
+    fn record_answer_floors_at_practicing() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1", "c2"])]);
+        practice(&mut col, DeckId(1), &["c1", "c2"]);
+
+        let result = col
+            .speedrun_record_concept_answer(DeckId(1), "c1", RATING_AGAIN)
+            .unwrap();
+        assert_eq!(result["state"], json!("practicing"));
+        assert_eq!(result["to"], json!("practicing"));
+        assert_eq!(
+            progress_of(&mut col, DeckId(1))["c1"]["state"],
+            json!("practicing")
+        );
+    }
+
+    // --- materialize / reconcile (ST12) ------------------------------------
+
+    #[test]
+    fn reconcile_creates_one_card_per_concept_and_enables_fsrs() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1", "c2"])]);
+
+        let result = col.speedrun_reconcile(DeckId(1)).unwrap();
+        assert_eq!(
+            result,
+            ReconcileOutcome {
+                created: 2,
+                removed: 0,
+                total: 2
+            }
+        );
+
+        let cards = item_cards(&mut col, DeckId(1));
+        assert_eq!(
+            cards.keys().cloned().collect::<HashSet<_>>(),
+            HashSet::from(["c1".to_string(), "c2".to_string()])
+        );
+        assert!(col.get_config_bool(BoolKey::Fsrs), "FSRS enabled");
+
+        // Idempotent: a second reconcile over the same tree changes nothing.
+        assert_eq!(
+            col.speedrun_reconcile(DeckId(1)).unwrap(),
+            ReconcileOutcome {
+                created: 0,
+                removed: 0,
+                total: 2
+            }
+        );
+        assert_eq!(item_cards(&mut col, DeckId(1)).len(), 2);
+    }
+
+    #[test]
+    fn reconcile_removes_orphaned_cards() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1", "c2"])]);
+        col.speedrun_reconcile(DeckId(1)).unwrap();
+        assert_eq!(item_cards(&mut col, DeckId(1)).len(), 2);
+
+        // Drop c2 from the authored tree; reconcile must remove its card.
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1"])]);
+        let result = col.speedrun_reconcile(DeckId(1)).unwrap();
+        assert_eq!(
+            result,
+            ReconcileOutcome {
+                created: 0,
+                removed: 1,
+                total: 1
+            }
+        );
+        assert_eq!(
+            item_cards(&mut col, DeckId(1))
+                .keys()
+                .cloned()
+                .collect::<HashSet<_>>(),
+            HashSet::from(["c1".to_string()])
+        );
+    }
+
+    #[test]
+    fn answer_card_grades_through_fsrs_and_moves_state() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1"])]);
+        practice(&mut col, DeckId(1), &["c1"]);
+        col.speedrun_reconcile(DeckId(1)).unwrap();
+        let card_id = item_cards(&mut col, DeckId(1))["c1"];
+
+        let revlog_before = col
+            .storage
+            .get_all_revlog_entries(TimestampSecs(0))
+            .unwrap()
+            .len();
+        let result = col
+            .speedrun_answer_card(DeckId(1), card_id, "c1", RATING_GOOD)
+            .unwrap();
+        assert_eq!(result["state"], json!("practicing"));
+
+        // Real FSRS: one revlog entry written and the card left the New state
+        // with an FSRS memory state assigned.
+        assert_eq!(
+            col.storage
+                .get_all_revlog_entries(TimestampSecs(0))
+                .unwrap()
+                .len(),
+            revlog_before + 1
+        );
+        let graded = col.storage.get_card(card_id).unwrap().unwrap();
+        assert_ne!(graded.ctype, crate::card::CardType::New);
+        assert!(graded.memory_state.is_some(), "FSRS memory state assigned");
+    }
+
+    #[test]
+    fn study_hierarchy_returns_stored_blob_and_empty_fallback() {
+        let mut col = Collection::new();
+        // A deck with no authored blob gets a fresh empty hierarchy seeded with
+        // the deck's name.
+        let empty = col.speedrun_study_hierarchy(DeckId(1)).unwrap();
+        assert_eq!(empty["deckId"], json!("1"));
+        assert_eq!(empty["root"]["concepts"], json!([]));
+
+        set_hierarchy(&mut col, "1", &[("Amino acids", &["c1"])]);
+        let stored = col.speedrun_study_hierarchy(DeckId(1)).unwrap();
+        assert_eq!(stored["root"]["children"][0]["title"], json!("Amino acids"));
+        assert_eq!(
+            stored["root"]["children"][0]["concepts"][0]["id"],
+            json!("c1")
+        );
+    }
+}

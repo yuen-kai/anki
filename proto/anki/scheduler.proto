@@ -65,6 +65,34 @@ service SchedulerService {
   // details modal. Read-only; one pass over the in-scope cards. Distinct from
   // the whole-deck Memory/Performance scores, which stay aggregate.
   rpc GetSpeedrunScoreBreakdown(decks.DeckId) returns (SpeedrunScoreBreakdown);
+  // Bespoke Speedrun study screen (speedrun-review route). Ported from the
+  // desktop-only Python so the Qt desktop and AnkiDroid webviews drive the same
+  // engine over the same backend. Each exchanges JSON (the authored content and
+  // the mastery store are JSON in the collection config); the request/response
+  // bodies match the screen's lib.ts. FSRS owns timing (via the materialized
+  // cards + answer_card); the speedrun_study_progress config owns per-concept
+  // mastery state (learning, practicing, hierarchy which displays as Applying,
+  // and mastering).
+  //
+  // SpeedrunStudyState: { deckId } ->
+  // { progress: { <conceptId>: { state, seen } } }.
+  rpc SpeedrunStudyState(generic.Json) returns (generic.Json);
+  // SpeedrunNextCard: { deckId }; reconciles the deck's materialized cards, then
+  // returns { kind: "learning_block", topicNodeId, conceptIds, learnedCount,
+  // totalCount }, or { kind: "review", cardId, conceptId, state }, or
+  // { kind: "done" }.
+  rpc SpeedrunNextCard(generic.Json) returns (generic.Json);
+  // SpeedrunAnswerCard: { deckId, cardId, conceptId, rating } where rating 1..4
+  // = Again/Hard/Good/Easy. Grades the card through real FSRS and moves its
+  // mastery state -> { state, upgraded, from, to }.
+  rpc SpeedrunAnswerCard(generic.Json) returns (generic.Json);
+  // SpeedrunRecordLearned: { deckId, conceptIds }. Marks the concepts seen,
+  // flipping a leaf topic learning -> practicing once all its concepts are seen
+  // -> { upgraded, from, to, conceptIds }.
+  rpc SpeedrunRecordLearned(generic.Json) returns (generic.Json);
+  // SpeedrunStudyHierarchy: { deckId } -> the authored hierarchy blob the screen
+  // renders concept content/problems from (read-only), or a fresh empty one.
+  rpc SpeedrunStudyHierarchy(generic.Json) returns (generic.Json);
   rpc AnswerCard(CardAnswer) returns (collection.OpChanges);
   rpc SchedTimingToday(generic.Empty) returns (SchedTimingTodayResponse);
   rpc StudiedToday(generic.Empty) returns (generic.String);

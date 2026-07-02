@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from errno import EPROTOTYPE
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import flask
 import stringcase
@@ -30,17 +30,13 @@ import aqt
 import aqt.main
 import aqt.operations
 from anki import generic_pb2, hooks
-from anki.cards import CardId
 from anki.collection import OpChangesOnly, Progress, SearchNode
 from anki.decks import DeckId, UpdateDeckConfigs, UpdateDeckConfigsMode
-from anki.notes import NoteId
 from anki.scheduler.v3 import (
-    CardAnswer,
     SchedulingStatesWithContext,
     SetSchedulingStatesRequest,
 )
-from anki.scheduler.v3 import Scheduler as V3Scheduler
-from anki.speedrun import authoring, materialize, study
+from anki.speedrun import authoring
 from anki.utils import dev_mode
 from aqt.changenotetype import ChangeNotetypeDialog
 from aqt.deckoptions import DeckOptionsDialog, display_options_for_deck
@@ -832,92 +828,12 @@ def speedrun_show_decks() -> bytes:
     return _speedrun_response({})
 
 
-# Bespoke card-study screen (speedrun-review). FSRS owns timing via
-# col.sched.answer_card on the materialized cards; anki.speedrun.study owns the
-# per-concept mastery state in collection config. These data RPCs run on the
-# media-server thread like the authoring ones (backend calls are self-locking).
-
-_RATING_BY_INDEX = {
-    1: CardAnswer.AGAIN,
-    2: CardAnswer.HARD,
-    3: CardAnswer.GOOD,
-    4: CardAnswer.EASY,
-}
-
-
-def speedrun_study_state() -> bytes:
-    deck_id = str(_speedrun_request()["deckId"])
-    return _speedrun_response(study.get_study_state(aqt.mw.col, deck_id))
-
-
-def _speedrun_review_card(col: Any, deck_id: str) -> dict[str, Any]:
-    """The next FSRS-due concept card for the deck, as a review payload, or a
-    done payload when the scheduler has nothing left today."""
-    did = DeckId(int(deck_id))
-    col.decks.set_current(did)
-    queued = col.sched.get_queued_cards(fetch_limit=1)
-    if not queued.cards:
-        return {"kind": "done"}
-    backend_card = queued.cards[0].card
-    concept_id = materialize.concept_id_for_note(col, NoteId(backend_card.note_id))
-    progress = study.get_study_state(col, deck_id)["progress"]
-    state = (progress.get(concept_id) or {}).get("state", study.STATE_PRACTICING)
-    return {
-        "kind": "review",
-        "cardId": str(backend_card.id),
-        "conceptId": concept_id,
-        "state": state,
-    }
-
-
-def speedrun_next_card() -> bytes:
-    """Reconcile the deck's cards, then return the learning block for the first
-    topic still being taught, else the next FSRS-due card, else done."""
-    deck_id = str(_speedrun_request()["deckId"])
-    col = aqt.mw.col
-    materialize.reconcile(col, deck_id)
-    hierarchy = authoring.get_hierarchy(col, deck_id)
-    progress = study.get_study_state(col, deck_id)["progress"]
-    block = study.next_learning_block(hierarchy, progress)
-    if block is not None:
-        return _speedrun_response({"kind": "learning_block", **block})
-    return _speedrun_response(_speedrun_review_card(col, deck_id))
-
-
-def speedrun_record_learned() -> bytes:
-    req = _speedrun_request()
-    deck_id = str(req["deckId"])
-    concept_ids = [str(cid) for cid in (req.get("conceptIds") or [])]
-    return _speedrun_response(study.record_learned(aqt.mw.col, deck_id, concept_ids))
-
-
-def speedrun_answer_card() -> bytes:
-    """Grade a concept card through real FSRS (col.sched.answer_card) and update
-    its mastery state. rating 1..4 = Again/Hard/Good/Easy."""
-    req = _speedrun_request()
-    deck_id = str(req["deckId"])
-    concept_id = str(req["conceptId"])
-    rating = int(req["rating"])
-    col = aqt.mw.col
-
-    sched = cast(V3Scheduler, col.sched)
-    card = col.get_card(CardId(int(req["cardId"])))
-    # build_answer reads card.time_taken(), which needs a started timer; the
-    # bespoke screen tracks its own timing, so a near-zero elapsed is fine (FSRS
-    # schedules on the rating, not the answer time).
-    card.start_timer()
-    states = col._backend.get_scheduling_states(card.id)
-    answer = sched.build_answer(
-        card=card,
-        states=states,
-        rating=_RATING_BY_INDEX[rating],
-        # served from the bespoke screen, not the live study queue, so grade it
-        # out of queue (still real FSRS; only skips the queue-pop assertion).
-        from_queue=False,
-    )
-    sched.answer_card(answer)
-
-    return _speedrun_response(study.record_answer(col, deck_id, concept_id, rating))
+# The bespoke card-study screen (speedrun-review) now drives the shared Rust
+# engine directly: speedrunStudyState / speedrunNextCard / speedrunAnswerCard /
+# speedrunRecordLearned / speedrunStudyHierarchy are SchedulerService RPCs (see
+# proto/anki/scheduler.proto, rslib/src/speedrun/study.rs) exposed via
+# exposed_backend_list below, so desktop and AnkiDroid run the identical study
+# backend. There is deliberately no Python study handler here.
 
 
 post_handler_list = [
@@ -945,10 +861,6 @@ post_handler_list = [
     speedrun_start_study,
     speedrun_overview_action,
     speedrun_show_decks,
-    speedrun_study_state,
-    speedrun_next_card,
-    speedrun_record_learned,
-    speedrun_answer_card,
 ]
 
 
@@ -996,6 +908,12 @@ exposed_backend_list = [
     "get_readiness_score",
     "get_speedrun_progress",
     "get_speedrun_score_breakdown",
+    # SchedulerService: bespoke study screen (shared with AnkiDroid)
+    "speedrun_study_state",
+    "speedrun_next_card",
+    "speedrun_answer_card",
+    "speedrun_record_learned",
+    "speedrun_study_hierarchy",
     # DeckConfigService
     "get_ignored_before_count",
     "get_retention_workload",

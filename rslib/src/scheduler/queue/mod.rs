@@ -86,6 +86,25 @@ impl Collection {
             .map(|queued| queued.cards.first().cloned())
     }
 
+    /// The next card the standard scheduler would serve for `deck_id`, peeked
+    /// from a freshly built deck-scoped queue. Unlike [`Self::get_next_card`],
+    /// this does not touch the live study queue or the current deck, so the
+    /// bespoke Speedrun study screen can serve a specific deck's next FSRS-due
+    /// card without disturbing a normal review session.
+    pub(crate) fn speedrun_peek_next_card(&mut self, deck_id: DeckId) -> Result<Option<Card>> {
+        let next_id = {
+            let queues = self.build_queues(deck_id)?;
+            // Bind before the block ends so the borrowing iterator is dropped
+            // before `queues`; the card id itself is Copy and outlives both.
+            let id = queues.iter().next().map(|entry| entry.card_id());
+            id
+        };
+        match next_id {
+            Some(cid) => Ok(Some(self.storage.get_card(cid)?.or_not_found(cid)?)),
+            None => Ok(None),
+        }
+    }
+
     pub fn get_queued_cards(
         &mut self,
         fetch_limit: usize,

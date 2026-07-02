@@ -59,29 +59,11 @@ service FrontendService {
   // Request: {} -> moves the window back to the decks home (deckBrowser).
   rpc SpeedrunShowDecks(generic.Json) returns (generic.Json);
 
-  // Bespoke card-study screen (speedrun-review route). JSON payloads are
-  // handled in Python by mediasrv with no Rust backend impl. FSRS owns timing
-  // (via answer_card); the speedrun_study_progress config owns per-concept
-  // mastery state (learning, practicing, hierarchy which displays as Applying,
-  // and mastering).
-  //
-  // SpeedrunStudyState: request { deckId }, response
-  // { progress: { <conceptId>: { state, seen } } }.
-  rpc SpeedrunStudyState(generic.Json) returns (generic.Json);
-  // SpeedrunNextCard: request { deckId }; reconciles the deck's cards, then
-  // returns the next thing to study as { kind: "learning_block", topicNodeId,
-  // conceptIds, learnedCount, totalCount }, or { kind: "review", cardId,
-  // conceptId, state }, or { kind: "done" }.
-  rpc SpeedrunNextCard(generic.Json) returns (generic.Json);
-  // SpeedrunAnswerCard: request { deckId, cardId, conceptId, rating } where
-  // rating 1..4 = Again/Hard/Good/Easy. Grades the card through FSRS
-  // (answer_card) and records the mastery signal. Response
-  // { state, upgraded, from, to }.
-  rpc SpeedrunAnswerCard(generic.Json) returns (generic.Json);
-  // SpeedrunRecordLearned: request { deckId, conceptIds }. Marks the concepts
-  // seen, flipping a leaf topic learning -> practicing once all its concepts
-  // are seen. Response { upgraded, from, to, conceptIds }.
-  rpc SpeedrunRecordLearned(generic.Json) returns (generic.Json);
+  // The bespoke card-study screen (speedrun-review route) is driven by the
+  // shared Rust engine, not Python: its RPCs (SpeedrunStudyState /
+  // SpeedrunNextCard / SpeedrunAnswerCard / SpeedrunRecordLearned /
+  // SpeedrunStudyHierarchy) live on SchedulerService (see anki/scheduler.proto)
+  // so desktop and AnkiDroid share one study backend.
 }
 
 service BackendFrontendService {}

@@ -31,6 +31,48 @@ use crate::scheduler::states::SchedulingStates;
 use crate::search::SortMode;
 use crate::stats::studied_today;
 
+/// Request body for the deck-scoped Speedrun study RPCs (`{ deckId }`). The
+/// screen sends ids as strings, matching the authoring store.
+#[derive(serde::Deserialize)]
+struct SpeedrunDeckRequest {
+    #[serde(rename = "deckId")]
+    deck_id: String,
+}
+
+/// Request body for `SpeedrunAnswerCard`.
+#[derive(serde::Deserialize)]
+struct SpeedrunAnswerRequest {
+    #[serde(rename = "deckId")]
+    deck_id: String,
+    #[serde(rename = "cardId")]
+    card_id: String,
+    #[serde(rename = "conceptId")]
+    concept_id: String,
+    rating: i32,
+}
+
+/// Request body for `SpeedrunRecordLearned`.
+#[derive(serde::Deserialize)]
+struct SpeedrunLearnedRequest {
+    #[serde(rename = "deckId")]
+    deck_id: String,
+    #[serde(rename = "conceptIds", default)]
+    concept_ids: Vec<String>,
+}
+
+fn speedrun_parse_id(value: &str, what: &str) -> Result<i64> {
+    match value.parse::<i64>() {
+        Ok(id) => Ok(id),
+        Err(_) => invalid_input!("invalid {what}: {value}"),
+    }
+}
+
+fn speedrun_json_reply(value: &serde_json::Value) -> Result<anki_proto::generic::Json> {
+    Ok(anki_proto::generic::Json {
+        json: serde_json::to_vec(value)?,
+    })
+}
+
 impl crate::services::SchedulerService for Collection {
     /// This behaves like _updateCutoff() in older code - it also unburies at
     /// the start of a new day.
@@ -358,6 +400,42 @@ impl crate::services::SchedulerService for Collection {
             })
             .collect();
         Ok(scheduler::SpeedrunScoreBreakdown { topics })
+    }
+
+    fn speedrun_study_state(&mut self, input: generic::Json) -> Result<generic::Json> {
+        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
+        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
+        speedrun_json_reply(&self.speedrun_study_state(deck_id)?)
+    }
+
+    fn speedrun_next_card(&mut self, input: generic::Json) -> Result<generic::Json> {
+        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
+        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
+        speedrun_json_reply(&self.speedrun_next_card(deck_id)?)
+    }
+
+    fn speedrun_answer_card(&mut self, input: generic::Json) -> Result<generic::Json> {
+        let req: SpeedrunAnswerRequest = serde_json::from_slice(&input.json)?;
+        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
+        let card_id = CardId(speedrun_parse_id(&req.card_id, "cardId")?);
+        speedrun_json_reply(&self.speedrun_answer_card(
+            deck_id,
+            card_id,
+            &req.concept_id,
+            req.rating,
+        )?)
+    }
+
+    fn speedrun_record_learned(&mut self, input: generic::Json) -> Result<generic::Json> {
+        let req: SpeedrunLearnedRequest = serde_json::from_slice(&input.json)?;
+        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
+        speedrun_json_reply(&self.speedrun_record_learned(deck_id, &req.concept_ids)?)
+    }
+
+    fn speedrun_study_hierarchy(&mut self, input: generic::Json) -> Result<generic::Json> {
+        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
+        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
+        speedrun_json_reply(&self.speedrun_study_hierarchy(deck_id)?)
     }
 
     fn custom_study(
