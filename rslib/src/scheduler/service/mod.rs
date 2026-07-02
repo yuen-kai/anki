@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 mod answering;
+mod speedrun;
 mod states;
 
 use anki_proto::cards;
@@ -30,48 +31,6 @@ use crate::scheduler::states::CardState;
 use crate::scheduler::states::SchedulingStates;
 use crate::search::SortMode;
 use crate::stats::studied_today;
-
-/// Request body for the deck-scoped Speedrun study RPCs (`{ deckId }`). The
-/// screen sends ids as strings, matching the authoring store.
-#[derive(serde::Deserialize)]
-struct SpeedrunDeckRequest {
-    #[serde(rename = "deckId")]
-    deck_id: String,
-}
-
-/// Request body for `SpeedrunAnswerCard`.
-#[derive(serde::Deserialize)]
-struct SpeedrunAnswerRequest {
-    #[serde(rename = "deckId")]
-    deck_id: String,
-    #[serde(rename = "cardId")]
-    card_id: String,
-    #[serde(rename = "conceptId")]
-    concept_id: String,
-    rating: i32,
-}
-
-/// Request body for `SpeedrunRecordLearned`.
-#[derive(serde::Deserialize)]
-struct SpeedrunLearnedRequest {
-    #[serde(rename = "deckId")]
-    deck_id: String,
-    #[serde(rename = "conceptIds", default)]
-    concept_ids: Vec<String>,
-}
-
-fn speedrun_parse_id(value: &str, what: &str) -> Result<i64> {
-    match value.parse::<i64>() {
-        Ok(id) => Ok(id),
-        Err(_) => invalid_input!("invalid {what}: {value}"),
-    }
-}
-
-fn speedrun_json_reply(value: &serde_json::Value) -> Result<anki_proto::generic::Json> {
-    Ok(anki_proto::generic::Json {
-        json: serde_json::to_vec(value)?,
-    })
-}
 
 impl crate::services::SchedulerService for Collection {
     /// This behaves like _updateCutoff() in older code - it also unburies at
@@ -290,180 +249,73 @@ impl crate::services::SchedulerService for Collection {
             .map(Into::into)
     }
 
-    fn get_topic_grouped_queue(
-        &mut self,
-        input: scheduler::GetTopicGroupedQueueRequest,
-    ) -> Result<scheduler::QueuedCards> {
-        self.get_topic_grouped_queue(input.deck_id.into(), input.fetch_limit as usize)
-            .map(Into::into)
-    }
-
+    // Speedrun RPC bodies live in `speedrun.rs`; these are thin delegators.
     fn get_memory_score(
         &mut self,
         input: scheduler::GetMemoryScoreRequest,
     ) -> Result<scheduler::MemoryScore> {
-        let score = self.get_memory_score(input.deck_id.into())?;
-        Ok(scheduler::MemoryScore {
-            estimate: score.estimate,
-            range_low: score.range_low,
-            range_high: score.range_high,
-            coverage_pct: score.coverage_pct,
-            confidence: score.confidence.as_str().to_string(),
-            updated_at_secs: score.updated_at_secs,
-            reasons: score.reasons,
-            abstained: score.abstained,
-            abstain_reason: score.abstain_reason,
-            graded_reviews: score.graded_reviews,
-        })
+        speedrun::memory_score(self, input)
     }
 
     fn get_performance_score(
         &mut self,
         input: scheduler::GetSpeedrunScoreRequest,
     ) -> Result<scheduler::ScoreEnvelope> {
-        Ok(score_envelope_to_proto(
-            self.get_performance_score(input.deck_id.into())?,
-        ))
+        speedrun::performance_score(self, input)
     }
 
     fn get_readiness_score(
         &mut self,
         input: scheduler::GetSpeedrunScoreRequest,
     ) -> Result<scheduler::ScoreEnvelope> {
-        Ok(score_envelope_to_proto(
-            self.get_readiness_score(input.deck_id.into())?,
-        ))
-    }
-
-    fn get_speedrun_card_mode(
-        &mut self,
-        input: anki_proto::cards::CardId,
-    ) -> Result<generic::String> {
-        let cid: CardId = input.into();
-        Ok(self.get_speedrun_card_mode(cid)?.to_string().into())
-    }
-
-    fn get_speedrun_card_context(
-        &mut self,
-        input: anki_proto::cards::CardId,
-    ) -> Result<scheduler::SpeedrunCardContext> {
-        let (mode, path) = self.get_speedrun_card_context(input.into())?;
-        Ok(scheduler::SpeedrunCardContext {
-            mode: mode.to_string(),
-            path,
-        })
-    }
-
-    fn speedrun_record_answer(
-        &mut self,
-        input: scheduler::SpeedrunRecordAnswerRequest,
-    ) -> Result<generic::String> {
-        let new_state =
-            self.speedrun_record_answer(CardId(input.card_id), input.rating().into())?;
-        Ok(new_state.as_str().to_string().into())
-    }
-
-    fn get_speedrun_progress(
-        &mut self,
-        input: anki_proto::decks::DeckId,
-    ) -> Result<scheduler::SpeedrunProgress> {
-        let topics = self
-            .get_speedrun_progress(input.did.into())?
-            .into_iter()
-            .map(
-                |(topic_id, state)| scheduler::speedrun_progress::TopicProgress {
-                    path: crate::speedrun::taxonomy::topic_path_labels(&topic_id),
-                    topic_id,
-                    state: state.as_str().to_string(),
-                },
-            )
-            .collect();
-        Ok(scheduler::SpeedrunProgress { topics })
+        speedrun::readiness_score(self, input)
     }
 
     fn get_speedrun_score_breakdown(
         &mut self,
         input: anki_proto::decks::DeckId,
     ) -> Result<scheduler::SpeedrunScoreBreakdown> {
-        let topics = self
-            .get_speedrun_score_breakdown(input.did.into())?
-            .into_iter()
-            .map(|stat| scheduler::speedrun_score_breakdown::TopicStat {
-                topic_id: stat.topic_id,
-                path: stat.path,
-                mean_retrievability: stat.mean_retrievability,
-                application_accuracy: stat.application_accuracy,
-                application_attempts: stat.application_attempts,
-                memory_reviews: stat.memory_reviews,
-                exam_weight: stat.exam_weight,
-                has_application_data: stat.has_application_data,
-            })
-            .collect();
-        Ok(scheduler::SpeedrunScoreBreakdown { topics })
+        speedrun::score_breakdown(self, input)
     }
 
     fn speedrun_study_state(&mut self, input: generic::Json) -> Result<generic::Json> {
-        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
-        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
-        speedrun_json_reply(&self.speedrun_study_state(deck_id)?)
+        speedrun::study_state(self, input)
     }
 
     fn speedrun_next_card(&mut self, input: generic::Json) -> Result<generic::Json> {
-        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
-        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
-        speedrun_json_reply(&self.speedrun_next_card(deck_id)?)
+        speedrun::next_card(self, input)
     }
 
     fn speedrun_answer_card(&mut self, input: generic::Json) -> Result<generic::Json> {
-        let req: SpeedrunAnswerRequest = serde_json::from_slice(&input.json)?;
-        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
-        let card_id = CardId(speedrun_parse_id(&req.card_id, "cardId")?);
-        speedrun_json_reply(&self.speedrun_answer_card(
-            deck_id,
-            card_id,
-            &req.concept_id,
-            req.rating,
-        )?)
+        speedrun::answer_card(self, input)
     }
 
     fn speedrun_record_learned(&mut self, input: generic::Json) -> Result<generic::Json> {
-        let req: SpeedrunLearnedRequest = serde_json::from_slice(&input.json)?;
-        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
-        speedrun_json_reply(&self.speedrun_record_learned(deck_id, &req.concept_ids)?)
+        speedrun::record_learned(self, input)
     }
 
     fn speedrun_study_hierarchy(&mut self, input: generic::Json) -> Result<generic::Json> {
-        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
-        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
-        speedrun_json_reply(&self.speedrun_study_hierarchy(deck_id)?)
+        speedrun::study_hierarchy(self, input)
     }
 
-    fn speedrun_list_decks(&mut self, _input: generic::Json) -> Result<generic::Json> {
-        speedrun_json_reply(&self.speedrun_list_decks()?)
+    fn speedrun_list_decks(&mut self, input: generic::Json) -> Result<generic::Json> {
+        speedrun::list_decks(self, input)
     }
 
     fn speedrun_get_hierarchy(&mut self, input: generic::Json) -> Result<generic::Json> {
-        // The create flow sends deckId "new"/"", so the id stays a string here.
-        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
-        speedrun_json_reply(&self.speedrun_get_hierarchy(&req.deck_id)?)
+        speedrun::get_hierarchy(self, input)
     }
 
     fn speedrun_save_hierarchy(&mut self, input: generic::Json) -> Result<generic::Json> {
-        // The request body is the Hierarchy blob itself.
-        let hierarchy: serde_json::Value = serde_json::from_slice(&input.json)?;
-        speedrun_json_reply(&self.speedrun_save_hierarchy(hierarchy)?)
+        speedrun::save_hierarchy(self, input)
     }
 
     fn speedrun_delete_deck(&mut self, input: generic::Json) -> Result<generic::Json> {
-        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
-        self.speedrun_delete_deck(&req.deck_id)?;
-        speedrun_json_reply(&serde_json::json!({}))
+        speedrun::delete_deck(self, input)
     }
 
     fn speedrun_study_summary(&mut self, input: generic::Json) -> Result<generic::Json> {
-        let req: SpeedrunDeckRequest = serde_json::from_slice(&input.json)?;
-        let deck_id = DeckId(speedrun_parse_id(&req.deck_id, "deckId")?);
-        speedrun_json_reply(&self.speedrun_study_summary(deck_id)?)
+        speedrun::study_summary(self, input)
     }
 
     fn custom_study(
@@ -665,27 +517,6 @@ fn fsrs_review_proto_to_fsrs(review: anki_proto::scheduler::FsrsReview) -> FSRSR
     FSRSReview {
         delta_t: review.delta_t,
         rating: review.rating,
-    }
-}
-
-/// Map the shared Rust
-/// [`ScoreEnvelope`](crate::speedrun::scores::ScoreEnvelope) (Performance /
-/// Readiness) onto its protobuf form.
-fn score_envelope_to_proto(
-    score: crate::speedrun::scores::ScoreEnvelope,
-) -> scheduler::ScoreEnvelope {
-    scheduler::ScoreEnvelope {
-        estimate: score.estimate,
-        range_low: score.range_low,
-        range_high: score.range_high,
-        coverage_pct: score.coverage_pct,
-        confidence: score.confidence.as_str().to_string(),
-        updated_at_secs: score.updated_at_secs,
-        reasons: score.reasons,
-        abstained: score.abstained,
-        abstain_reason: score.abstain_reason,
-        graded_reviews: score.graded_reviews,
-        format: score.format.as_str().to_string(),
     }
 }
 

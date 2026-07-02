@@ -18,7 +18,7 @@ from typing import Any, Literal
 
 from anki import frontend_pb2, scheduler_pb2
 from anki._legacy import deprecated
-from anki.cards import Card, CardId
+from anki.cards import Card
 from anki.collection import OpChanges
 from anki.consts import *
 from anki.decks import DeckId
@@ -56,37 +56,21 @@ class Scheduler(SchedulerBaseWithLegacy):
             fetch_limit=fetch_limit, intraday_learning_only=intraday_learning_only
         )
 
-    def get_topic_grouped_queue(
-        self,
-        *,
-        deck_id: DeckId,
-        fetch_limit: int = 0,
-    ) -> QueuedCards:
-        """Speedrun "Learn" mode: a deck's due review cards regrouped into
-        topic-contiguous blocks, ordered by weakness × exam weight.
-
-        Read-only: grading still flows through answer_card, so FSRS intervals and
-        undo are unchanged. fetch_limit caps the returned cards (0 = no limit);
-        review_count always reports the full block total. Idempotent."""
-        return self.col._backend.get_topic_grouped_queue(
-            deck_id=deck_id, fetch_limit=fetch_limit
-        )
-
     def get_memory_score(self, *, deck_id: DeckId) -> scheduler_pb2.MemoryScore:
         """Speedrun honest Memory score for a deck: aggregated FSRS
-        retrievability over its in-scope taxonomy cards, returned as the full
+        retrievability over its authored concept cards, returned as the full
         evidence envelope (estimate, range, coverage, confidence, reasons).
 
         Read-only: reads existing FSRS/revlog state only. When the give-up rule
-        fires (too few graded reviews or too little topic coverage) the score
+        fires (too few graded reviews or too little concept coverage) the score
         abstains — estimate/range are 0 and abstain_reason says what's missing."""
         return self.col._backend.get_memory_score(deck_id=deck_id)
 
     def get_performance_score(self, *, deck_id: DeckId) -> scheduler_pb2.ScoreEnvelope:
         """Speedrun honest Performance score for a deck: weighted accuracy over
-        graded reviews of SpeedrunApplication (exam-style) cards, as the full
-        evidence envelope. Distinct from Memory (recall of a taught fact); this
-        measures getting application questions right. Read-only; abstains under
+        the authored concepts' application attempts, as the full evidence
+        envelope. Distinct from Memory (recall of a taught concept); this
+        measures getting application problems right. Read-only; abstains under
         the give-up rule (too few application attempts or too little coverage)."""
         return self.col._backend.get_performance_score(deck_id=deck_id)
 
@@ -97,46 +81,6 @@ class Scheduler(SchedulerBaseWithLegacy):
         Performance abstains; a projection from practice, not calibrated to real
         exam outcomes yet. Read-only."""
         return self.col._backend.get_readiness_score(deck_id=deck_id)
-
-    def get_speedrun_card_mode(self, *, card_id: CardId) -> str:
-        """Speedrun mastery progression: the card's active mode, resolved from
-        its topic's state and note type. One of "concept_learn",
-        "concept_practice", "application_scaffolded", "application_unscaffolded",
-        or "none" (a non-Speedrun card, or an application card whose topic is
-        below "hierarchy" and is suppressed). The reviewer injects this as
-        window.speedrunCardMode before render."""
-        return self.col._backend.get_speedrun_card_mode(card_id)
-
-    def get_speedrun_card_context(
-        self, *, card_id: CardId
-    ) -> scheduler_pb2.SpeedrunCardContext:
-        """Speedrun mastery progression: the card's render context — its active
-        mode (as get_speedrun_card_mode) plus its taxonomy hierarchy path as
-        display labels (foundation -> leaf, e.g. "Biomolecules", "Enzymes",
-        "Inhibition"), empty for a card with no taxonomy topic. The reviewer
-        injects these as window.speedrunCardMode and window.speedrunTopicPath
-        before render, so the templates can show the breadcrumb."""
-        return self.col._backend.get_speedrun_card_context(card_id)
-
-    def speedrun_record_answer(
-        self, *, card_id: CardId, rating: CardAnswer.Rating.V
-    ) -> str:
-        """Record an answer against the card's topic and return the topic's new
-        mastery state ("learning"/"practicing"/"hierarchy"/"mastering"). Again
-        demotes one state (never below "learning"); any other rating advances one
-        state once the topic's active-mode cards clear the mastery signal.
-
-        Writes only the per-topic state map in the collection config — no
-        scheduling change, so the card's FSRS state and undo are untouched. Call
-        it alongside answer_card, not instead of it."""
-        return self.col._backend.speedrun_record_answer(card_id=card_id, rating=rating)
-
-    def get_speedrun_progress(
-        self, *, deck_id: DeckId
-    ) -> Sequence[scheduler_pb2.SpeedrunProgress.TopicProgress]:
-        """Per-topic mastery state ((topic_id, state) pairs) for the deck's
-        in-scope topics, for the dashboard's per-area progress. Read-only."""
-        return self.col._backend.get_speedrun_progress(deck_id)
 
     def describe_next_states(self, next_states: SchedulingStates) -> Sequence[str]:
         "Labels for each of the answer buttons."

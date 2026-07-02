@@ -114,6 +114,37 @@ pub fn seed_taxonomy() -> Vec<TopicNode> {
     nodes
 }
 
+/// In-scope leaf topics keyed by their lowercased display label, mapped to
+/// exam weight. This is how the authored engine attaches AAMC weights to a
+/// hand-authored leaf: match the authored leaf's title to a taxonomy label,
+/// case-insensitively (the same match `speedrun-study/lib.ts` does on the
+/// frontend). A label collision keeps the first (taxonomy order) weight.
+pub fn leaf_weight_by_label() -> HashMap<String, f32> {
+    let mut out = HashMap::new();
+    for node in seed_taxonomy() {
+        if node.in_scope {
+            out.entry(node.label.to_lowercase())
+                .or_insert(node.exam_weight);
+        }
+    }
+    out
+}
+
+/// The mean exam weight across the in-scope leaf topics, used as the neutral
+/// weight for an authored concept whose leaf title matches no taxonomy label,
+/// so mapped and unmapped concepts stay comparable in a weighted mean.
+pub fn mean_leaf_weight() -> f32 {
+    let weights: Vec<f32> = seed_taxonomy()
+        .into_iter()
+        .filter(|node| node.in_scope)
+        .map(|node| node.exam_weight)
+        .collect();
+    if weights.is_empty() {
+        return 1.0;
+    }
+    weights.iter().sum::<f32>() / weights.len() as f32
+}
+
 /// The display-label path from the foundation (root) down to `topic_id`, e.g.
 /// `["Biomolecules", "Enzymes", "Inhibition"]` for an enzyme-inhibition leaf.
 ///
@@ -167,7 +198,7 @@ pub fn weighted_coverage(nodes: &[TopicNode], covered_topic_ids: &[String]) -> f
         .sum()
 }
 
-/// Wednesday weakness proxy for a topic, in `[0, 1]` (higher = weaker).
+/// Weakness proxy for a topic, in `[0, 1]` (higher = weaker).
 ///
 /// Blends miss rate (`1 - recent_accuracy`) and forgetting (`1 -
 /// mean_retrievability`) by [`W_ACC`] / [`W_RET`]. Inputs outside `[0, 1]` are

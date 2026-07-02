@@ -4,33 +4,33 @@
 //! Bespoke Speedrun study backend, shared by desktop and mobile.
 //!
 //! This is the engine behind the animated `speedrun-review` study screen. It
-//! was ported from desktop-only Python (`pylib/anki/speedrun/{study,materialize}.py`)
-//! into the shared Rust layer so both the Qt desktop app and the AnkiDroid fork
-//! drive the same RPCs, over the same backend, with no per-platform study code.
+//! was ported from desktop-only Python
+//! (`pylib/anki/speedrun/{study,materialize}.py`) into the shared Rust layer so
+//! both the Qt desktop app and the AnkiDroid fork drive the same RPCs, over the
+//! same backend, with no per-platform study code.
 //!
 //! Two concerns are kept deliberately separate:
 //!
 //! - **FSRS owns *timing*** (when a concept's card is due). Each authored
 //!   concept is *materialized* into one real Anki card of a minimal
-//!   [`ITEM_NOTETYPE_NAME`] note type, keyed by its `ConceptId`, so the standard
-//!   scheduler serves it and [`Collection::grade_now`] grades it with genuine
-//!   FSRS intervals.
+//!   [`ITEM_NOTETYPE_NAME`] note type, keyed by its `ConceptId`, so the
+//!   standard scheduler serves it and [`Collection::grade_now`] grades it with
+//!   genuine FSRS intervals.
 //! - **This module owns *mode*** (what interaction renders): a per-concept
 //!   mastery map in the collection config under [`STUDY_PROGRESS_CONFIG_KEY`],
 //!   the same native-store pattern as the authoring blob. It never produces an
 //!   FSRS interval.
 //!
-//! The mastery states reuse the taxonomy lifecycle
-//! ([`crate::speedrun::progression::TopicState`]); the internal `hierarchy`
-//! state displays as "Applying" in the UI:
+//! Each concept walks a four-state mastery ladder ([`TopicState`]); the
+//! internal `hierarchy` state displays as "Applying" in the UI:
 //!
 //! ```text
 //! learning -> practicing -> hierarchy(Applying) -> mastering
 //! ```
 //!
-//! - **Learning is topic-gated**: a concept stays `learning` until every concept
-//!   in its authored leaf node has been seen, at which point they all flip to
-//!   `practicing` together (`record_learned`).
+//! - **Learning is topic-gated**: a concept stays `learning` until every
+//!   concept in its authored leaf node has been seen, at which point they all
+//!   flip to `practicing` together (`record_learned`).
 //! - **Later stages are per-concept**: an answer advances one state once the
 //!   concept's recent ratings clear the mastery signal, or demotes one on
 //!   `Again`. Demotion floors at `practicing`, so a lapse never re-enters the
@@ -42,6 +42,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use fsrs::FSRS;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
@@ -52,11 +53,35 @@ use crate::notetype::Notetype;
 use crate::prelude::*;
 use crate::search::SearchNode;
 use crate::search::SortMode;
-use crate::speedrun::progression::TopicState;
+use crate::speedrun::card_signals::card_retrievability;
+
+/// One concept's position on the four-state mastery ladder. Serialized
+/// lowercase in the study-progress store; an absent entry defaults to
+/// `Learning`. The internal `hierarchy` state displays as "Applying".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum TopicState {
+    #[default]
+    Learning,
+    Practicing,
+    Hierarchy,
+    Mastering,
+}
+
+impl TopicState {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            TopicState::Learning => "learning",
+            TopicState::Practicing => "practicing",
+            TopicState::Hierarchy => "hierarchy",
+            TopicState::Mastering => "mastering",
+        }
+    }
+}
 
 /// Collection-config key holding the per-deck, per-concept mastery map. Shape:
-/// `{ "<deckId>": { "<conceptId>": { state, seen, ratings } } }`. Must match the
-/// legacy desktop key so an existing collection's progress is preserved.
+/// `{ "<deckId>": { "<conceptId>": { state, seen, ratings } } }`. Must match
+/// the legacy desktop key so an existing collection's progress is preserved.
 const STUDY_PROGRESS_CONFIG_KEY: &str = "speedrun_study_progress";
 /// Collection-config key holding the authored hierarchy blob per deck (written
 /// by the authoring editor; read here to drive materialize + learning blocks).
@@ -123,22 +148,36 @@ fn signal_cleared(ratings: &[i32]) -> bool {
     good as f32 / window.len() as f32 >= ACC_THRESHOLD
 }
 
-/// One concept's persisted mastery state. Serializes to the same JSON as the
-/// legacy desktop store (`{ state, seen, ratings }`), so an existing
-/// collection's progress round-trips unchanged.
+/// One concept's persisted mastery state. Serializes to `{ state, seen,
+/// ratings, appCorrect, appTotal }`; the trailing two are the authored
+/// Performance score's evidence (see
+/// [`Collection::speedrun_record_concept_answer`]). All fields default, so a
+/// store written before Performance persistence existed round-trips unchanged
+/// (the two counts start at 0).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct ConceptEntry {
+pub(crate) struct ConceptEntry {
     #[serde(default)]
-    state: TopicState,
+    pub(crate) state: TopicState,
     #[serde(default)]
-    seen: bool,
+    pub(crate) seen: bool,
     #[serde(default)]
     ratings: Vec<i32>,
+    /// Application-stage attempts answered correctly (rating ≥ Good). Only
+    /// grows while the concept is at Applying/Mastering
+    /// (`hierarchy`/`mastering`), the stages that render an application
+    /// problem.
+    #[serde(default, rename = "appCorrect")]
+    pub(crate) app_correct: u32,
+    /// Total application-stage attempts, correct or not; the denominator of the
+    /// concept's Performance accuracy.
+    #[serde(default, rename = "appTotal")]
+    pub(crate) app_total: u32,
 }
 
 /// `conceptId -> entry` for one deck.
-type ConceptMap = HashMap<String, ConceptEntry>;
-/// `deckId -> conceptMap`; the value stored under [`STUDY_PROGRESS_CONFIG_KEY`].
+pub(crate) type ConceptMap = HashMap<String, ConceptEntry>;
+/// `deckId -> conceptMap`; the value stored under
+/// [`STUDY_PROGRESS_CONFIG_KEY`].
 type StudyProgressStore = HashMap<String, ConceptMap>;
 
 // --- Authored-hierarchy view (read-only, minimal) --------------------------
@@ -158,6 +197,8 @@ struct AuthoredConcept {
 struct AuthoredNode {
     #[serde(default)]
     id: String,
+    #[serde(default)]
+    title: String,
     #[serde(default)]
     children: Vec<AuthoredNode>,
     #[serde(default)]
@@ -252,7 +293,7 @@ impl Collection {
             .unwrap_or_default()
     }
 
-    fn speedrun_deck_progress(&self, deck_id: DeckId) -> ConceptMap {
+    pub(crate) fn speedrun_deck_progress(&self, deck_id: DeckId) -> ConceptMap {
         self.speedrun_study_store()
             .remove(&deck_id.0.to_string())
             .unwrap_or_default()
@@ -426,6 +467,18 @@ impl Collection {
             current = TopicState::Practicing;
         }
 
+        // Performance evidence: the Applying/Mastering stages render an
+        // application problem, so grading one there is an application attempt.
+        // A ≥Good rating counts as getting the problem right (same threshold
+        // the reviewer uses). Practicing/learning are recall, not application,
+        // so they never move Performance.
+        if matches!(current, TopicState::Hierarchy | TopicState::Mastering) {
+            entry.app_total += 1;
+            if rating >= RATING_GOOD {
+                entry.app_correct += 1;
+            }
+        }
+
         entry.ratings.push(rating);
         if entry.ratings.len() > MASTERY_REVIEW_WINDOW {
             let excess = entry.ratings.len() - MASTERY_REVIEW_WINDOW;
@@ -573,13 +626,163 @@ impl Collection {
         self.add_notetype(&mut nt, true)?;
         Ok(nt.id)
     }
+
+    // --- authored-engine views for the scores ------------------------------
+
+    /// Every authored leaf topic (a node holding concepts) in tree order, with
+    /// its display path and concept ids. The single source of truth the
+    /// authored Memory/Performance scores and the per-subject breakdown roll
+    /// up.
+    pub(crate) fn speedrun_authored_leaves(&self, deck_id: DeckId) -> Vec<AuthoredLeaf> {
+        let hierarchy = self.speedrun_authored_hierarchy(deck_id);
+        let mut out = Vec::new();
+        let Some(root) = &hierarchy.root else {
+            return out;
+        };
+        // Concepts attached straight to the root are their own leaf.
+        if !root.concepts.is_empty() {
+            out.push(AuthoredLeaf {
+                node_id: root.id.clone(),
+                title: root.title.clone(),
+                path: vec![root.title.clone()],
+                concept_ids: node_concept_ids(root),
+            });
+        }
+        for child in &root.children {
+            collect_authored_leaves(child, &[], &mut out);
+        }
+        out
+    }
+
+    /// Per-concept FSRS evidence over the deck's materialized `SpeedrunItem`
+    /// cards: `conceptId -> {retrievability, graded_reviews}`. The Memory score
+    /// and breakdown read recall straight off these cards (one per concept),
+    /// so studying the authored screen moves the score. Empty when the note
+    /// type has never been installed (nothing materialized yet).
+    pub(crate) fn speedrun_concept_card_stats(
+        &mut self,
+        deck_id: DeckId,
+    ) -> Result<HashMap<String, ConceptCardStat>> {
+        let Some(notetype_id) = self
+            .get_notetype_by_name(ITEM_NOTETYPE_NAME)?
+            .map(|nt| nt.id)
+        else {
+            return Ok(HashMap::new());
+        };
+        let timing = self.timing_today()?;
+        let fsrs = FSRS::new(None)?;
+        let mut out = HashMap::new();
+        for cid in self.search_cards(SearchNode::from_deck_id(deck_id, true), SortMode::NoOrder)? {
+            let card = self.storage.get_card(cid)?.or_not_found(cid)?;
+            let note = self
+                .storage
+                .get_note(card.note_id)?
+                .or_not_found(card.note_id)?;
+            if note.notetype_id != notetype_id {
+                continue;
+            }
+            let concept_id = note
+                .fields()
+                .get(ITEM_FIELD_CONCEPT_ID)
+                .cloned()
+                .unwrap_or_default();
+            if concept_id.is_empty() {
+                continue;
+            }
+            let graded_reviews = self
+                .storage
+                .get_revlog_entries_for_card(cid)?
+                .iter()
+                .filter(|entry| entry.has_rating_and_affects_scheduling())
+                .count() as u32;
+            let retrievability = card_retrievability(&card, &timing, &fsrs);
+            out.insert(
+                concept_id,
+                ConceptCardStat {
+                    retrievability,
+                    graded_reviews,
+                },
+            );
+        }
+        Ok(out)
+    }
+
+    /// Directly seed a concept's application-attempt counts, for the score
+    /// tests. Real code only ever writes these through
+    /// [`Collection::speedrun_record_concept_answer`]; this bypass lets a test
+    /// build an arbitrary accuracy record without fighting the state machine.
+    #[cfg(test)]
+    pub(crate) fn speedrun_seed_app_counts(
+        &mut self,
+        deck_id: DeckId,
+        concept_id: &str,
+        correct: u32,
+        total: u32,
+    ) {
+        let mut progress = self.speedrun_deck_progress(deck_id);
+        let entry = progress.entry(concept_id.to_string()).or_default();
+        entry.seen = true;
+        entry.app_correct = correct;
+        entry.app_total = total;
+        self.save_speedrun_deck_progress(deck_id, progress).unwrap();
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// One authored leaf topic (a node that directly holds concepts) with its
+/// display path and concept ids, for the authored-engine scores.
+pub(crate) struct AuthoredLeaf {
+    pub node_id: String,
+    pub title: String,
+    /// Ancestor titles from the top category down to and including this leaf,
+    /// root excluded, e.g. `["Enzymes", "Kinetics"]`.
+    pub path: Vec<String>,
+    pub concept_ids: Vec<String>,
+}
 
-    fn concept(id: &str) -> Value {
+/// FSRS evidence for one concept's materialized `SpeedrunItem` card.
+pub(crate) struct ConceptCardStat {
+    /// Current FSRS retrievability in `[0, 1]` (the 0.9 no-memory prior applies
+    /// to a never-graded card).
+    pub retrievability: f32,
+    /// Scheduling-affecting revlog entries over the card.
+    pub graded_reviews: u32,
+}
+
+/// Depth-first collect of every concept-bearing node under `node`, threading
+/// the ancestor title path (root excluded by the caller).
+fn collect_authored_leaves(node: &AuthoredNode, prefix: &[String], out: &mut Vec<AuthoredLeaf>) {
+    let mut path = prefix.to_vec();
+    path.push(node.title.clone());
+    if !node.concepts.is_empty() {
+        out.push(AuthoredLeaf {
+            node_id: node.id.clone(),
+            title: node.title.clone(),
+            path: path.clone(),
+            concept_ids: node_concept_ids(node),
+        });
+    }
+    for child in &node.children {
+        collect_authored_leaves(child, &path, out);
+    }
+}
+
+/// Shared test fixtures for the authored engine, reused by the score modules'
+/// tests so they build the same deck shape this module does.
+#[cfg(test)]
+pub(crate) mod testing {
+    use std::collections::HashMap;
+
+    use serde_json::json;
+    use serde_json::Value;
+
+    use super::AUTHORING_CONFIG_KEY;
+    use super::ITEM_FIELD_CONCEPT_ID;
+    use super::ITEM_NOTETYPE_NAME;
+    use crate::prelude::*;
+    use crate::search::SearchNode;
+    use crate::search::SortMode;
+
+    pub(crate) fn concept(id: &str) -> Value {
         json!({
             "id": id,
             "title": id.to_uppercase(),
@@ -590,7 +793,7 @@ mod tests {
 
     /// Store an authoring blob whose root has one child node per leaf title,
     /// each holding the given concept ids (mirrors the Python test fixture).
-    fn set_hierarchy(col: &mut Collection, deck_id: &str, leaves: &[(&str, &[&str])]) {
+    pub(crate) fn set_hierarchy(col: &mut Collection, deck_id: &str, leaves: &[(&str, &[&str])]) {
         let children: Vec<Value> = leaves
             .iter()
             .map(|(title, cids)| {
@@ -610,12 +813,8 @@ mod tests {
             .unwrap();
     }
 
-    fn progress_of(col: &mut Collection, deck_id: DeckId) -> Value {
-        col.speedrun_study_state(deck_id).unwrap()["progress"].clone()
-    }
-
     /// conceptId -> cardId for every SpeedrunItem card in the deck.
-    fn item_cards(col: &mut Collection, deck_id: DeckId) -> HashMap<String, CardId> {
+    pub(crate) fn item_cards(col: &mut Collection, deck_id: DeckId) -> HashMap<String, CardId> {
         let item_id = col
             .get_notetype_by_name(ITEM_NOTETYPE_NAME)
             .unwrap()
@@ -634,6 +833,72 @@ mod tests {
         out
     }
 
+    /// Reconcile the deck then grade one concept's materialized card with
+    /// `rating` (1..4 = Again/Hard/Good/Easy), the same path the study screen
+    /// drives. Advances the concept's mastery state as a real answer would.
+    pub(crate) fn grade_concept(
+        col: &mut Collection,
+        deck_id: DeckId,
+        concept_id: &str,
+        rating: i32,
+    ) {
+        col.speedrun_reconcile(deck_id).unwrap();
+        let card_id = item_cards(col, deck_id)[concept_id];
+        col.speedrun_answer_card(deck_id, card_id, concept_id, rating)
+            .unwrap();
+    }
+
+    /// Mark concepts learned (flips a fully-seen leaf learning -> practicing).
+    pub(crate) fn learn_leaf(col: &mut Collection, deck_id: DeckId, concept_ids: &[&str]) {
+        let ids: Vec<String> = concept_ids.iter().map(|s| s.to_string()).collect();
+        col.speedrun_record_learned(deck_id, &ids).unwrap();
+    }
+
+    /// Drive a concept up to the Applying stage (`hierarchy`): learn its whole
+    /// leaf, then two Goods to clear the practicing -> hierarchy signal.
+    pub(crate) fn advance_to_applying(
+        col: &mut Collection,
+        deck_id: DeckId,
+        leaf_concept_ids: &[&str],
+        concept_id: &str,
+    ) {
+        learn_leaf(col, deck_id, leaf_concept_ids);
+        grade_concept(col, deck_id, concept_id, 3);
+        grade_concept(col, deck_id, concept_id, 3);
+    }
+
+    /// Drive a concept to Applying, then grade it Good `count` times through
+    /// the real answer path. Every grade at Applying/Mastering is a
+    /// *correct* application attempt (Good never leaves the application
+    /// stages), so this deterministically records `count` correct attempts.
+    /// For mixed accuracy a test seeds counts directly with
+    /// [`Collection::speedrun_seed_app_counts`].
+    pub(crate) fn apply_correct_attempts(
+        col: &mut Collection,
+        deck_id: DeckId,
+        leaf_concept_ids: &[&str],
+        concept_id: &str,
+        count: u32,
+    ) {
+        advance_to_applying(col, deck_id, leaf_concept_ids, concept_id);
+        for _ in 0..count {
+            grade_concept(col, deck_id, concept_id, 3);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::testing::advance_to_applying;
+    use super::testing::grade_concept;
+    use super::testing::item_cards;
+    use super::testing::set_hierarchy;
+    use super::*;
+
+    fn progress_of(col: &mut Collection, deck_id: DeckId) -> Value {
+        col.speedrun_study_state(deck_id).unwrap()["progress"].clone()
+    }
+
     // --- initial state -----------------------------------------------------
 
     #[test]
@@ -641,8 +906,14 @@ mod tests {
         let mut col = Collection::new();
         set_hierarchy(&mut col, "1", &[("Amino acids", &["c1", "c2"])]);
         let progress = progress_of(&mut col, DeckId(1));
-        assert_eq!(progress["c1"], json!({ "state": "learning", "seen": false }));
-        assert_eq!(progress["c2"], json!({ "state": "learning", "seen": false }));
+        assert_eq!(
+            progress["c1"],
+            json!({ "state": "learning", "seen": false })
+        );
+        assert_eq!(
+            progress["c2"],
+            json!({ "state": "learning", "seen": false })
+        );
     }
 
     // --- topic-gated learning flip (ST7) -----------------------------------
@@ -660,7 +931,10 @@ mod tests {
         assert_eq!(first["conceptIds"], json!([]));
         let progress = progress_of(&mut col, DeckId(1));
         assert_eq!(progress["c1"], json!({ "state": "learning", "seen": true }));
-        assert_eq!(progress["c2"], json!({ "state": "learning", "seen": false }));
+        assert_eq!(
+            progress["c2"],
+            json!({ "state": "learning", "seen": false })
+        );
 
         // Learning the last concept flips the whole leaf together.
         let second = col
@@ -671,10 +945,7 @@ mod tests {
         assert_eq!(second["to"], json!("practicing"));
         let flipped: HashSet<String> =
             serde_json::from_value(second["conceptIds"].clone()).unwrap();
-        assert_eq!(
-            flipped,
-            HashSet::from(["c1".to_string(), "c2".to_string()])
-        );
+        assert_eq!(flipped, HashSet::from(["c1".to_string(), "c2".to_string()]));
         let progress = progress_of(&mut col, DeckId(1));
         assert_eq!(progress["c1"]["state"], json!("practicing"));
         assert_eq!(progress["c2"]["state"], json!("practicing"));
@@ -894,6 +1165,29 @@ mod tests {
         let graded = col.storage.get_card(card_id).unwrap().unwrap();
         assert_ne!(graded.ctype, crate::card::CardType::New);
         assert!(graded.memory_state.is_some(), "FSRS memory state assigned");
+    }
+
+    #[test]
+    fn answer_at_applying_records_application_attempt() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Kinetics", &["c1"])]);
+        // learn + two Goods reaches Applying (hierarchy); both were at
+        // practicing, so no application attempt is recorded yet.
+        advance_to_applying(&mut col, DeckId(1), &["c1"], "c1");
+        assert_eq!(col.speedrun_deck_progress(DeckId(1))["c1"].app_total, 0);
+
+        // A Good at the Applying stage is a correct application attempt.
+        grade_concept(&mut col, DeckId(1), "c1", 3);
+        let entry = col.speedrun_deck_progress(DeckId(1))["c1"].clone();
+        assert_eq!(entry.app_total, 1);
+        assert_eq!(entry.app_correct, 1);
+
+        // An Again at the application stage is a wrong attempt: counted, then
+        // the concept demotes.
+        grade_concept(&mut col, DeckId(1), "c1", 1);
+        let entry = col.speedrun_deck_progress(DeckId(1))["c1"].clone();
+        assert_eq!(entry.app_total, 2);
+        assert_eq!(entry.app_correct, 1);
     }
 
     #[test]

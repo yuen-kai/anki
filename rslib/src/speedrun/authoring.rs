@@ -3,9 +3,10 @@
 
 //! Speedrun authoring store, shared by desktop and mobile.
 //!
-//! Ported from the desktop-only Python (`pylib/anki/speedrun/authoring.py`) into
-//! the shared Rust layer so the Qt desktop app and the AnkiDroid fork drive the
-//! same RPCs over the same backend, with no per-platform authoring code.
+//! Ported from the desktop-only Python (`pylib/anki/speedrun/authoring.py`)
+//! into the shared Rust layer so the Qt desktop app and the AnkiDroid fork
+//! drive the same RPCs over the same backend, with no per-platform authoring
+//! code.
 //!
 //! One JSON blob per deck lives under the [`AUTHORING_CONFIG_KEY`] collection
 //! config map, keyed by the Anki deck id. A deck row is a real Anki deck (so
@@ -22,9 +23,9 @@
 //! ```
 //!
 //! The store owns only structure. Materialization into FSRS-scheduled cards and
-//! the per-concept mastery state live in [`crate::speedrun::study`], which reads
-//! the same [`AUTHORING_CONFIG_KEY`] blob, so the two interoperate. The RPC
-//! surface exchanges JSON so the editor's `lib.ts` is unchanged.
+//! the per-concept mastery state live in [`crate::speedrun::study`], which
+//! reads the same [`AUTHORING_CONFIG_KEY`] blob, so the two interoperate. The
+//! RPC surface exchanges JSON so the editor's `lib.ts` is unchanged.
 
 use std::collections::HashMap;
 
@@ -50,12 +51,9 @@ fn empty_hierarchy(deck_id: &str, title: &str) -> Value {
     })
 }
 
-/// Parse a numeric deck id, matching the service layer's `speedrun_parse_id`.
+/// Parse a numeric deck id via the shared [`crate::speedrun::parse_id`].
 fn parse_deck_id(value: &str) -> Result<DeckId> {
-    match value.parse::<i64>() {
-        Ok(id) => Ok(DeckId(id)),
-        Err(_) => invalid_input!("invalid deckId: {value}"),
-    }
+    Ok(DeckId(crate::speedrun::parse_id(value, "deckId")?))
 }
 
 impl Collection {
@@ -71,9 +69,9 @@ impl Collection {
         Ok(())
     }
 
-    /// Every top-level Anki deck as a row: `{ deckId, name, todo }`, where `todo`
-    /// is the deck's new + learn + review due count. This replaces the deck
-    /// browser (mirrors the desktop `authoring.list_decks`).
+    /// Every top-level Anki deck as a row: `{ deckId, name, todo }`, where
+    /// `todo` is the deck's new + learn + review due count. This replaces
+    /// the deck browser (mirrors the desktop `authoring.list_decks`).
     pub(crate) fn speedrun_list_decks(&mut self) -> Result<Value> {
         let tree = self.deck_tree(Some(TimestampSecs::now()))?;
         let rows: Vec<Value> = tree
@@ -90,10 +88,11 @@ impl Collection {
         Ok(Value::Array(rows))
     }
 
-    /// The stored blob for a deck, or a fresh one seeded with the deck's current
-    /// name so the editor always has a root title (mirrors the desktop
-    /// `authoring.get_hierarchy`). `deckId` may be `"new"`/`""` (the create
-    /// flow), which yields an empty scaffold with a blank title.
+    /// The stored blob for a deck, or a fresh one seeded with the deck's
+    /// current name so the editor always has a root title (mirrors the
+    /// desktop `authoring.get_hierarchy`). `deckId` may be `"new"`/`""`
+    /// (the create flow), which yields an empty scaffold with a blank
+    /// title.
     pub(crate) fn speedrun_get_hierarchy(&mut self, deck_id: &str) -> Result<Value> {
         if let Some(blob) = self.speedrun_authoring_map().get(deck_id) {
             return Ok(blob.clone());
@@ -110,13 +109,14 @@ impl Collection {
         Ok(empty_hierarchy(deck_id, &title))
     }
 
-    /// Persist a deck's authored tree and return the resolved `{ deckId, name }`.
+    /// Persist a deck's authored tree and return the resolved `{ deckId, name
+    /// }`.
     ///
-    /// Creates the backing Anki deck for a new hierarchy (root title = deck name)
-    /// or renames it when the root title changed, then writes the blob under the
-    /// deck id. A new hierarchy with an empty root title is a no-op: there is
-    /// nothing to key the blob on yet, so it returns empty ids (mirrors the
-    /// desktop `authoring.save_hierarchy`).
+    /// Creates the backing Anki deck for a new hierarchy (root title = deck
+    /// name) or renames it when the root title changed, then writes the
+    /// blob under the deck id. A new hierarchy with an empty root title is
+    /// a no-op: there is nothing to key the blob on yet, so it returns
+    /// empty ids (mirrors the desktop `authoring.save_hierarchy`).
     pub(crate) fn speedrun_save_hierarchy(&mut self, mut hierarchy: Value) -> Result<Value> {
         let deck_id = hierarchy
             .get("deckId")
@@ -177,8 +177,9 @@ impl Collection {
     }
 
     /// Today's Progress counts for the study screen: the deck's remaining
-    /// new/learn/review (from the due tree) and how many cards were studied in it
-    /// today (mirrors the desktop `authoring`-adjacent `speedrun_study_summary`).
+    /// new/learn/review (from the due tree) and how many cards were studied in
+    /// it today (mirrors the desktop `authoring`-adjacent
+    /// `speedrun_study_summary`).
     pub(crate) fn speedrun_study_summary(&mut self, deck_id: DeckId) -> Result<Value> {
         let tree = self.deck_tree(Some(TimestampSecs::now()))?;
         let Some(node) = get_deck_in_tree(tree, deck_id) else {

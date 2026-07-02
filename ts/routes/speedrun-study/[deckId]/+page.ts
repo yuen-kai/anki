@@ -1,17 +1,11 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import type { SpeedrunProgress } from "@generated/anki/scheduler_pb";
-import {
-    getMemoryScore,
-    getPerformanceScore,
-    getReadinessScore,
-    getSpeedrunProgress,
-    getSpeedrunScoreBreakdown,
-} from "@generated/backend";
+import { getMemoryScore, getPerformanceScore, getReadinessScore, getSpeedrunScoreBreakdown } from "@generated/backend";
 
 import { envelopeFromMemoryScore, envelopeFromScoreEnvelope, type ScoreEnvelope } from "../../speedrun-dashboard/lib";
-import { getHierarchy, type Hierarchy } from "../../speedrun-hierarchy/lib";
+import type { Hierarchy } from "../../speedrun-hierarchy/lib";
+import { getStudyHierarchy, type StudyProgress, studyState } from "../../speedrun-review/lib";
 import {
     buildConceptTree,
     buildSubjectBreakdown,
@@ -63,10 +57,10 @@ export const load = (async ({ params }) => {
         readinessError = message(err);
     }
 
-    let progress: SpeedrunProgress | null = null;
+    let progress: StudyProgress | null = null;
     let progressError: string | null = null;
     try {
-        progress = await getSpeedrunProgress({ did: bigDeckId }, quiet);
+        progress = (await studyState(deckId)).progress;
     } catch (err) {
         progressError = message(err);
     }
@@ -74,7 +68,7 @@ export const load = (async ({ params }) => {
     let hierarchy: Hierarchy | null = null;
     let hierarchyError: string | null = null;
     try {
-        hierarchy = await getHierarchy(deckId);
+        hierarchy = await getStudyHierarchy(deckId);
     } catch (err) {
         hierarchyError = message(err);
     }

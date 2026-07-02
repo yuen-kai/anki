@@ -1,12 +1,8 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import type {
-    SpeedrunProgress,
-    SpeedrunScoreBreakdown,
-    SpeedrunScoreBreakdown_TopicStat,
-} from "@generated/anki/scheduler_pb";
 import { goto } from "$app/navigation";
+import type { SpeedrunScoreBreakdown, SpeedrunScoreBreakdown_TopicStat } from "@generated/anki/scheduler_pb";
 import {
     getDeckNames,
     speedrunOverviewAction,
@@ -16,15 +12,8 @@ import {
 } from "@generated/backend";
 
 import { gaugePercent, MASTERY_STAGES, type ScoreEnvelope, STAGE_COUNT, stageIndex } from "../speedrun-dashboard/lib";
-import { type Hierarchy, isMobileShell, type Node } from "../speedrun-hierarchy/lib";
-
-const enc = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
-
-const dec = <T>(reply: { json: Uint8Array }): T => JSON.parse(new TextDecoder().decode(reply.json)) as T;
-
-// The JSON handlers alert on error by default; the loader isolates every call
-// itself, so we opt out of the global dialog (mirrors speedrun-hierarchy/lib).
-const quiet = { alertOnError: false } as const;
+import { dec, enc, type Hierarchy, isMobileShell, type Node, quiet } from "../speedrun-hierarchy/lib";
+import type { StudyProgress } from "../speedrun-review/lib";
 
 // ---------------------------------------------------------------------------
 // JSON RPC helpers (the study-screen POST handlers)
@@ -204,91 +193,45 @@ function makeBranch(id: string, title: string, children: ConceptTreeNode[]): Con
     };
 }
 
-// Stage by leaf label (case-insensitive), for overlaying taxonomy progress on
-// authored leaves. First mapping wins on a collision.
-function stagesByLeafLabel(progress: SpeedrunProgress | null): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const topic of progress?.topics ?? []) {
-        const path = topic.path ?? [];
-        const leaf = (path.length ? path[path.length - 1] : topic.topicId).trim().toLowerCase();
-        if (leaf && !map.has(leaf)) {
-            map.set(leaf, stageIndex(topic.state));
-        }
-    }
-    return map;
-}
-
-function mapAuthored(node: Node, stages: Map<string, number>): ConceptTreeNode {
-    if (node.children.length === 0) {
-        const stage = stages.get(node.title.trim().toLowerCase());
-        return makeLeaf(node.id, node.title, stage ?? null);
-    }
-    return makeBranch(node.id, node.title, node.children.map((child) => mapAuthored(child, stages)));
-}
-
-// Working node for the fallback build: an ordered map keeps taxonomy display
-// order (progress topics arrive in that order).
-interface Building {
-    id: string;
-    title: string;
-    children: Map<string, Building>;
-    stage: number | null;
-}
-
-function finalizeBuilding(node: Building): ConceptTreeNode {
-    if (node.children.size === 0) {
-        return makeLeaf(node.id, node.title, node.stage);
-    }
-    return makeBranch(node.id, node.title, [...node.children.values()].map(finalizeBuilding));
-}
-
-// Rebuild a tree straight from the taxonomy `progress` paths, so an unauthored
-// deck (the seed) still shows real structure. Each path segment is a branch and
-// the last segment the leaf carrying its stage.
-function fallbackTree(rootTitle: string, progress: SpeedrunProgress | null): ConceptTreeNode | null {
-    const root: Building = { id: "root", title: rootTitle, children: new Map(), stage: null };
-    for (const topic of progress?.topics ?? []) {
-        const path = (topic.path ?? []).filter((seg) => seg.length > 0);
-        const stage = stageIndex(topic.state);
-        if (path.length === 0) {
-            root.children.set(topic.topicId, { id: topic.topicId, title: topic.topicId, children: new Map(), stage });
-            continue;
-        }
-        let cursor = root;
-        path.forEach((seg, i) => {
-            const existing = cursor.children.get(seg);
-            const next: Building = existing
-                ?? { id: `${cursor.id}/${seg}`, title: seg, children: new Map(), stage: null };
-            if (!existing) {
-                cursor.children.set(seg, next);
-            }
-            if (i === path.length - 1) {
-                next.stage = stage;
-            }
-            cursor = next;
-        });
-    }
-    const finalized = finalizeBuilding(root);
-    if (finalized.children.length === 0) {
+// A leaf's mastery stage from its own concepts' authored progress: the rounded
+// mean stage over every concept (an absent/unseen concept counts as learning),
+// or null ("not started") when the leaf holds no concept or none has been seen.
+// This is the authored roll-up — the leaf reflects how far its concepts have
+// come, not a taxonomy-tag overlay.
+function leafStage(node: Node, progress: StudyProgress | null): number | null {
+    if (node.concepts.length === 0) {
         return null;
     }
-    // A single foundation is the natural root; drop the synthetic wrapper so the
-    // seed deck reads "Biomolecules -> categories -> topics", not a stutter.
-    return finalized.children.length === 1 ? finalized.children[0] : finalized;
+    const anySeen = node.concepts.some((c) => progress?.[c.id]?.seen);
+    if (!anySeen) {
+        return null;
+    }
+    const sum = node.concepts.reduce((total, c) => total + stageIndex(progress?.[c.id]?.state ?? "learning"), 0);
+    return Math.round(sum / node.concepts.length);
 }
 
-// Build the concept tree: the deck's authored hierarchy for structure with the
-// taxonomy stage overlaid on mapped leaves; fall back to the taxonomy paths
-// when the deck has no authored children.
+function mapAuthored(node: Node, progress: StudyProgress | null): ConceptTreeNode {
+    if (node.children.length === 0) {
+        return makeLeaf(node.id, node.title, leafStage(node, progress));
+    }
+    return makeBranch(node.id, node.title, node.children.map((child) => mapAuthored(child, progress)));
+}
+
+// Build the concept tree from the deck's authored hierarchy, overlaying each
+// leaf's mastery stage from its concepts' authored study progress (the same
+// `speedrun_study_progress` the review screen writes). Null when the deck has no
+// authored structure yet.
 export function buildConceptTree(
     hierarchy: Hierarchy | null,
-    progress: SpeedrunProgress | null,
+    progress: StudyProgress | null,
 ): ConceptTreeNode | null {
     const root = hierarchy?.root ?? null;
-    if (root && root.children.length > 0) {
-        return mapAuthored(root, stagesByLeafLabel(progress));
+    if (!root || (root.children.length === 0 && root.concepts.length === 0)) {
+        return null;
     }
-    return fallbackTree(root?.title || "All topics", progress);
+    // A single authored root wraps everything; render its own subtree so the
+    // header isn't a redundant top node.
+    return mapAuthored(root, progress);
 }
 
 // ---------------------------------------------------------------------------

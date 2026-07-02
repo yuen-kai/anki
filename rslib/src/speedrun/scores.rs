@@ -2,20 +2,16 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 //! Shared evidence envelope for the Speedrun **Performance** and **Readiness**
-//! scores (spec-scores §4, decision D33). Memory keeps its own
-//! [`crate::speedrun::memory_score`] module; these two share this envelope so
-//! all three scores render through the same contract, never blended into one
-//! number (D7).
+//! scores. Memory keeps its own [`crate::speedrun::memory_score`] module; these
+//! two share this envelope so all three scores render through the same
+//! contract, never blended into one number.
 //!
 //! The real computations live in [`crate::speedrun::performance_score`] and
 //! [`crate::speedrun::readiness_score`]; this module only defines the shared
 //! shape and the abstaining constructor, so a score with no evidence produces a
 //! silent (numberless) envelope instead of a guess in a nice font.
 
-use std::collections::HashMap;
-
 use crate::speedrun::memory_score::Confidence;
-use crate::speedrun::taxonomy::seed_taxonomy;
 use crate::timestamp::TimestampSecs;
 
 /// z for a 95% normal interval (shared with the Memory score's interval).
@@ -39,10 +35,10 @@ impl ScoreFormat {
     }
 }
 
-/// The shared evidence envelope (spec §4) for Performance and Readiness. Same
-/// fields as [`crate::speedrun::memory_score::MemoryScore`] plus a `format`, so
-/// the three scores render identically. When `abstained`, `estimate`/`range_*`
-/// are 0 and `abstain_reason` names what is missing.
+/// The shared evidence envelope for Performance and Readiness. Same fields as
+/// [`crate::speedrun::memory_score::MemoryScore`] plus a `format`, so the three
+/// scores render identically. When `abstained`, `estimate`/`range_*` are 0 and
+/// `abstain_reason` names what is missing.
 #[derive(Debug, Clone)]
 pub struct ScoreEnvelope {
     pub estimate: f32,
@@ -117,15 +113,6 @@ pub(crate) fn confidence_from(
     } else {
         Confidence::Low
     }
-}
-
-/// In-scope leaf topic id → human label, for a score's `reasons`.
-pub(crate) fn topic_labels() -> HashMap<String, String> {
-    seed_taxonomy()
-        .into_iter()
-        .filter(|node| node.in_scope)
-        .map(|node| (node.id, node.label))
-        .collect()
 }
 
 /// Round a `[0, 1]` fraction to a whole-percent integer, for reason strings.

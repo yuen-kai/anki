@@ -67,13 +67,17 @@ export interface SaveResult {
     name: string;
 }
 
-const enc = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
+// The Speedrun JSON RPCs exchange a `{ json }` blob; these three helpers wrap
+// the encode/decode and the "handle errors inline" option, shared by every
+// Speedrun screen (hierarchy editor, study overview, review) so the plumbing
+// lives once.
+export const enc = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
 
-const dec = <T>(reply: { json: Uint8Array }): T => JSON.parse(new TextDecoder().decode(reply.json)) as T;
+export const dec = <T>(reply: { json: Uint8Array }): T => JSON.parse(new TextDecoder().decode(reply.json)) as T;
 
-// The RPCs alert on error by default; every call site here handles failures
-// itself (inline status, retry), so we opt out of the global dialog.
-const quiet = { alertOnError: false } as const;
+// The RPCs alert on error by default; every call site handles failures itself
+// (inline status, retry), so we opt out of the global dialog.
+export const quiet = { alertOnError: false } as const;
 
 export async function listDecks(): Promise<DeckSummary[]> {
     return dec<DeckSummary[]>(await speedrunListDecks({ json: enc({}) }, quiet));

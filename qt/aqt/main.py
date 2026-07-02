@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import enum
 import gc
+import logging
 import os
 import re
 import signal
@@ -678,26 +679,16 @@ class AnkiQt(QMainWindow):
         return True
 
     def _maybe_seed_speedrun(self) -> None:
-        # Speedrun: preload the MCAT seed deck so the Learn/Practice flow and the
-        # dashboard have content out of the box. add_seed_notes is idempotent, so
-        # this is a no-op after the first load. Fail open: never block startup.
-        try:
-            from anki.speedrun.notetypes import add_seed_notes
-
-            add_seed_notes(self.col)
-        except Exception as exc:
-            print(f"speedrun: seed skipped ({exc})")
-
-        # Also preload a complete authored deck so the bespoke study/review
-        # screens have real content to study out of the box. Idempotent (skips
-        # if the deck already exists) and fail-open, in its own block so a
-        # failure here never affects the note seed above.
+        # Speedrun: preload the authored demo deck so the study/review screens
+        # have real content out of the box. The one canonical seed path; it is
+        # idempotent (a no-op once the deck exists) and fail-open, so a seed
+        # error only logs and never blocks a collection from opening.
         try:
             from anki.speedrun.seed_deck import seed as seed_speedrun_deck
 
             seed_speedrun_deck(self.col)
-        except Exception as exc:
-            print(f"speedrun: demo deck seed skipped ({exc})")
+        except Exception:
+            logging.getLogger(__name__).exception("speedrun: demo deck seed skipped")
 
     def _loadCollection(self) -> None:
         cpath = self.pm.collectionPath()
@@ -922,6 +913,17 @@ class AnkiQt(QMainWindow):
                 setattr(op, field.name, True)
         gui_hooks.operation_did_execute(op, None)
 
+    # The Speedrun deck/overview screens render into speedrunWeb, and the study
+    # screen (speedrunStudy state) is a self-managing SvelteKit session that
+    # reacts to its own RPC results, so it needs no Python-driven refresh.
+    _SPEEDRUN_WEB_STATES = ("deckBrowser", "overview", "speedrunStudy")
+
+    def _active_webview(self) -> AnkiWebView:
+        "The webview currently on screen for the active state."
+        if self.state in self._SPEEDRUN_WEB_STATES:
+            return self.speedrunWeb
+        return self.web
+
     def on_operation_did_execute(
         self, changes: OpChanges, handler: object | None
     ) -> None:
@@ -958,10 +960,10 @@ class AnkiQt(QMainWindow):
                 self.deckBrowser.refresh_if_needed()
 
     def fade_out_webview(self) -> None:
-        self.web.eval("document.body.style.opacity = 0.3")
+        self._active_webview().eval("document.body.style.opacity = 0.3")
 
     def fade_in_webview(self) -> None:
-        self.web.eval("document.body.style.opacity = 1")
+        self._active_webview().eval("document.body.style.opacity = 1")
 
     def reset(self, unused_arg: bool = False) -> None:
         """Legacy method of telling UI to refresh after changes made to DB.
@@ -1563,7 +1565,7 @@ title="{}" {}>{}</button>""".format(
         m.actionFullScreen.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
 
     def updateTitleBar(self) -> None:
-        self.setWindowTitle("Anki")
+        self.setWindowTitle("Speedrun")
 
     # View
     ##########################################################################

@@ -22,20 +22,24 @@ What "complete" means here (matches what the review screen needs):
   with one marked correct.
 
 The content is pure data (no ``anki`` import at build time); :func:`seed` does
-the collection work. Ids are stable strings so a reseed is a no-op and the
-materialized cards keep their identity.
+the collection work through the shared Rust authoring engine (the same
+``SpeedrunSaveHierarchy`` / ``SpeedrunNextCard`` RPCs the UI drives), so there is
+no second Python authoring/materialize path. Ids are stable strings so a reseed
+is a no-op and the materialized cards keep their identity.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import anki.collection
-from anki.speedrun import authoring, materialize
 
-# A distinct name so the demo never collides with the note-based "Speedrun"
-# seed (anki.speedrun.notetypes.add_seed_notes).
 DEMO_DECK_NAME = "MCAT Biochemistry (demo)"
+
+# The deckId the create flow sends before its Anki deck exists (mirrors the Rust
+# authoring store's sentinel).
+NEW_DECK_ID = "new"
 
 
 def _problem(pid: str, prompt: str, choices: list[str], correct: int) -> dict[str, Any]:
@@ -457,12 +461,12 @@ _ENZYME_REGULATION = _leaf(
 )
 
 
-def build_hierarchy(deck_id: str = authoring.NEW_DECK_ID) -> dict[str, Any]:
+def build_hierarchy(deck_id: str = NEW_DECK_ID) -> dict[str, Any]:
     """The complete demo hierarchy as an authoring-store blob.
 
     ``deck_id`` defaults to the sentinel the create flow uses, so
-    :func:`anki.speedrun.authoring.save_hierarchy` creates the backing deck from
-    the root title on first save.
+    ``SpeedrunSaveHierarchy`` creates the backing deck from the root title on
+    first save.
     """
     root = _branch(
         "sr-demo-root",
@@ -493,16 +497,24 @@ def seed(col: anki.collection.Collection) -> bool:
 
     Returns True when it seeded, False when the deck already existed (so a
     repeat call, e.g. on every collection load, is a no-op that never clobbers
-    the user's edits or study state). Materializes the concepts into FSRS cards
+    the user's edits or study state). Goes through the shared Rust engine:
+    ``SpeedrunSaveHierarchy`` creates the backing deck + stores the blob, then
+    ``SpeedrunNextCard`` reconciles it (materializing one FSRS card per concept)
     so the deck shows a To Do count and is studyable right away.
     """
     if col.decks.id_for_name(DEMO_DECK_NAME) is not None:
         return False
 
-    saved = authoring.save_hierarchy(col, build_hierarchy())
+    saved = json.loads(
+        col._backend.speedrun_save_hierarchy(
+            json=json.dumps(build_hierarchy()).encode()
+        )
+    )
     deck_id = saved.get("deckId") or ""
     if not deck_id:
         return False
 
-    materialize.reconcile(col, deck_id)
+    # Reconcile (materialize the concept cards) via the study engine's next-card
+    # entry point, which reconciles before returning.
+    col._backend.speedrun_next_card(json=json.dumps({"deckId": deck_id}).encode())
     return True

@@ -12,13 +12,14 @@ suites.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from typing import Any
 
 # anki.collection is imported before the other anki submodules so the package
 # initializes in the right order (see the sibling test_speedrun_* suites).
 import anki.collection  # noqa: F401
-from anki.speedrun import authoring, materialize, seed_deck
+from anki.speedrun import seed_deck
 from tests.shared import getEmptyCol
 
 
@@ -38,7 +39,7 @@ def _all_concepts(hierarchy: dict[str, Any]) -> list[dict[str, Any]]:
 def test_hierarchy_shape_is_studyable():
     hierarchy = seed_deck.build_hierarchy()
 
-    assert hierarchy["deckId"] == authoring.NEW_DECK_ID
+    assert hierarchy["deckId"] == seed_deck.NEW_DECK_ID
     root = hierarchy["root"]
     assert root["title"] == seed_deck.DEMO_DECK_NAME
     assert not root["concepts"], "root is structural, not a topic leaf"
@@ -107,13 +108,15 @@ def test_seed_creates_deck_and_materializes_once():
     did = col.decks.id_for_name(seed_deck.DEMO_DECK_NAME)
     assert did is not None
 
-    # The authored blob is stored under the real deck id, and every concept was
-    # materialized into exactly one card.
-    stored = authoring.get_hierarchy(col, str(did))
+    # The authored blob is stored under the real deck id (read back through the
+    # shared Rust engine), and every concept was materialized into one card.
+    stored = json.loads(
+        col._backend.speedrun_study_hierarchy(
+            json=json.dumps({"deckId": str(did)}).encode()
+        )
+    )
     assert len(_all_concepts(stored)) == concept_count
-    reconciled = materialize.reconcile(col, str(did))
-    assert reconciled["total"] == concept_count
-    assert reconciled["created"] == 0, "seed already materialized every concept"
+    assert len(col.decks.cids(did)) == concept_count, "one card per concept"
 
 
 def test_seed_is_idempotent():

@@ -11,21 +11,24 @@ import {
     speedrunStudyState,
 } from "@generated/backend";
 
-import { MASTERY_STAGES } from "../speedrun-dashboard/lib";
+import { MASTERY_STAGES, stageIndex } from "../speedrun-dashboard/lib";
 import {
     type Concept,
+    dec,
+    enc,
     type Hierarchy,
     isMobileShell,
     type Node,
     openDeck,
     type Problem,
+    quiet,
 } from "../speedrun-hierarchy/lib";
 
 // Re-export the authored shapes and the two exits (deck overview / decks home)
 // so the screen imports everything study-related from one place; the study RPCs
-// never send card/concept content, we look it up here. `getHierarchy` reads the
-// authored blob through the shared Rust engine (below), so the study screen runs
-// unchanged on both desktop and AnkiDroid.
+// never send card/concept content, we look it up here. `getStudyHierarchy` reads
+// the authored blob through the shared Rust engine (below), so the study screen
+// runs unchanged on both desktop and AnkiDroid.
 export { openDeck };
 export type { Concept, Hierarchy, Node, Problem };
 
@@ -102,18 +105,11 @@ export const RATINGS: RatingChoice[] = [
     { rating: 4, label: "Easy" },
 ];
 
-const enc = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
-
-const dec = <T>(reply: { json: Uint8Array }): T => JSON.parse(new TextDecoder().decode(reply.json)) as T;
-
-// The screen shows its own inline status/finished states, so it opts out of the
-// backend's global error dialog (same choice as the authoring RPCs).
-const quiet = { alertOnError: false } as const;
-
 // The authored hierarchy (concept content + problems) the screen renders from,
 // read through the shared Rust engine so it resolves on desktop and AnkiDroid
-// alike. Same shape as the authoring store's read.
-export async function getHierarchy(deckId: string): Promise<Hierarchy> {
+// alike. Same shape as the authoring store's read, but via the study RPC
+// (distinct from the authoring editor's `getHierarchy`).
+export async function getStudyHierarchy(deckId: string): Promise<Hierarchy> {
     return dec<Hierarchy>(await speedrunStudyHierarchy({ json: enc({ deckId }) }, quiet));
 }
 
@@ -202,11 +198,10 @@ export function stageLabel(state: string): string {
 // The number of rungs on the mastery ladder (learning..mastering).
 export const STAGE_TOTAL = MASTERY_STAGES.length;
 
-// The 0-based rung of a state, for drawing the mastery meter. Unknown = 0.
-export function stageRank(state: string): number {
-    const i = MASTERY_STAGES.findIndex((stage) => stage.state === state);
-    return i < 0 ? 0 : i;
-}
+// The 0-based rung of a state, for drawing the mastery meter. Same mapping as
+// the dashboard's stageIndex (unknown = 0), re-exported here so the review
+// components import it from one place.
+export const stageRank = stageIndex;
 
 export function stageBlurb(state: string): string {
     return STAGE_BLURB.get(state) ?? MASTERY_STAGES[0].blurb;

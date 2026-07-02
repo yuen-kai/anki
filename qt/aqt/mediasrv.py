@@ -427,7 +427,6 @@ def is_sveltekit_page(path: str) -> bool:
         "import-csv",
         "import-page",
         "image-occlusion",
-        "speedrun-dashboard",
         "speedrun-decks",
         "speedrun-hierarchy",
         "speedrun-study",
@@ -864,7 +863,6 @@ exposed_backend_list = [
     "get_memory_score",
     "get_performance_score",
     "get_readiness_score",
-    "get_speedrun_progress",
     "get_speedrun_score_breakdown",
     # SchedulerService: bespoke study screen (shared with AnkiDroid)
     "speedrun_study_state",

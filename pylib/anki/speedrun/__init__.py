@@ -1,15 +1,13 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-"""Speedrun's application-teaching content layer.
+"""Speedrun's Python layer.
 
-This package holds the no-AI Learn content from spec-study-model: the
-contrasting-cases concept cards and the principle-first scaffold, shipped as
-Anki note types so they render on desktop and AnkiDroid alike (decision D19).
+The study engine (authoring store, concept materialization, scores, mastery
+progression) lives in the shared Rust layer (``rslib/src/speedrun``) and is
+driven through the backend RPCs, so desktop and AnkiDroid share one engine.
 
-The ``feedback`` and ``seed_content`` modules are deliberately pure Python with
-no ``anki`` import, so the content and the static feedback map can be unit
-tested without building the Rust backend. ``notetypes`` is the only module that
-touches a collection; keep heavyweight imports out of this ``__init__`` so that
-``import anki.speedrun.feedback`` stays backend-free.
+The only Python module here is :mod:`anki.speedrun.seed_deck`, which preloads a
+complete authored demo deck through those same RPCs so the study screens have
+real content out of the box.
 """

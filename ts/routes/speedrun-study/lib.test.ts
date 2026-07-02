@@ -1,10 +1,11 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { SpeedrunProgress, SpeedrunScoreBreakdown } from "@generated/anki/scheduler_pb";
+import { SpeedrunScoreBreakdown } from "@generated/anki/scheduler_pb";
 import { expect, test } from "vitest";
 
-import type { Hierarchy } from "../speedrun-hierarchy/lib";
+import type { Hierarchy, Node } from "../speedrun-hierarchy/lib";
+import type { StudyProgress } from "../speedrun-review/lib";
 import {
     buildConceptTree,
     buildSubjectBreakdown,
@@ -14,8 +15,12 @@ import {
     todayProgress,
 } from "./lib";
 
-function leaf(id: string, title: string): Hierarchy["root"] {
-    return { id, title, children: [], concepts: [] };
+function concept(id: string): Node["concepts"][number] {
+    return { id, title: id, content: "", problems: [] };
+}
+
+function leaf(id: string, title: string, conceptIds: string[] = []): Node {
+    return { id, title, children: [], concepts: conceptIds.map(concept) };
 }
 
 function child(node: ConceptTreeNode | undefined, title: string): ConceptTreeNode {
@@ -26,7 +31,7 @@ function child(node: ConceptTreeNode | undefined, title: string): ConceptTreeNod
     return found;
 }
 
-test("buildConceptTree overlays taxonomy stages on the authored structure", () => {
+test("buildConceptTree overlays authored per-concept stages on the hierarchy", () => {
     const hierarchy: Hierarchy = {
         deckId: "1",
         root: {
@@ -38,21 +43,22 @@ test("buildConceptTree overlays taxonomy stages on the authored structure", () =
                     id: "enz",
                     title: "Enzymes",
                     concepts: [],
-                    children: [leaf("l1", "Kinetics"), leaf("l2", "Inhibition"), leaf("l3", "Regulation")],
+                    children: [
+                        leaf("l1", "Kinetics", ["k1"]),
+                        leaf("l2", "Inhibition", ["i1"]),
+                        leaf("l3", "Regulation", ["r1"]),
+                    ],
                 },
-                { id: "pro", title: "Proteins", concepts: [], children: [leaf("l4", "Folding")] },
+                { id: "pro", title: "Proteins", concepts: [], children: [leaf("l4", "Folding", ["f1"])] },
             ],
         },
     };
-    const progress = new SpeedrunProgress({
-        topics: [
-            { topicId: "a", state: "mastering", path: ["Biomolecules", "Enzymes", "Kinetics"] },
-            // Lowercased path leaf proves the match is case-insensitive.
-            { topicId: "b", state: "learning", path: ["Biomolecules", "Enzymes", "inhibition"] },
-            { topicId: "c", state: "hierarchy", path: ["Biomolecules", "Enzymes", "Regulation"] },
-            // Folding is absent, so it stays "not started".
-        ],
-    });
+    const progress: StudyProgress = {
+        k1: { state: "mastering", seen: true },
+        i1: { state: "learning", seen: true },
+        r1: { state: "hierarchy", seen: true },
+        // f1 is absent, so Folding stays "not started".
+    };
 
     const tree = buildConceptTree(hierarchy, progress)!;
     expect(tree.title).toBe("Biochem");
@@ -81,35 +87,25 @@ test("buildConceptTree overlays taxonomy stages on the authored structure", () =
     expect(tree.fraction).toBeCloseTo((1 + 0.25 + 0.75 + 0) / 4);
 });
 
-test("buildConceptTree falls back to the taxonomy paths for an unauthored deck", () => {
-    // The seed deck: a hierarchy with an empty root (no authored children).
+test("a leaf's stage is the rounded mean over its concepts", () => {
     const hierarchy: Hierarchy = {
         deckId: "1",
-        root: { id: "root", title: "Biomolecules", children: [], concepts: [] },
+        root: { id: "root", title: "Root", concepts: [], children: [leaf("l", "Mix", ["a", "b"])] },
     };
-    const progress = new SpeedrunProgress({
-        topics: [
-            { topicId: "a", state: "mastering", path: ["Biomolecules", "Enzymes", "Kinetics"] },
-            { topicId: "b", state: "learning", path: ["Biomolecules", "Enzymes", "Inhibition"] },
-            { topicId: "c", state: "practicing", path: ["Biomolecules", "Amino Acids", "Structure"] },
-        ],
-    });
-
-    const tree = buildConceptTree(hierarchy, progress)!;
-    // A single foundation collapses to the root (no synthetic stutter).
-    expect(tree.title).toBe("Biomolecules");
-    expect(tree.leafCount).toBe(3);
-    // Categories keep taxonomy display order.
-    expect(tree.children.map((c) => c.title)).toEqual(["Enzymes", "Amino Acids"]);
-    const enzymes = child(tree, "Enzymes");
-    expect(enzymes.children.map((c) => c.title)).toEqual(["Kinetics", "Inhibition"]);
-    expect(child(enzymes, "Kinetics").stage).toBe(3);
-    expect(child(enzymes, "Kinetics").isLeaf).toBe(true);
+    // One mastered, one just started: the leaf reads as the mean (Applying).
+    const progress: StudyProgress = {
+        a: { state: "mastering", seen: true },
+        b: { state: "learning", seen: true },
+    };
+    const mix = child(buildConceptTree(hierarchy, progress)!, "Mix");
+    expect(mix.stage).toBe(2);
+    expect(mix.stageLabel).toBe("Applying");
 });
 
-test("buildConceptTree is null when there is nothing to draw", () => {
+test("buildConceptTree is null when there is no authored structure", () => {
     expect(buildConceptTree(null, null)).toBeNull();
-    expect(buildConceptTree(null, new SpeedrunProgress({ topics: [] }))).toBeNull();
+    const empty: Hierarchy = { deckId: "1", root: { id: "root", title: "x", children: [], concepts: [] } };
+    expect(buildConceptTree(empty, null)).toBeNull();
 });
 
 test("buildSubjectBreakdown rolls per-leaf stats up by content-category", () => {

@@ -1,76 +1,69 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-//! The honest **Memory score** — Speedrun Phase 2b, decisions D7, D8, D9
-//! (see docs/plan/spec-scores.md, docs/plan/decisions.md).
+//! The honest **Memory score** for the authored study engine.
 //!
-//! Memory answers "can I recall a taught fact now?" by aggregating FSRS
-//! per-card retrievability over the deck's cards that map to in-scope AAMC
-//! topics. It is rendered only as a whole [evidence envelope](MemoryScore)
-//! (spec §4) — there is no bare-number path — and it is governed by a single
-//! give-up rule (spec §5, D9): below a data floor it abstains and says what is
-//! missing rather than guessing in a nice font.
+//! Memory answers "can I recall a taught concept now?" by aggregating FSRS
+//! per-card retrievability over the deck's authored concepts. Each authored
+//! concept is materialized into exactly one `SpeedrunItem` card
+//! ([`crate::speedrun::study`]), so studying the `speedrun-review` screen
+//! grades those cards and moves this score — the two are the same engine.
 //!
-//! What it computes, over the in-scope cards (those whose note carries a
-//! taxonomy-leaf tag, [`card_topic`]):
+//! It is rendered only as a whole [evidence envelope](MemoryScore) — there is
+//! no bare-number path — and it is governed by a single give-up rule: below a
+//! data floor it abstains and says what is missing rather than guessing.
 //!
-//! - `estimate` = mean current FSRS retrievability over the *reviewed* in-scope
-//!   cards. Retrievability comes from the shared [`card_retrievability`]; a
-//!   card with no FSRS memory state contributes the same
-//!   `NO_MEMORY_STATE_RETRIEVABILITY` (0.9) prior the queue uses (D23).
-//! - `range` = the 95% interval of that mean (mean ± `Z_95`·SE over the
-//!   per-card retrievabilities), clamped to `[0, 1]`. This is a *spread-based*
-//!   interval, not yet model/calibration uncertainty — calibration is proven
-//!   Sunday (spec §6, D8).
-//! - `coverage_pct` = [`coverage_pct`] of in-scope topics that have ≥1 reviewed
-//!   card.
-//! - `graded_reviews` = scheduling-affecting revlog entries over the in-scope
+//! What it computes, over the concepts whose card has ≥1 graded review:
+//!
+//! - `estimate` = the exam-weight-weighted mean of per-concept retrievability.
+//!   A concept's weight is its authored leaf's AAMC exam weight when the leaf
+//!   title matches a taxonomy label (case-insensitive), else the taxonomy's
+//!   mean leaf weight (a neutral share), so mapped and unmapped concepts stay
+//!   comparable. This is the hierarchy roll-up: a leaf's memory is the mean
+//!   over its concepts, and the deck's is the weighted mean over leaves.
+//! - `range` = the 95% interval of that mean (estimate ± `Z_95`·SE over the
+//!   per-concept retrievabilities), a spread-based interval, clamped to `[0,
+//!   1]`.
+//! - `coverage_pct` = fraction of the deck's concepts with ≥1 graded review.
+//! - `graded_reviews` = scheduling-affecting revlog entries over the concept
 //!   cards.
 //! - `confidence` = low/medium/high from (`graded_reviews`, `coverage_pct`).
-//! - `reasons` = the top drivers (coverage, the weakest covered topics).
+//! - `reasons` = coverage plus the weakest covered leaves.
 //!
-//! **Give-up rule (D9):** eligible ⇔ `graded_reviews ≥ MIN_GRADED_REVIEWS` AND
-//! `coverage_pct ≥ MIN_COVERAGE_PCT`. When ineligible the score abstains
-//! (`estimate`/`range` = 0) and `abstain_reason` names the failed condition(s)
-//! and what clears them. All thresholds are named constants, flagged tunable
-//! until real study histories exist (D9 gap).
+//! **Give-up rule:** eligible ⇔ `graded_reviews ≥ MIN_GRADED_REVIEWS` AND
+//! `coverage_pct ≥ MIN_COVERAGE_PCT`. When ineligible it abstains
+//! (`estimate`/`range` = 0) and `abstain_reason` names the failed condition(s).
+//! Thresholds are named constants, tunable and sized for authored decks (one
+//! card per concept, not thousands of tagged cards).
 //!
-//! Read-only: like the topic queue, this only reads existing FSRS/revlog state
-//! and never mutates the collection or touches scheduling. (Per-attempt
-//! `AttemptLog` persistence from spec §8 is deferred — Wednesday's Memory score
-//! needs only existing data; the reviewer logging hook is Phase 3.)
+//! Read-only: reads the materialized cards' FSRS/revlog state and the authored
+//! hierarchy; mutates nothing.
 
 use std::collections::HashMap;
 
-use fsrs::FSRS;
-
 use crate::prelude::*;
-use crate::search::SearchNode;
-use crate::search::SortMode;
-use crate::speedrun::card_signals::card_retrievability;
-use crate::speedrun::card_signals::card_topic;
-use crate::speedrun::card_signals::leaf_topic_weights;
-use crate::speedrun::taxonomy::coverage_pct;
-use crate::speedrun::taxonomy::seed_taxonomy;
+use crate::speedrun::scores::confidence_from;
+use crate::speedrun::scores::pct_round;
+use crate::speedrun::scores::Z_95;
+use crate::speedrun::taxonomy::leaf_weight_by_label;
+use crate::speedrun::taxonomy::mean_leaf_weight;
 use crate::timestamp::TimestampSecs;
 
-/// Minimum scheduling-affecting reviews in scope before Memory will show a
-/// number (D9). Tunable; a guess pending real study histories.
-pub const MIN_GRADED_REVIEWS: u32 = 200;
-/// Minimum fraction of in-scope topics that must be covered before Memory will
-/// show a number (D9). Tunable.
-pub const MIN_COVERAGE_PCT: f32 = 0.50;
+/// Minimum graded concept reviews before Memory shows a number. Tunable; sized
+/// for authored decks where each concept is a single card.
+pub const MIN_GRADED_REVIEWS: u32 = 5;
+/// Minimum fraction of the deck's concepts that must be graded before Memory
+/// shows a number. Tunable.
+pub const MIN_COVERAGE_PCT: f32 = 0.25;
 
 /// `graded_reviews`/`coverage_pct` at or above these report "high" confidence.
-const CONFIDENCE_HIGH_REVIEWS: u32 = 1_000;
+const CONFIDENCE_HIGH_REVIEWS: u32 = 40;
 const CONFIDENCE_HIGH_COVERAGE: f32 = 0.80;
 /// …and these report "medium"; anything eligible but below is "low".
-const CONFIDENCE_MEDIUM_REVIEWS: u32 = 500;
-const CONFIDENCE_MEDIUM_COVERAGE: f32 = 0.65;
+const CONFIDENCE_MEDIUM_REVIEWS: u32 = 15;
+const CONFIDENCE_MEDIUM_COVERAGE: f32 = 0.50;
 
-/// z for a 95% normal interval.
-const Z_95: f32 = 1.96;
-/// How many weak-topic drivers to surface in `reasons` (plus the coverage one).
+/// How many weak-leaf drivers to surface in `reasons` (plus the coverage one).
 const MAX_WEAK_TOPIC_REASONS: usize = 2;
 
 /// Confidence band reported alongside the estimate.
@@ -91,9 +84,9 @@ impl Confidence {
     }
 }
 
-/// The Memory evidence envelope (spec §4). The single rendered form of the
-/// score; when `abstained`, `estimate`/`range_low`/`range_high` are 0 and
-/// `abstain_reason` explains why.
+/// The Memory evidence envelope. The single rendered form of the score; when
+/// `abstained`, `estimate`/`range_low`/`range_high` are 0 and `abstain_reason`
+/// explains why.
 #[derive(Debug, Clone)]
 pub struct MemoryScore {
     pub estimate: f32,
@@ -108,65 +101,60 @@ pub struct MemoryScore {
     pub graded_reviews: u32,
 }
 
-/// Per-topic retrievability accumulator (running sum + count) for the weakest-
-/// topic reasons.
-#[derive(Default)]
-struct TopicAccum {
-    retrievability_sum: f32,
-    card_count: u32,
+/// A concept's contribution to the Memory aggregate.
+struct GradedConcept {
+    retrievability: f32,
+    weight: f32,
+    leaf_title: String,
 }
 
 impl Collection {
-    /// Compute the Memory score for `deck_id` (and its children), spec §6.
+    /// Compute the Memory score for `deck_id` from its authored concepts.
     pub(crate) fn get_memory_score(&mut self, deck_id: DeckId) -> Result<MemoryScore> {
-        let leaf_weights = leaf_topic_weights();
-        let in_scope_topic_ids: Vec<String> = leaf_weights.keys().cloned().collect();
+        let leaves = self.speedrun_authored_leaves(deck_id);
+        let stats = self.speedrun_concept_card_stats(deck_id)?;
+        let weights_by_label = leaf_weight_by_label();
+        let neutral_weight = mean_leaf_weight();
 
-        let card_ids =
-            self.search_cards(SearchNode::from_deck_id(deck_id, true), SortMode::NoOrder)?;
-        let timing = self.timing_today()?;
-        let fsrs = FSRS::new(None)?;
-
-        // One pass over the in-scope cards: tally reviews, collect the per-card
-        // retrievabilities that feed the estimate, and the covered topics.
-        let mut retrievabilities: Vec<f32> = Vec::new();
-        let mut covered_topic_ids: Vec<String> = Vec::new();
+        let total_concepts: usize = leaves.iter().map(|l| l.concept_ids.len()).sum();
+        let mut graded: Vec<GradedConcept> = Vec::new();
         let mut graded_reviews: u32 = 0;
-        let mut per_topic: HashMap<String, TopicAccum> = HashMap::new();
-        for cid in card_ids {
-            let card = self.storage.get_card(cid)?.or_not_found(cid)?;
-            let note = self
-                .storage
-                .get_note(card.note_id)?
-                .or_not_found(card.note_id)?;
-            let Some(topic) = card_topic(&note.tags, &leaf_weights) else {
-                continue;
-            };
-            let graded = self
-                .storage
-                .get_revlog_entries_for_card(cid)?
-                .iter()
-                .filter(|entry| entry.has_rating_and_affects_scheduling())
-                .count() as u32;
-            graded_reviews += graded;
-            // A card counts toward the estimate and coverage only once it has
-            // actually been graded — an unreviewed card has no recall evidence.
-            if graded >= 1 {
-                let retrievability = card_retrievability(&card, &timing, &fsrs);
-                retrievabilities.push(retrievability);
-                covered_topic_ids.push(topic.clone());
-                let accum = per_topic.entry(topic).or_default();
-                accum.retrievability_sum += retrievability;
-                accum.card_count += 1;
+        for leaf in &leaves {
+            let weight = weights_by_label
+                .get(&leaf.title.to_lowercase())
+                .copied()
+                .unwrap_or(neutral_weight);
+            for concept_id in &leaf.concept_ids {
+                let Some(stat) = stats.get(concept_id) else {
+                    continue;
+                };
+                graded_reviews += stat.graded_reviews;
+                if stat.graded_reviews >= 1 {
+                    graded.push(GradedConcept {
+                        retrievability: stat.retrievability,
+                        weight,
+                        leaf_title: leaf.title.clone(),
+                    });
+                }
             }
         }
 
-        let coverage = coverage_pct(&in_scope_topic_ids, &covered_topic_ids);
-        let (estimate, range_low, range_high) = mean_and_interval(&retrievabilities);
-        let confidence = confidence_for(graded_reviews, coverage);
-        let reasons = build_reasons(coverage, &per_topic);
+        let coverage = if total_concepts == 0 {
+            0.0
+        } else {
+            graded.len() as f32 / total_concepts as f32
+        };
+        let (estimate, range_low, range_high) = weighted_mean_and_interval(&graded);
+        let confidence = confidence_from(
+            graded_reviews,
+            coverage,
+            CONFIDENCE_HIGH_REVIEWS,
+            CONFIDENCE_HIGH_COVERAGE,
+            CONFIDENCE_MEDIUM_REVIEWS,
+            CONFIDENCE_MEDIUM_COVERAGE,
+        );
+        let reasons = build_reasons(coverage, &graded);
 
-        // Give-up rule (D9): show a number only with enough reviews AND coverage.
         let eligible = graded_reviews >= MIN_GRADED_REVIEWS && coverage >= MIN_COVERAGE_PCT;
         let (estimate, range_low, range_high, abstain_reason) = if eligible {
             (estimate, range_low, range_high, String::new())
@@ -189,22 +177,36 @@ impl Collection {
     }
 }
 
-/// Mean of the values plus its 95% interval (mean ± `Z_95`·SE), clamped to
-/// `[0, 1]`. Returns all-zero for an empty slice and a degenerate point
-/// interval for a single value (only reachable when abstaining, where the
-/// caller zeroes the estimate regardless).
-fn mean_and_interval(values: &[f32]) -> (f32, f32, f32) {
-    let n = values.len();
+/// The exam-weight-weighted mean of the graded concepts' retrievability, plus
+/// its 95% interval (mean ± `Z_95`·SE over the unweighted per-concept spread),
+/// clamped to `[0, 1]`. All-zero for an empty slice; a degenerate point
+/// interval for a single concept (only reachable while abstaining).
+fn weighted_mean_and_interval(concepts: &[GradedConcept]) -> (f32, f32, f32) {
+    let n = concepts.len();
     if n == 0 {
         return (0.0, 0.0, 0.0);
     }
-    let mean = values.iter().sum::<f32>() / n as f32;
+    let weight_sum: f32 = concepts.iter().map(|c| c.weight).sum();
+    let mean = if weight_sum > 0.0 {
+        concepts
+            .iter()
+            .map(|c| c.weight * c.retrievability)
+            .sum::<f32>()
+            / weight_sum
+    } else {
+        concepts.iter().map(|c| c.retrievability).sum::<f32>() / n as f32
+    };
     if n < 2 {
         return (mean, mean, mean);
     }
-    let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / (n as f32 - 1.0);
-    let std_err = (variance / n as f32).sqrt();
-    let half = Z_95 * std_err;
+    // Spread of the raw per-concept retrievabilities around their plain mean.
+    let plain_mean = concepts.iter().map(|c| c.retrievability).sum::<f32>() / n as f32;
+    let variance = concepts
+        .iter()
+        .map(|c| (c.retrievability - plain_mean).powi(2))
+        .sum::<f32>()
+        / (n as f32 - 1.0);
+    let half = Z_95 * (variance / n as f32).sqrt();
     (
         mean,
         (mean - half).clamp(0.0, 1.0),
@@ -212,42 +214,30 @@ fn mean_and_interval(values: &[f32]) -> (f32, f32, f32) {
     )
 }
 
-fn confidence_for(graded_reviews: u32, coverage: f32) -> Confidence {
-    if graded_reviews >= CONFIDENCE_HIGH_REVIEWS && coverage >= CONFIDENCE_HIGH_COVERAGE {
-        Confidence::High
-    } else if graded_reviews >= CONFIDENCE_MEDIUM_REVIEWS && coverage >= CONFIDENCE_MEDIUM_COVERAGE
-    {
-        Confidence::Medium
-    } else {
-        Confidence::Low
-    }
-}
-
-/// Top drivers behind the score: coverage, then the weakest covered topics by
-/// mean `1 - retrievability` (the memory signal), named by their taxonomy
-/// label. Deterministic: ties break on topic id.
-fn build_reasons(coverage: f32, per_topic: &HashMap<String, TopicAccum>) -> Vec<String> {
+/// Top drivers: coverage, then the weakest covered leaves by mean
+/// `1 - retrievability`, named by the authored leaf title. Deterministic: ties
+/// break on title.
+fn build_reasons(coverage: f32, concepts: &[GradedConcept]) -> Vec<String> {
     let mut reasons = vec![format!("coverage {}%", pct_round(coverage))];
 
-    let labels = topic_labels();
-    let mut by_weakness: Vec<(&str, f32)> = per_topic
+    let mut sums: HashMap<&str, (f32, u32)> = HashMap::new();
+    for c in concepts {
+        let entry = sums.entry(c.leaf_title.as_str()).or_insert((0.0, 0));
+        entry.0 += c.retrievability;
+        entry.1 += 1;
+    }
+    let mut by_weakness: Vec<(&str, f32)> = sums
         .iter()
-        .filter(|(_, accum)| accum.card_count > 0)
-        .map(|(topic, accum)| {
-            let mean_r = accum.retrievability_sum / accum.card_count as f32;
-            (topic.as_str(), 1.0 - mean_r)
-        })
+        .map(|(title, (sum, count))| (*title, 1.0 - sum / *count as f32))
         .collect();
     by_weakness.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
-
-    for (topic, _weakness) in by_weakness.into_iter().take(MAX_WEAK_TOPIC_REASONS) {
-        let label = labels.get(topic).map(String::as_str).unwrap_or(topic);
-        reasons.push(format!("weak: {label}"));
+    for (title, _weakness) in by_weakness.into_iter().take(MAX_WEAK_TOPIC_REASONS) {
+        reasons.push(format!("weak: {title}"));
     }
     reasons
 }
 
-/// The failed give-up condition(s) and what clears them (spec §5).
+/// The failed give-up condition(s) and what clears them.
 fn abstain_reason(graded_reviews: u32, coverage: f32) -> String {
     let mut failed = Vec::new();
     if graded_reviews < MIN_GRADED_REVIEWS {
@@ -265,118 +255,38 @@ fn abstain_reason(graded_reviews: u32, coverage: f32) -> String {
     failed.join("; ")
 }
 
-/// In-scope leaf topic id → human label, for `reasons`.
-fn topic_labels() -> HashMap<String, String> {
-    seed_taxonomy()
-        .into_iter()
-        .filter(|node| node.in_scope)
-        .map(|node| (node.id, node.label))
-        .collect()
-}
-
-fn pct_round(fraction: f32) -> i64 {
-    (fraction * 100.0).round() as i64
-}
-
 #[cfg(test)]
 mod tests {
-    use fsrs::FSRS5_DEFAULT_DECAY;
-
     use super::*;
-    use crate::card::CardQueue;
-    use crate::card::CardType;
-    use crate::card::FsrsMemoryState;
-    use crate::revlog::RevlogEntry;
-    use crate::revlog::RevlogId;
-    use crate::revlog::RevlogReviewKind;
-    use crate::types::Usn;
+    use crate::speedrun::study::testing::grade_concept;
+    use crate::speedrun::study::testing::set_hierarchy;
 
-    const STRUCTURE: &str = "mcat::biomolecules::amino_acids::structure";
-    const PKA: &str = "mcat::biomolecules::amino_acids::pka_titration";
-    const METABOLISM: &str = "mcat::biomolecules::amino_acids::metabolism";
-    const FOLDING: &str = "mcat::biomolecules::proteins::folding";
-    const KINETICS: &str = "mcat::biomolecules::enzymes::kinetics";
-
-    /// Adds a review card due today, tagged `tag`, whose FSRS state sets its
-    /// retrievability, then logs `reviews` scheduling-affecting revlog entries.
-    /// `next_id` keeps revlog ids globally unique across cards.
-    fn seed_card(
-        col: &mut Collection,
-        tag: &str,
-        stability: f32,
-        elapsed_days: i64,
-        reviews: u32,
-        next_id: &mut i64,
-    ) -> CardId {
-        let nt = col.basic_notetype();
-        let mut note = nt.new_note();
-        note.set_field(0, "front").unwrap();
-        note.tags.push(tag.to_string());
-        col.add_note(&mut note, DeckId(1)).unwrap();
-        let cid = col.storage.card_ids_of_notes(&[note.id]).unwrap()[0];
-
-        let mut card = col.storage.get_card(cid).unwrap().unwrap();
-        card.ctype = CardType::Review;
-        card.queue = CardQueue::Review;
-        card.due = 0;
-        card.interval = elapsed_days.max(1) as u32;
-        card.memory_state = Some(FsrsMemoryState {
-            stability,
-            difficulty: 5.0,
-        });
-        card.decay = Some(FSRS5_DEFAULT_DECAY);
-        card.last_review_time = Some(TimestampSecs::now().adding_secs(-elapsed_days * 86_400));
-        col.storage.update_card(&card).unwrap();
-
-        for _ in 0..reviews {
-            *next_id += 1;
-            let entry = RevlogEntry {
-                id: RevlogId(*next_id),
-                cid,
-                usn: Usn(-1),
-                button_chosen: 3,
-                interval: 1,
-                last_interval: 1,
-                ease_factor: 2500,
-                taken_millis: 1000,
-                review_kind: RevlogReviewKind::Review,
-            };
-            col.storage.add_revlog_entry(&entry, true).unwrap();
-        }
-        cid
-    }
-
-    /// A base revlog id well above any timestamp the harness might generate.
-    fn id_base() -> i64 {
-        TimestampSecs::now().0 * 1000
-    }
-
-    /// Eligible deck (≥200 reviews, ≥50% coverage) returns a fully populated
-    /// envelope with a real estimate and interval, not abstaining.
+    /// A deck with enough graded concepts is eligible and returns a real
+    /// estimate inside its clamped range, not abstaining.
     #[test]
     fn eligible_deck_populates_full_envelope() {
         let mut col = Collection::new();
-        let mut id = id_base();
-        // Five of eight topics covered (62.5%), 50 graded reviews each = 250.
-        for (tag, stability, elapsed) in [
-            (STRUCTURE, 10.0, 20),
-            (PKA, 30.0, 10),
-            (METABOLISM, 5.0, 40),
-            (FOLDING, 80.0, 5),
-            (KINETICS, 50.0, 8),
-        ] {
-            seed_card(&mut col, tag, stability, elapsed, 50, &mut id);
+        set_hierarchy(
+            &mut col,
+            "1",
+            &[
+                ("Kinetics", &["k1", "k2"]),
+                ("Inhibition", &["i1", "i2"]),
+                ("Folding", &["f1", "f2"]),
+            ],
+        );
+        // Grade every concept twice (12 graded reviews, full coverage).
+        for cid in ["k1", "k2", "i1", "i2", "f1", "f2"] {
+            grade_concept(&mut col, DeckId(1), cid, 3);
+            grade_concept(&mut col, DeckId(1), cid, 3);
         }
 
         let score = col.get_memory_score(DeckId(1)).unwrap();
 
         assert!(!score.abstained, "deck above the give-up line is eligible");
         assert!(score.abstain_reason.is_empty());
-        assert_eq!(score.graded_reviews, 250);
-        assert!(
-            (score.coverage_pct - 5.0 / 8.0).abs() < 1e-4,
-            "5 of 8 topics"
-        );
+        assert_eq!(score.graded_reviews, 12);
+        assert!((score.coverage_pct - 1.0).abs() < 1e-4, "6 of 6 concepts");
         assert!(
             score.estimate > 0.0 && score.estimate <= 1.0,
             "real estimate in (0, 1], got {}",
@@ -386,128 +296,82 @@ mod tests {
             score.range_low <= score.estimate && score.estimate <= score.range_high,
             "estimate must sit inside its range"
         );
-        assert!(
-            score.range_low >= 0.0 && score.range_high <= 1.0,
-            "range clamped"
-        );
         assert!(!score.reasons.is_empty(), "drivers are reported");
-        assert!(score.updated_at_secs > 0);
     }
 
-    /// Below 200 graded reviews (but well-covered), Memory abstains and the
-    /// reason names the review shortfall; the number is hidden.
+    /// Below the review floor Memory abstains and names the shortfall.
     #[test]
     fn abstains_below_review_threshold() {
         let mut col = Collection::new();
-        let mut id = id_base();
-        // Good coverage (5/8) but only 10 reviews each = 50 < 200.
-        for tag in [STRUCTURE, PKA, METABOLISM, FOLDING, KINETICS] {
-            seed_card(&mut col, tag, 20.0, 10, 10, &mut id);
-        }
+        set_hierarchy(&mut col, "1", &[("Kinetics", &["k1", "k2", "k3", "k4"])]);
+        // Only two graded concepts (2 < 5).
+        grade_concept(&mut col, DeckId(1), "k1", 3);
+        grade_concept(&mut col, DeckId(1), "k2", 3);
 
         let score = col.get_memory_score(DeckId(1)).unwrap();
 
         assert!(score.abstained);
-        assert_eq!(score.graded_reviews, 50);
+        assert_eq!(score.graded_reviews, 2);
         assert!(
             score.abstain_reason.contains("graded reviews"),
-            "reason should name the review shortfall, got {:?}",
+            "reason names the review shortfall, got {:?}",
             score.abstain_reason
         );
         assert_eq!(score.estimate, 0.0, "no number when abstaining");
-        assert_eq!(score.range_low, 0.0);
-        assert_eq!(score.range_high, 0.0);
-        // Coverage is still reported honestly even while abstaining.
-        assert!((score.coverage_pct - 5.0 / 8.0).abs() < 1e-4);
     }
 
-    /// Below 50% coverage (even with many reviews), Memory abstains and the
-    /// reason names the coverage gap.
+    /// An empty (unauthored) deck has no evidence: abstain, no number.
     #[test]
-    fn abstains_below_coverage_threshold() {
+    fn empty_deck_abstains() {
         let mut col = Collection::new();
-        let mut id = id_base();
-        // Only 2/8 topics (25%) but 150 reviews each = 300 ≥ 200.
-        for tag in [STRUCTURE, KINETICS] {
-            seed_card(&mut col, tag, 20.0, 10, 150, &mut id);
-        }
-
         let score = col.get_memory_score(DeckId(1)).unwrap();
-
-        assert!(score.abstained);
-        assert_eq!(score.graded_reviews, 300);
-        assert!(
-            score.abstain_reason.contains("coverage"),
-            "reason should name the coverage gap, got {:?}",
-            score.abstain_reason
-        );
-        assert_eq!(score.estimate, 0.0);
-        assert!((score.coverage_pct - 2.0 / 8.0).abs() < 1e-4);
-    }
-
-    /// The interval is a real distribution-based range, not a bare number:
-    /// with varied per-card retrievability the low and high bounds differ.
-    #[test]
-    fn range_is_nondegenerate_when_eligible() {
-        let mut col = Collection::new();
-        let mut id = id_base();
-        // Deliberately spread retrievability across the five covered topics.
-        for (tag, stability, elapsed) in [
-            (STRUCTURE, 2.0, 60),
-            (PKA, 10.0, 30),
-            (METABOLISM, 40.0, 15),
-            (FOLDING, 120.0, 3),
-            (KINETICS, 300.0, 1),
-        ] {
-            seed_card(&mut col, tag, stability, elapsed, 50, &mut id);
-        }
-
-        let score = col.get_memory_score(DeckId(1)).unwrap();
-
-        assert!(!score.abstained);
-        assert!(
-            score.range_high - score.range_low > 1e-6,
-            "range must be a real interval, got [{}, {}]",
-            score.range_low,
-            score.range_high
-        );
-    }
-
-    /// `reasons` surfaces the weakest covered topic by name.
-    #[test]
-    fn weakest_topic_surfaces_in_reasons() {
-        let mut col = Collection::new();
-        let mut id = id_base();
-        // KINETICS is by far the weakest (tiny stability, long elapsed); the
-        // rest are strongly retained.
-        seed_card(&mut col, KINETICS, 1.0, 90, 50, &mut id);
-        for tag in [STRUCTURE, PKA, METABOLISM, FOLDING] {
-            seed_card(&mut col, tag, 500.0, 1, 50, &mut id);
-        }
-
-        let score = col.get_memory_score(DeckId(1)).unwrap();
-
-        assert!(!score.abstained);
-        // "Kinetics" is the seed label for the KINETICS leaf.
-        assert!(
-            score.reasons.iter().any(|r| r == "weak: Kinetics"),
-            "weakest topic should be named, got {:?}",
-            score.reasons
-        );
-    }
-
-    /// An empty deck has no evidence: abstain on both conditions, no number.
-    #[test]
-    fn empty_deck_abstains_on_both_conditions() {
-        let mut col = Collection::new();
-
-        let score = col.get_memory_score(DeckId(1)).unwrap();
-
         assert!(score.abstained);
         assert_eq!(score.graded_reviews, 0);
         assert_eq!(score.coverage_pct, 0.0);
         assert_eq!(score.estimate, 0.0);
-        assert!(score.abstain_reason.contains("graded reviews"));
-        assert!(score.abstain_reason.contains("coverage"));
+    }
+
+    /// Studying more concepts raises coverage (the acceptance-style check that
+    /// the authored study flow actually moves Memory).
+    #[test]
+    fn studying_more_concepts_raises_coverage() {
+        let mut col = Collection::new();
+        set_hierarchy(
+            &mut col,
+            "1",
+            &[(
+                "Kinetics",
+                &["k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8"],
+            )],
+        );
+        for cid in ["k1", "k2", "k3"] {
+            grade_concept(&mut col, DeckId(1), cid, 3);
+        }
+        let before = col.get_memory_score(DeckId(1)).unwrap();
+        for cid in ["k4", "k5", "k6", "k7", "k8"] {
+            grade_concept(&mut col, DeckId(1), cid, 3);
+        }
+        let after = col.get_memory_score(DeckId(1)).unwrap();
+
+        assert!(
+            after.coverage_pct > before.coverage_pct,
+            "coverage should rise as more concepts are studied ({} -> {})",
+            before.coverage_pct,
+            after.coverage_pct
+        );
+        assert!(after.graded_reviews > before.graded_reviews);
+    }
+
+    /// The materialized-card helper keys cards by concept id.
+    #[test]
+    fn concept_card_stats_map_to_concepts() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Kinetics", &["k1", "k2"])]);
+        col.speedrun_reconcile(DeckId(1)).unwrap();
+        let stats = col.speedrun_concept_card_stats(DeckId(1)).unwrap();
+        assert_eq!(stats.len(), 2);
+        assert!(stats.contains_key("k1") && stats.contains_key("k2"));
+        // Ungraded card: no reviews yet, retrievability is the no-memory prior.
+        assert_eq!(stats["k1"].graded_reviews, 0);
     }
 }

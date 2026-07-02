@@ -98,14 +98,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </button>
             <div class="menu-wrap" bind:this={menuWrap}>
                 {#if showMenu}
-                <button
-                    class="more"
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
-                    on:click={() => (menuOpen = !menuOpen)}
-                >
-                    More
-                </button>
+                    <button
+                        class="more"
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        on:click={() => (menuOpen = !menuOpen)}
+                    >
+                        More
+                    </button>
                 {/if}
                 {#if menuOpen}
                     <ul class="more-menu" role="menu">

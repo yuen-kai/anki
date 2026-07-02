@@ -1,16 +1,16 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import type { MemoryScore, ScoreEnvelope as ProtoScoreEnvelope, SpeedrunProgress } from "@generated/anki/scheduler_pb";
+import type { MemoryScore, ScoreEnvelope as ProtoScoreEnvelope } from "@generated/anki/scheduler_pb";
 
 // How a score's numbers are rendered: "ratio" is a probability in [0, 1]
 // (Memory, Performance); "points" is a whole score on the 472-528 MCAT scale
 // (Readiness).
 export type ScoreFormat = "ratio" | "points";
 
-// The Speedrun evidence envelope (spec-scores §4): the single shape every score
-// is rendered as. There is no bare-number path; when `abstained` is true the
-// number is withheld and `abstainReason` says what is missing.
+// The Speedrun evidence envelope: the single shape every score is rendered as.
+// There is no bare-number path; when `abstained` is true the number is withheld
+// and `abstainReason` says what is missing.
 export interface ScoreEnvelope {
     estimate: number;
     rangeLow: number;
@@ -141,7 +141,7 @@ export function driverReasons(reasons: string[]): string[] {
     return reasons.filter((reason) => !reason.toLowerCase().startsWith("coverage"));
 }
 
-// The four-stage mastery ladder (spec-mastery-progression §2), in order. The
+// The four-stage mastery ladder, in order. The
 // internal "hierarchy" state renders as "Applying": the learner is applying the
 // concept with the scaffold, and "hierarchy" names the mechanism, not a stage a
 // student would recognize. The blurb is what the learner is doing at that stage.
@@ -159,63 +159,4 @@ export function stageIndex(state: string): number {
     // An unknown/absent state is the fail-safe first rung (matches the engine's
     // default of `learning`), never a negative index.
     return i < 0 ? 0 : i;
-}
-
-export interface TopicRow {
-    id: string;
-    label: string;
-    stage: number;
-    stageLabel: string;
-}
-
-export interface TopicGroup {
-    heading: string;
-    topics: TopicRow[];
-}
-
-export interface TopicsView {
-    groups: TopicGroup[];
-    // Count of topics at each rung, index-aligned with MASTERY_STAGES.
-    distribution: number[];
-    total: number;
-}
-
-// Shape the flat per-topic progress into the topics view: rows grouped under
-// their hierarchy path (foundation › category), plus the stage distribution for
-// the summary. Labels come from the taxonomy path the backend sends, so nothing
-// here re-spells a topic; a topic missing its path falls back to its id.
-export function buildTopicsView(progress: SpeedrunProgress | null): TopicsView {
-    const distribution = new Array(STAGE_COUNT).fill(0);
-    const byHeading = new Map<string, TopicRow[]>();
-
-    for (const topic of progress?.topics ?? []) {
-        const path = topic.path ?? [];
-        const label = path.length ? path[path.length - 1] : topic.topicId;
-        const heading = path.length > 1 ? path.slice(0, -1).join(" › ") : "Other topics";
-        const stage = stageIndex(topic.state);
-        distribution[stage] += 1;
-
-        const row: TopicRow = {
-            id: topic.topicId,
-            label,
-            stage,
-            stageLabel: MASTERY_STAGES[stage].label,
-        };
-        const rows = byHeading.get(heading);
-        if (rows) {
-            rows.push(row);
-        } else {
-            byHeading.set(heading, [row]);
-        }
-    }
-
-    const groups: TopicGroup[] = [...byHeading.entries()]
-        .map(([heading, topics]) => ({
-            heading,
-            topics: topics.sort((a, b) => a.label.localeCompare(b.label)),
-        }))
-        .sort((a, b) => a.heading.localeCompare(b.heading));
-
-    const total = groups.reduce((sum, group) => sum + group.topics.length, 0);
-    return { groups, distribution, total };
 }
