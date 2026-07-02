@@ -66,9 +66,10 @@ const MASTERY_REVIEW_WINDOW: usize = 50;
 const CONCEPT_NOTETYPE_NAME: &str = "SpeedrunConcept";
 const APPLICATION_NOTETYPE_NAME: &str = "SpeedrunApplication";
 
-/// The exact card-mode strings the reviewer injects as `window.speedrunCardMode`
-/// and the templates render by (spec §5). `none` covers a non-Speedrun card and
-/// an application card whose topic is still below `hierarchy` (suppressed).
+/// The exact card-mode strings the reviewer injects as
+/// `window.speedrunCardMode` and the templates render by (spec §5). `none`
+/// covers a non-Speedrun card and an application card whose topic is still
+/// below `hierarchy` (suppressed).
 pub(crate) const MODE_CONCEPT_LEARN: &str = "concept_learn";
 pub(crate) const MODE_CONCEPT_PRACTICE: &str = "concept_practice";
 pub(crate) const MODE_APPLICATION_SCAFFOLDED: &str = "application_scaffolded";
@@ -236,8 +237,9 @@ impl Collection {
     }
 
     /// Persist one topic's state, stamping `updated_at`. Written non-undoably
-    /// (`Op::SkipUndo`) so the config write leaves the card-answer undo entry on
-    /// top of the undo stack untouched — the progression never disturbs undo.
+    /// (`Op::SkipUndo`) so the config write leaves the card-answer undo entry
+    /// on top of the undo stack untouched — the progression never disturbs
+    /// undo.
     pub(crate) fn set_speedrun_topic_state(
         &mut self,
         topic: &str,

@@ -6,17 +6,19 @@
 
 ## 1. The problem this fills
 
-Every other feature needs the same thing: a stable, exam-true notion of "topic." The blocked queue groups by it, the give-up rule and coverage % gate on it, and the principle-first scaffold's answer options *are* its nodes. Without one canonical taxonomy, each feature invents its own and they drift. This spec defines it once.
+Every other feature needs the same thing: a stable, exam-true notion of "topic." The blocked queue groups by it, the give-up rule and coverage % gate on it, and the principle-first scaffold's answer options _are_ its nodes. Without one canonical taxonomy, each feature invents its own and they drift. This spec defines it once.
 
 ## 2. Goals & non-goals
 
 **Goals**
+
 - One canonical MCAT topic tree, sourced from the AAMC content outline.
 - A reviewed mapping from deck cards → topic nodes via tags.
 - Per-topic exam weight, for ordering ([D16](decisions.md#d16)) and later readiness weighting.
 - Honest coverage %: which in-scope topics the deck actually covers.
 
 **Non-goals**
+
 - Auto-classifying untagged cards with AI (Friday+; Wednesday mapping is tag-driven).
 - A general taxonomy for other exams ([D1](decisions.md#d1)).
 - Per-card difficulty modeling (lives in [`spec-scores`](spec-scores.md)).
@@ -67,11 +69,11 @@ coverage_pct         = |covered_topics| / |in_scope_topics|       # node-based, 
 weighted_coverage    = sum(t.exam_weight for t in covered_topics) # for readiness later
 ```
 
-| Deck | Cards | Topics covered / in-scope | coverage_pct | Reads as |
-| :-- | :-- | :-- | :-- | :-- |
-| Broad community deck | 9,800 | 95 / 100 | 95% | covered |
-| Big but lopsided | 12,000 | 60 / 100 (skips a high-weight category) | 60% | gap shown; readiness still abstains on weighted gap |
-| Authored subset | 1,200 | 40 / 100 | 40% | below give-up line → abstain |
+| Deck                 | Cards  | Topics covered / in-scope               | coverage_pct | Reads as                                            |
+| :------------------- | :----- | :-------------------------------------- | :----------- | :-------------------------------------------------- |
+| Broad community deck | 9,800  | 95 / 100                                | 95%          | covered                                             |
+| Big but lopsided     | 12,000 | 60 / 100 (skips a high-weight category) | 60%          | gap shown; readiness still abstains on weighted gap |
+| Authored subset      | 1,200  | 40 / 100                                | 40%          | below give-up line → abstain                        |
 
 ## 7. UI surfaces
 

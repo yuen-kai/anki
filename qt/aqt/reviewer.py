@@ -593,6 +593,10 @@ class Reviewer:
             card=self.card,
             states=self._v3.states,
             rating=self._v3.rating_from_ease(ease),
+            # Speedrun Learn serves cards from an owned topic-grouped ordering,
+            # not the live study queue, so grading must not try to pop the card
+            # from that queue (it isn't its top -> "not at top of queue").
+            from_queue=self._speedrun_learn_deck_id is None,
         )
 
         def after_answer(changes: OpChanges) -> None:

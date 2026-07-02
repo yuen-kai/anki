@@ -86,7 +86,9 @@ def _template_assets(name: str) -> tuple[str, str, str]:
 def concept_notetype(col: anki.collection.Collection) -> NotetypeDict:
     """Build (without saving) the SpeedrunConcept note type."""
     qfmt, afmt, css = _template_assets(CONCEPT_NOTETYPE_NAME)
-    return _build(col, CONCEPT_NOTETYPE_NAME, CONCEPT_FIELDS, "Concept", qfmt, afmt, css)
+    return _build(
+        col, CONCEPT_NOTETYPE_NAME, CONCEPT_FIELDS, "Concept", qfmt, afmt, css
+    )
 
 
 def application_notetype(col: anki.collection.Collection) -> NotetypeDict:

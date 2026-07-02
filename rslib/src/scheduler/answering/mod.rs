@@ -382,6 +382,13 @@ impl Collection {
                     }))
                 ),
             )?;
+        } else {
+            // The card was answered outside the live study queue (e.g. the
+            // Speedrun Learn topic-grouped ordering serves cards the cached
+            // queue doesn't have at its top). That cached queue no longer
+            // reflects this answer, so drop it: the next counts()/build rebuilds
+            // from the database instead of reporting stale counts.
+            self.clear_study_queues();
         }
 
         Ok(())

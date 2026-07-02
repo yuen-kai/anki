@@ -30,6 +30,58 @@ service FrontendService {
 
   // Save colour picker's custom colour palette
   rpc SaveCustomColours(generic.Empty) returns (generic.Empty);
+
+  // Speedrun authoring screens. JSON payloads (see anki.speedrun.authoring),
+  // handled in Python by mediasrv, no Rust backend impl.
+  //
+  // Request: {} -> Response: [{ deckId, name, todo }]
+  rpc SpeedrunListDecks(generic.Json) returns (generic.Json);
+  // Request: { deckId } -> Response: Hierarchy { deckId, root }
+  rpc SpeedrunGetHierarchy(generic.Json) returns (generic.Json);
+  // Request: Hierarchy { deckId, root } -> Response: { deckId, name }
+  rpc SpeedrunSaveHierarchy(generic.Json) returns (generic.Json);
+  // Request: { deckId } -> moves the window to the deck's overview.
+  rpc SpeedrunOpenDeck(generic.Json) returns (generic.Json);
+  // Request: { deckId } -> removes the deck and its authored blob.
+  rpc SpeedrunDeleteDeck(generic.Json) returns (generic.Json);
+
+  // Bespoke study screen (bar-less deck overview). JSON payloads handled in
+  // Python by mediasrv, no Rust backend impl.
+  //
+  // Request: { deckId } -> Response: { deckName, new, learn, review,
+  // studiedToday } for that deck's Today's Progress.
+  rpc SpeedrunStudySummary(generic.Json) returns (generic.Json);
+  // Request: { deckId } -> arms the topic-grouped queue and moves to review.
+  rpc SpeedrunStartStudy(generic.Json) returns (generic.Json);
+  // Request: { action } where action is one of options | customStudy | unbury |
+  // description | rebuild | empty -> runs the matching deck-overview action.
+  rpc SpeedrunOverviewAction(generic.Json) returns (generic.Json);
+  // Request: {} -> moves the window back to the decks home (deckBrowser).
+  rpc SpeedrunShowDecks(generic.Json) returns (generic.Json);
+
+  // Bespoke card-study screen (speedrun-review route). JSON payloads are
+  // handled in Python by mediasrv with no Rust backend impl. FSRS owns timing
+  // (via answer_card); the speedrun_study_progress config owns per-concept
+  // mastery state (learning, practicing, hierarchy which displays as Applying,
+  // and mastering).
+  //
+  // SpeedrunStudyState: request { deckId }, response
+  // { progress: { <conceptId>: { state, seen } } }.
+  rpc SpeedrunStudyState(generic.Json) returns (generic.Json);
+  // SpeedrunNextCard: request { deckId }; reconciles the deck's cards, then
+  // returns the next thing to study as { kind: "learning_block", topicNodeId,
+  // conceptIds, learnedCount, totalCount }, or { kind: "review", cardId,
+  // conceptId, state }, or { kind: "done" }.
+  rpc SpeedrunNextCard(generic.Json) returns (generic.Json);
+  // SpeedrunAnswerCard: request { deckId, cardId, conceptId, rating } where
+  // rating 1..4 = Again/Hard/Good/Easy. Grades the card through FSRS
+  // (answer_card) and records the mastery signal. Response
+  // { state, upgraded, from, to }.
+  rpc SpeedrunAnswerCard(generic.Json) returns (generic.Json);
+  // SpeedrunRecordLearned: request { deckId, conceptIds }. Marks the concepts
+  // seen, flipping a leaf topic learning -> practicing once all its concepts
+  // are seen. Response { upgraded, from, to, conceptIds }.
+  rpc SpeedrunRecordLearned(generic.Json) returns (generic.Json);
 }
 
 service BackendFrontendService {}

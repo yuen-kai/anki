@@ -1,12 +1,74 @@
 /* Copyright: Ankitects Pty Ltd and contributors
  * License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
 
+@use "../../../../../ts/lib/sass/root-vars";
+@use "../../../../../ts/lib/sass/vars" as *;
+
+:root {
+    --sr-signal: #df8f0a;
+    --sr-hover: rgba(24, 20, 12, 0.06);
+    --sr-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.nightMode {
+    --sr-signal: #f2a93b;
+    --sr-hover: rgba(255, 255, 255, 0.08);
+}
+
 body {
+    margin: 0;
+    padding: 0;
     overflow: hidden;
+    color: color(fg);
+    font-family: var(--sr-sans);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* The strip shared by every bottom bar. */
+#outer {
+    border-top: 1px solid color(border-subtle);
+    background: color(canvas-elevated);
+    -webkit-user-select: none;
 }
 
 #header {
-    border-bottom: 0;
-    margin-top: 0;
-    padding: 9px;
+    border: 0;
+    margin: 0;
+    padding: 9px 12px;
+}
+
+/* Secondary actions on the deck-list and deck-study bottom bars. */
+#header button {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 560;
+    letter-spacing: -0.005em;
+    color: color(fg-subtle);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 7px 13px;
+    margin: 0 2px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+        color 120ms ease,
+        background-color 120ms ease;
+}
+#header button:hover {
+    color: color(fg);
+    background: var(--sr-hover);
+}
+#header button:focus-visible {
+    outline: 2px solid var(--sr-signal);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #header button {
+        transition: none;
+    }
+}
+.reduce-motion #header button {
+    transition: none;
 }

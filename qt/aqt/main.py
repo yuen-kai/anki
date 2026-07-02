@@ -83,7 +83,13 @@ from aqt.webview import AnkiWebView, AnkiWebViewKind
 install_pylib_legacy()
 
 MainWindowState = Literal[
-    "startup", "deckBrowser", "overview", "review", "resetRequired", "profileManager"
+    "startup",
+    "deckBrowser",
+    "overview",
+    "review",
+    "resetRequired",
+    "profileManager",
+    "speedrunStudy",
 ]
 
 
@@ -167,6 +173,7 @@ class AnkiQt(QMainWindow):
     col: Collection
     pm: ProfileManagerType
     web: MainWebView
+    speedrunWeb: AnkiWebView
     bottomWeb: BottomWebView
 
     def __init__(
@@ -681,6 +688,17 @@ class AnkiQt(QMainWindow):
         except Exception as exc:
             print(f"speedrun: seed skipped ({exc})")
 
+        # Also preload a complete authored deck so the bespoke study/review
+        # screens have real content to study out of the box. Idempotent (skips
+        # if the deck already exists) and fail-open, in its own block so a
+        # failure here never affects the note seed above.
+        try:
+            from anki.speedrun.seed_deck import seed as seed_speedrun_deck
+
+            seed_speedrun_deck(self.col)
+        except Exception as exc:
+            print(f"speedrun: demo deck seed skipped ({exc})")
+
     def _loadCollection(self) -> None:
         cpath = self.pm.collectionPath()
         self.col = Collection(cpath, backend=self.backend)
@@ -782,7 +800,25 @@ class AnkiQt(QMainWindow):
         gui_hooks.state_did_change(state, oldState)
 
     def _deckBrowserState(self, oldState: MainWindowState) -> None:
+        # the Speedrun deck screens own the whole window: hide the top/bottom
+        # bars and the reviewer/overview webview, and reveal our dedicated one
+        self.toolbarWeb.hide()
+        self.bottomWeb.hide()
+        self.web.hide()
+        self.speedrunWeb.show()
         self.deckBrowser.show()
+
+    def _deckBrowserCleanup(self, newState: MainWindowState) -> None:
+        if newState == "overview":
+            # the study screen keeps the same bar-less chrome as the decks home,
+            # so leave speedrunWeb shown and the bars hidden (Overview.show
+            # re-asserts this); restoring them here would flash the old chrome.
+            return
+        if newState != "deckBrowser":
+            self.speedrunWeb.hide()
+            self.web.show()
+            self.toolbarWeb.show()
+            self.bottomWeb.show()
 
     def _selectedDeck(self) -> DeckDict | None:
         did = self.col.decks.selected()
@@ -795,6 +831,17 @@ class AnkiQt(QMainWindow):
         if not self._selectedDeck():
             return self.moveToState("deckBrowser")
         self.overview.show()
+
+    def _overviewCleanup(self, newState: MainWindowState) -> None:
+        if newState == "review":
+            # hand the window to the reviewer: reveal mw.web and the bars it
+            # draws its chrome into, and hide the bespoke study webview
+            self.speedrunWeb.hide()
+            self.web.show()
+            self.toolbarWeb.show()
+            self.bottomWeb.show()
+        # leaving to the decks home keeps the bar-less chrome: _deckBrowserState
+        # re-asserts speedrunWeb + hidden bars, so there is nothing to restore.
 
     def _reviewState(self, oldState: MainWindowState) -> None:
         self.reviewer.show()
@@ -824,6 +871,32 @@ class AnkiQt(QMainWindow):
             self.toolbarWeb.elevate()
             self.toolbarWeb.show()
             self.bottomWeb.show()
+
+    def _speedrunStudyState(
+        self, oldState: MainWindowState, deck_id: DeckId | None = None
+    ) -> None:
+        # the bespoke Speedrun study screen owns the whole window: hide the
+        # top/bottom bars and the reviewer/deck webview, and load the study route
+        # into the dedicated Speedrun webview (mirrors _deckBrowserState). This is
+        # how the classic reviewer is disconnected from Speedrun study.
+        if deck_id is None:
+            deck_id = self.col.decks.get_current_id()
+        self.toolbarWeb.hide()
+        self.bottomWeb.hide()
+        self.web.hide()
+        self.speedrunWeb.show()
+        self.speedrunWeb.load_sveltekit_page(f"speedrun-review/{deck_id}")
+
+    def _speedrunStudyCleanup(self, newState: MainWindowState) -> None:
+        if newState in {"overview", "deckBrowser"}:
+            # returning to a bar-less Speedrun screen (the study overview or the
+            # decks home): it re-asserts speedrunWeb + hidden bars itself, so
+            # restoring them here would only flash the old chrome.
+            return
+        self.speedrunWeb.hide()
+        self.web.show()
+        self.toolbarWeb.show()
+        self.bottomWeb.show()
 
     # Resetting state
     ##########################################################################
@@ -964,6 +1037,9 @@ title="{}" {}>{}</button>""".format(
         self.toolbar = Toolbar(self, tweb)
         # main area
         self.web = MainWebView(self)
+        # bespoke Speedrun deck screens; shown only in the deckBrowser state,
+        # in place of the old HTML deck browser and the top/bottom chrome
+        self.speedrunWeb = AnkiWebView(kind=AnkiWebViewKind.SPEEDRUN_HOME)
         # bottom area
         sweb = self.bottomWeb = BottomWebView(self)
         sweb.setFocusPolicy(Qt.FocusPolicy.WheelFocus)
@@ -974,8 +1050,10 @@ title="{}" {}>{}</button>""".format(
         self.mainLayout.setSpacing(0)
         self.mainLayout.addWidget(tweb)
         self.mainLayout.addWidget(self.web)
+        self.mainLayout.addWidget(self.speedrunWeb)
         self.mainLayout.addWidget(sweb)
         self.form.centralwidget.setLayout(self.mainLayout)
+        self.speedrunWeb.hide()
 
         # force webengine processes to load before cwd is changed
         if is_win:
@@ -1460,6 +1538,13 @@ title="{}" {}>{}</button>""".format(
         qconnect(m.action_check_for_updates.triggered, self.on_check_for_updates)
         qconnect(m.actionPreferences.triggered, self.onPrefs)
 
+        # Speedrun: a developer preview of the bespoke study screens (mock data,
+        # no collection). Added programmatically since it is a dev-only tool and
+        # not part of the main.ui menu.
+        from aqt import speedrun_demo
+
+        speedrun_demo.setup_tools_menu(self)
+
         # View
         qconnect(
             m.actionZoomIn.triggered,
@@ -1840,7 +1925,7 @@ title="{}" {}>{}</button>""".format(
 
     def interactiveState(self) -> bool:
         "True if not in profile manager, syncing, etc."
-        return self.state in ("overview", "review", "deckBrowser")
+        return self.state in ("overview", "review", "deckBrowser", "speedrunStudy")
 
     # GC
     ##########################################################################

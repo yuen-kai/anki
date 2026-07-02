@@ -26,14 +26,15 @@ service SchedulerService {
   // give-up rule. Read-only; reads existing FSRS/revlog state only.
   rpc GetMemoryScore(GetMemoryScoreRequest) returns (MemoryScore);
   // Speedrun honest Performance score for a deck: weighted accuracy over graded
-  // reviews of SpeedrunApplication (exam-style) cards mapped to in-scope topics,
-  // with the same evidence envelope + give-up rule. Distinct from Memory (recall
-  // of a taught fact): this measures getting an application question right.
+  // reviews of SpeedrunApplication (exam-style) cards mapped to in-scope
+  // topics, with the same evidence envelope + give-up rule. Distinct from
+  // Memory (recall of a taught fact): this measures getting an application
+  // question right.
   rpc GetPerformanceScore(GetSpeedrunScoreRequest) returns (ScoreEnvelope);
   // Speedrun honest Readiness score for a deck: the Performance score projected
-  // onto the 472-528 MCAT scale with a coverage-widened range. Abstains whenever
-  // Performance abstains; a projection from practice, not calibrated to real
-  // exam outcomes yet (that is the Sunday milestone).
+  // onto the 472-528 MCAT scale with a coverage-widened range. Abstains
+  // whenever Performance abstains; a projection from practice, not calibrated
+  // to real exam outcomes yet (that is the Sunday milestone).
   rpc GetReadinessScore(GetSpeedrunScoreRequest) returns (ScoreEnvelope);
   // Speedrun mastery progression (decisions D30-D32): the per-topic four-state
   // lifecycle learning → practicing → hierarchy → mastering. These read/write
@@ -59,6 +60,11 @@ service SchedulerService {
       returns (generic.String);
   // Per-topic mastery state for the deck's in-scope topics, for the dashboard.
   rpc GetSpeedrunProgress(decks.DeckId) returns (SpeedrunProgress);
+  // Per-leaf-topic score inputs (Memory retrievability + Performance accuracy,
+  // with exam weights and paths) for a deck, for the study screen's per-subject
+  // details modal. Read-only; one pass over the in-scope cards. Distinct from
+  // the whole-deck Memory/Performance scores, which stay aggregate.
+  rpc GetSpeedrunScoreBreakdown(decks.DeckId) returns (SpeedrunScoreBreakdown);
   rpc AnswerCard(CardAnswer) returns (collection.OpChanges);
   rpc SchedTimingToday(generic.Empty) returns (SchedTimingTodayResponse);
   rpc StudiedToday(generic.Empty) returns (generic.String);
@@ -239,9 +245,9 @@ message GetSpeedrunScoreRequest {
   int64 deck_id = 1;
 }
 
-// The shared Speedrun evidence envelope (spec-scores §4) for the Performance and
-// Readiness scores. Same contract as MemoryScore; `format` tells the UI how to
-// render the numbers. When `abstained` is true the give-up rule fired:
+// The shared Speedrun evidence envelope (spec-scores §4) for the Performance
+// and Readiness scores. Same contract as MemoryScore; `format` tells the UI how
+// to render the numbers. When `abstained` is true the give-up rule fired:
 // estimate/range are 0 and `abstain_reason` names the failed condition(s).
 message ScoreEnvelope {
   // The point estimate, in the units named by `format`.
@@ -300,6 +306,35 @@ message SpeedrunProgress {
     repeated string path = 3;
   }
   repeated TopicProgress topics = 1;
+}
+
+// Per-leaf-topic score inputs for the study screen's per-subject breakdown
+// (GetSpeedrunScoreBreakdown). One TopicStat per in-scope leaf topic — even
+// untouched ones (all zeros) — so the modal can show the full subject map.
+message SpeedrunScoreBreakdown {
+  message TopicStat {
+    // Taxonomy leaf id, e.g. "mcat::biomolecules::enzymes::kinetics".
+    string topic_id = 1;
+    // Display path foundation -> leaf, e.g. "Biomolecules", "Enzymes",
+    // "Kinetics".
+    repeated string path = 2;
+    // Mean FSRS retrievability over the topic's reviewed cards (Memory input);
+    // 0 when the topic has no reviewed card.
+    float mean_retrievability = 3;
+    // Accuracy over graded application attempts (Performance input); 0 when the
+    // topic has no application attempt.
+    float application_accuracy = 4;
+    // Graded application attempts backing application_accuracy.
+    uint32 application_attempts = 5;
+    // Graded reviews over the topic's cards that feed the Memory score.
+    uint32 memory_reviews = 6;
+    // The topic's share of exam emphasis.
+    float exam_weight = 7;
+    // Whether the topic has at least one graded application attempt, so the UI
+    // can tell "0%" apart from "not practiced".
+    bool has_application_data = 8;
+  }
+  repeated TopicStat topics = 1;
 }
 
 message SchedTimingTodayResponse {
@@ -430,6 +465,12 @@ message CardAnswer {
   Rating rating = 4;
   int64 answered_at_millis = 5;
   uint32 milliseconds_taken = 6;
+  // Whether the card was served from the live study queue and so should be
+  // popped from it. Unset means true (the normal reviewer): the answered card
+  // is the queue's top. The Speedrun "Learn" reviewer sets this false because
+  // it serves cards from an owned, read-only topic-grouped ordering that is not
+  // the live queue, so popping would fail with "not at top of queue".
+  optional bool from_queue = 7;
 }
 
 message CustomStudyRequest {

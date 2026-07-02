@@ -151,8 +151,15 @@ class Scheduler(SchedulerBaseWithLegacy):
         card: Card,
         states: SchedulingStates,
         rating: CardAnswer.Rating.V,
+        from_queue: bool = True,
     ) -> CardAnswer:
-        "Build input for answer_card()."
+        """Build input for answer_card().
+
+        ``from_queue`` should be False when the card was not served from the live
+        study queue (e.g. the Speedrun Learn topic-grouped ordering), so the
+        backend skips popping it from the queue and doesn't fail with "not at top
+        of queue".
+        """
         if rating == CardAnswer.AGAIN:
             new_state = states.again
         elif rating == CardAnswer.HARD:
@@ -171,6 +178,7 @@ class Scheduler(SchedulerBaseWithLegacy):
             rating=rating,
             answered_at_millis=int_time(1000),
             milliseconds_taken=card.time_taken(capped=False),
+            from_queue=from_queue,
         )
 
     def answer_card(self, input: CardAnswer) -> OpChanges:

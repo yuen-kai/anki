@@ -93,6 +93,37 @@ export function formatCoverage(fraction: number): string {
     return `${Math.round(fraction * 100)}%`;
 }
 
+// The MCAT scaled-score range, the domain the Readiness gauge is drawn on.
+export const POINTS_MIN = 472;
+export const POINTS_MAX = 528;
+
+// The big readout number: a ratio shown as a whole percent (0.71 -> "71"), a
+// points score as a whole number (508). The unit ("%") is added by the caller.
+export function displayNumber(value: number, format: ScoreFormat): string {
+    return format === "points" ? `${Math.round(value)}` : `${Math.round(value * 100)}`;
+}
+
+// The compact range shown under the gauge (e.g. "66-76%" or "498-516").
+export function displayRange(low: number, high: number, format: ScoreFormat): string {
+    return format === "points"
+        ? `${Math.round(low)}\u2013${Math.round(high)}`
+        : `${Math.round(low * 100)}\u2013${Math.round(high * 100)}%`;
+}
+
+// Where a value sits on its gauge, as a clamped 0-100 percentage. Ratio scores
+// run 0-1; points scores run the MCAT scale. This is what draws the marker and
+// the likely-range band.
+export function gaugePercent(value: number, format: ScoreFormat): number {
+    const [lo, hi] = format === "points" ? [POINTS_MIN, POINTS_MAX] : [0, 1];
+    const pct = ((value - lo) / (hi - lo)) * 100;
+    return Math.max(0, Math.min(100, pct));
+}
+
+// The labels at each end of the gauge scale.
+export function gaugeBounds(format: ScoreFormat): [string, string] {
+    return format === "points" ? [`${POINTS_MIN}`, `${POINTS_MAX}`] : ["0", "100%"];
+}
+
 export function formatUpdated(secs: number): string {
     if (!secs) {
         return "";

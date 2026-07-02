@@ -15,6 +15,9 @@
 //!   scores, so all three render identically and are never blended (D33).
 //! - [`performance_score`]: accuracy over application (exam-style) cards (D33).
 //! - [`readiness_score`]: Performance projected onto the 472-528 scale (D33).
+//! - [`score_breakdown`]: per-leaf-topic Memory/Performance inputs (weights,
+//!   retrievability, application accuracy) for the study screen's per-subject
+//!   details modal — a read-only view, distinct from the whole-deck scores.
 //! - [`progression`]: the per-topic four-state mastery lifecycle (learning →
 //!   practicing → hierarchy → mastering), its state-aware card-mode resolution
 //!   and its config-backed transitions (decisions D30–D32).
@@ -24,5 +27,6 @@ pub mod memory_score;
 pub mod performance_score;
 pub mod progression;
 pub mod readiness_score;
+pub mod score_breakdown;
 pub mod scores;
 pub mod taxonomy;

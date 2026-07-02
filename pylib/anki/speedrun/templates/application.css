@@ -1,35 +1,42 @@
-/* SpeedrunApplication styling. The scaffold reads as a sequence of real
-   choices, not a quiz grid: a breadcrumb trail, one level of options at a time,
-   a cue when wrong, the solution behind the reveal. One accent for "on track",
-   one quiet warning tone for a wrong pick. */
+/* SpeedrunApplication card. The "score instrument" identity: cool paper,
+   charcoal ink, one marigold signal for "on track", one clay tone for a wrong
+   pick. The scaffold reads as a real sequence of choices, a mono step label, a
+   breadcrumb trail of what's chosen, one level of options at a time, a cue when
+   wrong, the worked solution behind the reveal. System-first fonts so it renders
+   the same offline on desktop Qt and AnkiDroid. */
 
 .card {
-  /* Cool clinical neutral, deliberately not the warm-cream + serif default. */
-  background: #e9eeec;
+  --sr-paper: #e7eaec;
+  --sr-panel: #fcfcfc;
+  --sr-ink: #181b20;
+  --sr-ink-2: #565c64;
+  --sr-ink-3: #878d95;
+  --sr-line: #d5d9dc;
+  --sr-line-2: #c1c6cb;
+  --sr-signal: #df8f0a;
+  --sr-signal-ink: #3a2a05;
+  --sr-signal-weak: #f4e6cb;
+  --sr-signal-line: #e6c079;
+  --sr-wrong: #bd482f;
+  --sr-wrong-weak: #f0dbd4;
+  --sr-radius: 8px;
+  --sr-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sr-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, "Cascadia Code",
+    "Roboto Mono", Consolas, monospace;
+
+  background: var(--sr-paper);
   padding: 0;
 }
 
 .speedrun {
-  --sr-ink: #16201d;
-  --sr-muted: #556862;
-  --sr-surface: #ffffff;
-  --sr-line: #d6e0dc;
-  --sr-accent: #0e7c66;
-  --sr-accent-soft: #e3efeb;
-  --sr-warn: #9a5b00;
-  --sr-warn-soft: #f6efe0;
-  --sr-radius: 10px;
-
   box-sizing: border-box;
-  max-width: 700px;
+  max-width: 660px;
   margin: 0 auto;
-  padding: 30px 22px 40px;
+  padding: 30px 24px 44px;
   text-align: left;
   color: var(--sr-ink);
-  /* Deliberate sans for dense scientific prose; system-first so it renders the
-     same offline on desktop Qt and AnkiDroid, where web fonts can't be relied on. */
-  font-family: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--sr-sans);
   font-size: 16px;
   line-height: 1.62;
   letter-spacing: -0.003em;
@@ -44,19 +51,17 @@
   box-sizing: border-box;
 }
 
-/* Topic breadcrumb: where this card sits in the AAMC hierarchy. Quiet by
-   default, the current (leaf) topic carries the accent. Separators are drawn in
-   CSS so the script only ever writes plain label text. */
 .sr-breadcrumb {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   margin: 0 0 22px;
+  font-family: var(--sr-mono);
   font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.09em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--sr-muted);
+  color: var(--sr-ink-3);
 }
 
 .sr-breadcrumb[hidden] {
@@ -64,34 +69,59 @@
 }
 
 .sr-breadcrumb__item + .sr-breadcrumb__item::before {
-  content: "›";
+  content: "/";
   margin: 0 8px;
-  color: var(--sr-muted);
-  font-weight: 400;
+  color: var(--sr-line-2);
 }
 
 .sr-breadcrumb__item:last-child {
-  color: var(--sr-accent);
+  color: var(--sr-signal);
 }
 
 .sr-problem {
-  font-size: 16.5px;
-  line-height: 1.62;
+  font-size: 17px;
+  line-height: 1.6;
 }
 
+/* The scaffold: one panel that steps the learner from principle to topic. */
 .sr-scaffold {
-  margin-top: 24px;
+  margin-top: 26px;
   padding: 20px;
-  background: var(--sr-surface);
+  background: var(--sr-panel);
   border: 1px solid var(--sr-line);
   border-radius: var(--sr-radius);
 }
 
+.sr-scaffold[hidden] {
+  display: none;
+}
+
+.sr-scaffold__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-family: var(--sr-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sr-ink-3);
+}
+
+.sr-scaffold__label::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  background: var(--sr-signal);
+}
+
+/* Chosen path so far: squared mono chips in the signal tone. */
 .sr-trail {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   padding: 0;
   list-style: none;
 }
@@ -103,73 +133,95 @@
 .sr-trail__step {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
-  font-size: 13px;
+  padding: 3px 9px;
+  font-family: var(--sr-mono);
+  font-size: 11.5px;
   font-weight: 600;
-  color: var(--sr-accent);
-  background: var(--sr-accent-soft);
-  border-radius: 999px;
+  letter-spacing: 0.02em;
+  color: var(--sr-signal);
+  background: var(--sr-signal-weak);
+  border: 1px solid var(--sr-signal-line);
+  border-radius: 4px;
 }
 
 .sr-trail__step + .sr-trail__step::before {
-  content: "→";
-  margin: 0 8px 0 -4px;
-  color: var(--sr-muted);
-  font-weight: 400;
+  content: "\2192";
+  margin: 0 8px 0 -3px;
+  color: var(--sr-ink-3);
 }
 
 .sr-level__q {
   margin: 0 0 12px;
   font-size: 15px;
-  font-weight: 620;
+  font-weight: 640;
   letter-spacing: -0.005em;
 }
 
 .sr-options {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
 }
 
 .sr-option {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: 100%;
   text-align: left;
-  padding: 13px 16px;
+  padding: 12px 14px;
   font: inherit;
   font-size: 15.5px;
   color: var(--sr-ink);
-  background: var(--sr-surface);
-  border: 1px solid var(--sr-line);
-  border-radius: 8px;
+  background: var(--sr-panel);
+  border: 1px solid var(--sr-line-2);
+  border-radius: 4px;
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 
+.sr-option::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--sr-line-2);
+}
+
 .sr-option:hover {
-  border-color: var(--sr-accent);
-  background: var(--sr-accent-soft);
+  border-color: var(--sr-signal);
+  background: var(--sr-signal-weak);
+}
+
+.sr-option:hover::before {
+  border-color: var(--sr-signal);
 }
 
 .sr-option:focus-visible,
 .sr-option:focus {
-  outline: 2px solid var(--sr-accent);
+  outline: 2px solid var(--sr-signal);
   outline-offset: 1px;
-  border-color: var(--sr-accent);
+  border-color: var(--sr-signal);
 }
 
 .sr-option.is-wrong {
-  border-color: var(--sr-warn);
-  background: var(--sr-warn-soft);
-  color: var(--sr-warn);
+  border-color: var(--sr-wrong);
+  background: var(--sr-wrong-weak);
+  color: var(--sr-wrong);
+}
+
+.sr-option.is-wrong::before {
+  border-color: var(--sr-wrong);
+  background: var(--sr-wrong);
 }
 
 .sr-feedback {
-  margin: 12px 0 0;
+  margin: 14px 0 0;
   padding: 0;
-  font-size: 15px;
+  font-size: 14.5px;
   line-height: 1.5;
-  color: var(--sr-warn);
+  color: var(--sr-wrong);
 }
 
 .sr-feedback:not(.is-visible) {
@@ -177,21 +229,21 @@
 }
 
 .sr-feedback.is-visible {
-  padding: 10px 12px;
-  background: var(--sr-warn-soft);
-  border-left: 3px solid var(--sr-warn);
-  border-radius: 0 var(--sr-radius) var(--sr-radius) 0;
+  padding: 11px 13px;
+  background: var(--sr-wrong-weak);
+  border-left: 3px solid var(--sr-wrong);
+  border-radius: 0 4px 4px 0;
 }
 
 .sr-unlocked {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  font-size: 15px;
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  font-size: 14.5px;
   font-weight: 600;
-  color: var(--sr-accent);
-  background: var(--sr-accent-soft);
-  border-left: 3px solid var(--sr-accent);
-  border-radius: 0 var(--sr-radius) var(--sr-radius) 0;
+  color: var(--sr-signal-ink);
+  background: var(--sr-signal-weak);
+  border-left: 3px solid var(--sr-signal);
+  border-radius: 0 4px 4px 0;
 }
 
 .sr-trail--final {
@@ -199,18 +251,19 @@
 }
 
 .sr-rule {
-  margin: 18px 0;
+  margin: 20px 0;
   border: none;
   border-top: 1px solid var(--sr-line);
 }
 
 .sr-reveal__label {
-  margin: 0 0 7px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  margin: 0 0 8px;
+  font-family: var(--sr-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--sr-muted);
+  color: var(--sr-ink-3);
 }
 
 .sr-solution {
@@ -224,17 +277,24 @@
   }
 }
 
-.nightMode .card {
-  background: #101513;
+.nightMode .card,
+.night-mode .card {
+  --sr-paper: #131519;
+  --sr-panel: #1b1e22;
+  --sr-ink: #f0eee9;
+  --sr-ink-2: #a6abb2;
+  --sr-ink-3: #767c85;
+  --sr-line: #2a2e34;
+  --sr-line-2: #3a3f46;
+  --sr-signal: #f2a93b;
+  --sr-signal-ink: #1b1405;
+  --sr-signal-weak: #2c2314;
+  --sr-signal-line: #5a4620;
+  --sr-wrong: #e28160;
+  --sr-wrong-weak: #33231c;
 }
 
-.nightMode .speedrun {
-  --sr-ink: #e6ece9;
-  --sr-muted: #91a39d;
-  --sr-surface: #1a201e;
-  --sr-line: #2e3835;
-  --sr-accent: #4fd1ac;
-  --sr-accent-soft: #17302a;
-  --sr-warn: #e0a35a;
-  --sr-warn-soft: #33291a;
+.nightMode .sr-unlocked,
+.night-mode .sr-unlocked {
+  color: var(--sr-signal);
 }

@@ -5,208 +5,275 @@
 @use "../../../../../ts/lib/sass/card-counts";
 @use "../../../../../ts/lib/sass/elevation" as *;
 
-/* Speedrun product accent (teal), spent with restraint: the current deck and
-   active affordances only. The soft variant reuses the study-card values so the
-   home screen and the cards read as one product. */
+/* Speedrun "score instrument" identity: paper + charcoal ink + one marigold
+   signal, a monospace readout label system, tabular numerals as the heroes. */
 :root {
-    --sr-accent: #0e7c66;
-    --sr-accent-soft: #e3efeb;
+    --sr-accent: #df8f0a;
+    --sr-accent-soft: #f7edd8;
+    --sr-hover: rgba(24, 20, 12, 0.05);
+    --sr-chip: rgba(24, 20, 12, 0.05);
+    --sr-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, "Cascadia Code",
+        "Roboto Mono", Consolas, monospace;
+    --sr-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 .nightMode {
-    --sr-accent: #4fd1ac;
-    --sr-accent-soft: #17302a;
+    --sr-accent: #f2a93b;
+    --sr-accent-soft: #2c2314;
+    --sr-hover: rgba(255, 255, 255, 0.07);
+    --sr-chip: rgba(255, 255, 255, 0.07);
 }
 
 body {
-    margin: 28px 16px 20px;
+    margin: 0;
     -webkit-user-select: none;
     color: color(fg);
-    /* System-first sans, same stack as the study cards; renders offline. */
-    font-family: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
-        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: color(canvas);
+    font-family: var(--sr-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
 }
 
-table {
+.home {
+    box-sizing: border-box;
+    max-width: 880px;
     margin: 0 auto;
+    padding: 30px 20px 48px;
+}
 
-    /* Default (non-minimalist) mode gathers the list into one calm card. */
-    .fancy & {
-        padding: 6px 8px;
-        background: var(--canvas-elevated);
-        border: 1px solid color(border-subtle);
-        border-radius: prop(border-radius-medium);
-        @include elevation(1, $opacity-boost: -0.1);
+.home-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.home-title {
+    margin: 0;
+    font-size: 1.9rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+}
+
+#studiedToday {
+    color: color(fg-subtle);
+    font-size: 12.5px;
+    text-align: end;
+
+    span {
+        font-variant-numeric: tabular-nums;
     }
 }
 
-/* Column header row, kept as a quiet eyebrow rather than a loud table head. */
-th {
-    padding: 2px 12px 9px;
+/* The deck list lives in one calm elevated card. */
+.deck-card {
+    padding: 8px 10px 10px;
+    background: color(canvas-elevated);
+    border: 1px solid color(border-subtle);
+    border-radius: prop(border-radius-medium);
+    @include elevation(1, $opacity-boost: -0.12);
+}
+
+table.decks {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+/* Column labels as a quiet mono eyebrow, not a loud table head. */
+.head th {
+    padding: 8px 12px 10px;
     border-bottom: 1px solid color(border-subtle);
-    font-size: 11px;
-    font-weight: 650;
-    letter-spacing: 0.08em;
+    font-family: var(--sr-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.11em;
     text-transform: uppercase;
     color: color(fg-subtle);
     white-space: nowrap;
 }
-
-th[align="start"] {
-    padding-inline-start: 14px;
+.head .h-deck {
+    padding-inline-start: 15px;
     text-align: start;
 }
-
-.count {
-    min-width: 4.5em;
-    text-align: right;
+.head .h-count {
+    text-align: center;
+    min-width: 4.2em;
+}
+.head .h-opts {
+    width: 2.6em;
 }
 
-.optscol {
-    width: 2.5em;
-}
-
-/* Deck rows read as clean, tappable rows. */
 tr.deck td {
-    padding-block: 11px;
-    padding-inline: 12px;
+    padding: 3px 4px;
     transition: background-color 120ms ease;
 }
 
-tr.deck td.decktd {
-    min-width: 15em;
-    max-width: calc(100vw - 300px);
-    overflow: hidden;
-    padding-inline-start: 11px;
-    /* Reserved so the current-deck marker never nudges the row sideways. */
+td.decktd {
+    padding-inline: 11px;
+    /* reserve the marker so the current row never shifts sideways */
     border-inline-start: 3px solid transparent;
+    line-height: 42px;
+    white-space: nowrap;
 }
 
-/* Only the minimalist mode (no card) needs per-row separators. */
-body:not(.fancy) tr.deck td {
-    border-bottom: 1px solid color(border-subtle);
-}
-
-a.deck {
+.indent {
     display: inline-block;
-    min-width: 5em;
-    color: color(fg);
-    font-size: 15px;
-    font-weight: 500;
-    letter-spacing: -0.003em;
-    text-decoration: none;
-}
-
-a.deck:hover {
-    color: var(--sr-accent);
-    text-decoration: none;
+    vertical-align: middle;
 }
 
 .collapse {
     display: inline-block;
-    width: 1.2em;
+    width: 1.4em;
     color: color(fg-subtle);
-    font-weight: 600;
+    font-size: 11px;
     text-align: center;
     text-decoration: none;
+    vertical-align: middle;
 }
-
 a.collapse:hover {
     color: var(--sr-accent);
 }
 
+.deckname {
+    display: inline-block;
+    vertical-align: middle;
+    color: color(fg);
+    font-size: 15px;
+    font-weight: 550;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+}
+.deckname:hover {
+    color: var(--sr-accent);
+    text-decoration: none;
+}
 .filtered {
-    color: color(fg-link) !important;
+    color: color(fg-link);
 }
 
-/* Due counts: right-aligned, tabular so digits line up column to column. Zero
-   counts stay muted via the shared .zero-count colour. */
-tr.deck td[align="end"] {
-    min-width: 4.5em;
-    text-align: right;
-    font-size: 14px;
-    font-variant-numeric: tabular-nums;
-}
-
-td.opts {
+/* Counts: tabular chips; colour carries the state, zeros stay muted. */
+td.cntcol {
     text-align: center;
 }
+.cnt {
+    display: inline-block;
+    min-width: 1.4em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--sr-chip);
+    font-size: 13px;
+    font-weight: 640;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+.cnt.zero-count {
+    background: transparent;
+    font-weight: 500;
+}
 
-.gears {
-    width: 15px;
-    height: 15px;
-    opacity: 0.5;
+/* Per-deck options: a "more" glyph revealed on row hover. */
+td.optscol {
+    text-align: center;
+}
+.deckopts {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    color: color(fg-subtle);
     cursor: pointer;
-    visibility: hidden;
-    vertical-align: middle;
+    opacity: 0;
+    transition:
+        opacity 120ms ease,
+        color 120ms ease,
+        background-color 120ms ease;
+}
+.deckopts:hover {
+    color: var(--sr-accent);
+    background: var(--sr-hover);
+}
+.nightMode .deckopts:hover {
+    color: var(--sr-accent);
 }
 
-.gears:hover {
-    opacity: 0.9;
-}
-
-.nightMode .gears {
-    filter: invert(1);
-}
-
-/* Highlight shared by hover and the current deck: a soft rounded fill with the
-   gear revealed. A smaller radius than the container, deliberately. */
-.current,
-tr:hover:not(.top-level-drag-row) {
-    td {
-        &:first-child {
-            border-start-start-radius: prop(border-radius);
-            border-end-start-radius: prop(border-radius);
-        }
-        &:last-child {
-            border-start-end-radius: prop(border-radius);
-            border-end-end-radius: prop(border-radius);
-        }
-        .gears {
-            visibility: visible;
-        }
+/* Row highlight, shared by hover and the current deck. */
+tr.deck:hover td,
+tr.deck.current td {
+    background: var(--sr-hover);
+    &:first-child {
+        border-start-start-radius: prop(border-radius);
+        border-end-start-radius: prop(border-radius);
+    }
+    &:last-child {
+        border-start-end-radius: prop(border-radius);
+        border-end-end-radius: prop(border-radius);
     }
 }
-
-tr.deck:hover:not(.current) td {
-    background: color(border-subtle);
+tr.deck:hover .deckopts,
+tr.deck.current .deckopts {
+    opacity: 1;
 }
 
-/* Current deck: the one place the accent lands, a soft teal fill plus an
-   inline-start marker echoing the accent edge on the study cards. */
+/* Current deck: the one place the marigold lands. */
 tr.deck.current td {
     background: var(--sr-accent-soft);
 }
-
 tr.deck.current td.decktd {
     border-inline-start-color: var(--sr-accent);
 }
-
-/* Drag and drop: a teal drop-target line, drawn with a shadow so nothing
-   shifts as you drag over a row. */
-tr.top-level-drag-row td {
-    height: 6px;
-    border-bottom: 1px solid transparent;
+tr.deck.current .deckname {
+    font-weight: 650;
 }
 
+/* Drag and drop reparenting. */
+tr.top-level-drag-row td {
+    height: 6px;
+    padding: 0;
+}
 tr.drag-hover td {
     box-shadow: inset 0 -2px 0 var(--sr-accent);
 }
 
-#studiedToday {
-    margin: 18px 0 0;
+/* Add a deck straight from the library. */
+.new-deck {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 10px 4px 2px;
+    padding: 9px 14px;
+    background: transparent;
+    border: 1px dashed color(border);
+    border-radius: 9px;
     color: color(fg-subtle);
-    font-size: 12.5px;
-    text-align: center;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 560;
+    cursor: pointer;
+    transition:
+        color 120ms ease,
+        border-color 120ms ease,
+        background-color 120ms ease;
+}
+.new-deck:hover {
+    color: var(--sr-accent);
+    border-color: var(--sr-accent);
+    background: var(--sr-hover);
+}
+.new-deck__plus {
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 1;
 }
 
-/* v3 scheduler upgrade notice (rarely shown on modern collections). */
+/* v3 scheduler upgrade notice (rare on modern collections). */
 .callout {
-    max-width: 32em;
+    max-width: 34em;
     margin: 1.25em auto;
     padding: 1em 1.25em;
-    background: var(--canvas-elevated);
+    background: color(canvas-elevated);
     border: 1px solid color(border-subtle);
     border-radius: prop(border-radius-medium);
 
@@ -216,11 +283,14 @@ tr.drag-hover td {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    tr.deck td {
+    tr.deck td,
+    .deckopts,
+    .new-deck {
         transition: none;
     }
 }
-
-.reduce-motion tr.deck td {
+.reduce-motion tr.deck td,
+.reduce-motion .deckopts,
+.reduce-motion .new-deck {
     transition: none;
 }

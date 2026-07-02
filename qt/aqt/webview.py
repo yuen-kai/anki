@@ -60,6 +60,7 @@ class AnkiWebViewKind(Enum):
     IMPORT_LOG = "import log"
     IMPORT_ANKI_PACKAGE = "anki package import"
     SPEEDRUN_DASHBOARD = "speedrun dashboard"
+    SPEEDRUN_HOME = "speedrun home"
 
 
 class AuthInterceptor(QWebEngineUrlRequestInterceptor):
@@ -144,6 +145,7 @@ class AnkiWebPage(QWebEnginePage):
             AnkiWebViewKind.IMPORT_CSV,
             AnkiWebViewKind.IMPORT_LOG,
             AnkiWebViewKind.SPEEDRUN_DASHBOARD,
+            AnkiWebViewKind.SPEEDRUN_HOME,
         )
 
         global _profile_with_api_access, _profile_without_api_access

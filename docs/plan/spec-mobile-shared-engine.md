@@ -6,16 +6,18 @@
 
 ## 1. The problem this fills
 
-The project's hardest day-one risk isn't features, it's getting the same Rust engine running on a phone ([source §"Get Anki Building First"](../../Speedrun_%20A%20Desktop%20+%20Mobile%20Study%20App%20Built%20on%20Anki.md)). Reimplementing the scheduler in Kotlin/JS doesn't count and would fork behavior between devices. AnkiDroid already runs `rslib` on-device via `rsdroid`, so forking it is the shortest path to a *shared* engine that inherits our Rust change.
+The project's hardest day-one risk isn't features, it's getting the same Rust engine running on a phone ([source §"Get Anki Building First"](../../Speedrun_%20A%20Desktop%20+%20Mobile%20Study%20App%20Built%20on%20Anki.md)). Reimplementing the scheduler in Kotlin/JS doesn't count and would fork behavior between devices. AnkiDroid already runs `rslib` on-device via `rsdroid`, so forking it is the shortest path to a _shared_ engine that inherits our Rust change.
 
 ## 2. Goals & non-goals
 
 **Goals**
+
 - One shared Rust engine across desktop and phone; the Rust change ([`spec-engine-topic-queue`](spec-engine-topic-queue.md)) runs on both.
 - AnkiDroid fork builds and runs on a real device or emulator.
 - Loads the MCAT deck and runs a real review session on the shared engine.
 
 **Non-goals (Wednesday)**
+
 - Two-way sync, offline-merge, conflict resolution → Friday ([D14](decisions.md#d14)).
 - iOS ([D13](decisions.md#d13)).
 - A reskinned mobile UI, Wednesday uses AnkiDroid's review UI; Speedrun surfaces come later.
@@ -55,7 +57,7 @@ This front-loads the riskiest task ([source warning](../../Speedrun_%20A%20Deskt
 
 ## 6. Cold-start / the real risk
 
-The cross-compilation toolchain (Android NDK + Rust targets) and the `rsdroid` `.aar` rebuild against a *forked* backend is the single highest-risk item in the whole Wednesday milestone. Layered mitigation: (a) do it first, before any feature work; (b) prove the stock fork builds before modifying the backend, so a break is bisectable to the engine change; (c) keep the Rust change additive ([`spec-engine-topic-queue`](spec-engine-topic-queue.md) §8) so it can't break existing mobile behavior.
+The cross-compilation toolchain (Android NDK + Rust targets) and the `rsdroid` `.aar` rebuild against a _forked_ backend is the single highest-risk item in the whole Wednesday milestone. Layered mitigation: (a) do it first, before any feature work; (b) prove the stock fork builds before modifying the backend, so a break is bisectable to the engine change; (c) keep the Rust change additive ([`spec-engine-topic-queue`](spec-engine-topic-queue.md) §8) so it can't break existing mobile behavior.
 
 ## 7. Out of scope (now), tracked
 

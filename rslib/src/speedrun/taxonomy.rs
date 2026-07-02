@@ -354,7 +354,10 @@ mod tests {
             topic_path_labels("mcat::biomolecules::enzymes"),
             vec!["Biomolecules", "Enzymes"]
         );
-        assert_eq!(topic_path_labels("mcat::biomolecules"), vec!["Biomolecules"]);
+        assert_eq!(
+            topic_path_labels("mcat::biomolecules"),
+            vec!["Biomolecules"]
+        );
 
         // An unknown id (unmapped/stale tag) yields no breadcrumb.
         assert!(topic_path_labels("mcat::biomolecules::enzymes::nope").is_empty());

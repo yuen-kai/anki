@@ -4,65 +4,82 @@
 @use "../../../../../ts/lib/sass/root-vars";
 @use "../../../../../ts/lib/sass/vars" as *;
 @use "../../../../../ts/lib/sass/card-counts";
+@use "../../../../../ts/lib/sass/elevation" as *;
 @use "../../../../../ts/lib/sass/button-mixins" as button;
 
-/* Speedrun product accent (teal), matched to the study cards + dashboard. */
+/* Speedrun "score instrument" identity: one marigold signal on the primary
+   Study action, a mono readout stack labelling the counts. */
 :root {
-    --sr-accent: #0e7c66;
-    --sr-accent-strong: #0b6353;
+    --sr-signal: #df8f0a;
+    --sr-signal-strong: #c67d06;
+    --sr-signal-ink: #2f2204;
+    --sr-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, "Cascadia Code",
+        "Roboto Mono", Consolas, monospace;
+    --sr-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 .nightMode {
-    --sr-accent: #4fd1ac;
-    --sr-accent-strong: #63dcc0;
+    --sr-signal: #f2a93b;
+    --sr-signal-strong: #f7bd5e;
+    --sr-signal-ink: #1b1405;
+}
+
+body {
+    color: color(fg);
+    font-family: var(--sr-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
 }
 
 .smallLink {
-    font-size: 10px;
+    font-size: 11px;
 }
 
-/* The deck name is the title of the study screen. */
+/* The deck name titles the study screen. */
 h3 {
-    margin: 0.2em 0 0;
-    font-size: 1.5rem;
-    font-weight: 650;
-    letter-spacing: -0.01em;
+    margin: 0.6em 0 0;
+    font-size: 1.7rem;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+    text-align: center;
 }
 
 .descfont {
     padding: 1em;
     color: color(fg-subtle);
 }
-
 .description {
     white-space: pre-wrap;
 }
-
 #fulldesc {
     display: none;
 }
-
 .descmid {
     width: 70%;
-    margin: 0 auto 0;
+    max-width: 34rem;
+    margin: 0 auto;
     text-align: left;
 }
-
 .dyn {
     text-align: center;
 }
 
-/* Study panel: three labelled counts, then one clear Study action. */
+/* One focused study card: three labelled readouts, then the Study action. */
 .study {
     box-sizing: border-box;
-    max-width: 24rem;
-    margin: 1.75rem auto 0;
+    max-width: 25rem;
+    margin: 1.6rem auto 0;
+    padding: 1.25rem;
     text-align: center;
+    background: color(canvas-elevated);
+    border: 1px solid color(border-subtle);
+    border-radius: prop(border-radius-medium);
+    @include elevation(1, $opacity-boost: -0.12);
 }
 
 .study-counts {
     display: flex;
-    gap: 0.6rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.3rem;
 }
 
 .study-count {
@@ -70,44 +87,50 @@ h3 {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.3rem;
-    padding: 0.95rem 0.4rem;
-    background: var(--canvas-elevated);
-    border: 1px solid color(border-subtle);
-    border-radius: 12px;
+    gap: 0.4rem;
+    padding: 0.4rem 0.3rem;
+
+    & + & {
+        border-inline-start: 1px solid color(border-subtle);
+    }
 }
 
 .study-count__n {
-    font-size: 1.7rem;
-    font-weight: 680;
+    font-size: 1.8rem;
+    font-weight: 720;
     line-height: 1;
     font-variant-numeric: tabular-nums;
 }
 
 .study-count__label {
-    font-size: 0.7rem;
+    font-family: var(--sr-mono);
+    font-size: 0.62rem;
     font-weight: 600;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: color(fg-subtle);
 }
 
-/* One Study button: the deck's primary action, in the Speedrun accent. */
+/* One Study button: the deck's primary action, the single marigold spot. */
 #study {
     @include button.base($primary: true);
 
     display: block;
     width: 100%;
-    padding: 0.8rem 1rem;
+    padding: 0.85rem 1rem;
     font-size: 1.05rem;
-    font-weight: 620;
-    border-radius: 12px;
-    background: var(--sr-accent);
-    border-color: var(--sr-accent);
-    color: #fff;
+    font-weight: 680;
+    letter-spacing: -0.005em;
+    border-radius: 10px;
+    background: var(--sr-signal);
+    border-color: var(--sr-signal);
+    color: var(--sr-signal-ink);
 }
-
 #study:hover {
-    background: var(--sr-accent-strong);
-    border-color: var(--sr-accent-strong);
+    background: var(--sr-signal-strong);
+    border-color: var(--sr-signal-strong);
+}
+#study:focus-visible {
+    outline: 2px solid var(--sr-signal);
+    outline-offset: 2px;
 }

@@ -6,11 +6,12 @@
 
 ## 1. The problem this fills
 
-Recall is not application. A student can answer "what does hexokinase do?" and still fail a passage that *uses* hexokinase in an unfamiliar experiment. The MCAT science sections rarely teach this transition top-down; the cultural advice is "do a ton of passages and it'll click" ([Brainlift](../../Brainlift%20MCAT.md)). It usually does click, but inductively and slowly. Speedrun teaches the transition explicitly, as a curriculum of reasoning steps, which is the project's "performance" bet.
+Recall is not application. A student can answer "what does hexokinase do?" and still fail a passage that _uses_ hexokinase in an unfamiliar experiment. The MCAT science sections rarely teach this transition top-down; the cultural advice is "do a ton of passages and it'll click" ([Brainlift](../../Brainlift%20MCAT.md)). It usually does click, but inductively and slowly. Speedrun teaches the transition explicitly, as a curriculum of reasoning steps, which is the project's "performance" bet.
 
 ## 2. Goals & non-goals
 
 **Goals**
+
 - Two clearly separated study modes mapping to block → interleave.
 - An explicit application step (principle-first hierarchy) between learning and unguided practice.
 - Feedback on identification errors with **zero model calls** (Wednesday no-AI).
@@ -18,21 +19,22 @@ Recall is not application. A student can answer "what does hexokinase do?" and s
 - One implementation that renders on both apps (note types + templates).
 
 **Non-goals**
+
 - AI-generated cases, questions, or grading (Friday+; the feedback map is the no-AI stand-in, [D5](decisions.md#d5)).
-- The Performance/Readiness *scores* (designed in [`spec-scores`](spec-scores.md)).
+- The Performance/Readiness _scores_ (designed in [`spec-scores`](spec-scores.md)).
 - Authoring the full MCAT content (Wednesday demonstrates the model on a seeded topic set, [D18](decisions.md#d18)).
 - A bespoke reviewer screen (rejected, the card system already renders everywhere, [D19](decisions.md#d19)).
 
 ## 3. Grounding (why this shape)
 
-| Mechanism | Claim the design rests on | Source | Caveat the design respects |
-| :-- | :-- | :-- | :-- |
-| Contrasting cases → tell | Comparing two analogs and articulating their **shared** structure induces a transferable schema; a single example transfers poorly | Gick & Holyoak 1983; Chi et al. 1981 | The learner must state the similarity / underlying concept, not just spot differences; the schema forms as a byproduct of describing what the cases share |
-| Invent/struggle before telling | Cases-then-told beats told-then-cases for transfer | Schwartz et al. 2011; Steenhof et al. 2019 | Productive *failure*, not unproductive flailing, keep cases bounded |
-| Block → interleave | Blocked practice builds the schema; interleaving then trains discrimination + durable retention | Kaminske et al. 2020; Firth et al. 2021 | Interleaving **before** understanding is an undesirable difficulty that backfires (Hwang 2024; "No Simple Solutions" 2024) → [D4](decisions.md#d4) |
-| Principle-first scaffold (hierarchy) | Forcing a top-down principle → concept → procedure analysis shifts novices to deep-structure categorization and better problem solving | Dufresne, Gerace, Hardiman & Mestre 1992 (the HAT) | The scaffold needs **feedback** to convert into problem-solving gains (ERIC ED310931) → the feedback map ([D5](decisions.md#d5)) |
+| Mechanism                            | Claim the design rests on                                                                                                              | Source                                             | Caveat the design respects                                                                                                                                |
+| :----------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contrasting cases → tell             | Comparing two analogs and articulating their **shared** structure induces a transferable schema; a single example transfers poorly     | Gick & Holyoak 1983; Chi et al. 1981               | The learner must state the similarity / underlying concept, not just spot differences; the schema forms as a byproduct of describing what the cases share |
+| Invent/struggle before telling       | Cases-then-told beats told-then-cases for transfer                                                                                     | Schwartz et al. 2011; Steenhof et al. 2019         | Productive _failure_, not unproductive flailing, keep cases bounded                                                                                       |
+| Block → interleave                   | Blocked practice builds the schema; interleaving then trains discrimination + durable retention                                        | Kaminske et al. 2020; Firth et al. 2021            | Interleaving **before** understanding is an undesirable difficulty that backfires (Hwang 2024; "No Simple Solutions" 2024) → [D4](decisions.md#d4)        |
+| Principle-first scaffold (hierarchy) | Forcing a top-down principle → concept → procedure analysis shifts novices to deep-structure categorization and better problem solving | Dufresne, Gerace, Hardiman & Mestre 1992 (the HAT) | The scaffold needs **feedback** to convert into problem-solving gains (ERIC ED310931) → the feedback map ([D5](decisions.md#d5))                          |
 
-This is the load-bearing argument; if a reviewer questions the section *order*, the answer is the block-then-interleave row and [D4](decisions.md#d4).
+This is the load-bearing argument; if a reviewer questions the section _order_, the answer is the block-then-interleave row and [D4](decisions.md#d4).
 
 ## 4. The mechanic: one topic's journey
 
@@ -98,7 +100,7 @@ sequenceDiagram
 ## 6. The two sections, and how they fit into Anki
 
 - **Learn (blocked):** driven by the topic-grouped queue ([`spec-engine-topic-queue`](spec-engine-topic-queue.md)). Sequence per topic: contrasting cases → concept → principle-first hierarchy → blocked practice. The non-negotiable element is that **the scaffold path precedes the answer**, that's the whole bet.
-- **Practice (interleaved):** Anki's standard SR, now mixing confusable topics for discrimination. Unchanged engine; the value is *what* is eligible (practice-eligible topics) and the framing.
+- **Practice (interleaved):** Anki's standard SR, now mixing confusable topics for discrimination. Unchanged engine; the value is _what_ is eligible (practice-eligible topics) and the framing.
 
 ### Where it lives ([D19](decisions.md#d19))
 
@@ -163,7 +165,7 @@ The feature falls flat if there's no authored content for a topic (no cases, no 
 
 ## 10. Content / ops (quality bar)
 
-Authored content must clear a bar before shipping: contrasting pairs are genuinely contrasting (different surface, same deep structure); the per-level distractors are real confusables (taxonomy siblings); feedback strings name the *discriminating cue*, not just "wrong"; no opposite-fact card pairs within a topic ([PRD edge case 3](prd-speedrun.md#10-cross-cutting-edge-cases)). The seed set is hand-reviewed; the Friday gold-set check ([source §7f](../../Speedrun_%20A%20Desktop%20+%20Mobile%20Study%20App%20Built%20on%20Anki.md)) extends this to generated content.
+Authored content must clear a bar before shipping: contrasting pairs are genuinely contrasting (different surface, same deep structure); the per-level distractors are real confusables (taxonomy siblings); feedback strings name the _discriminating cue_, not just "wrong"; no opposite-fact card pairs within a topic ([PRD edge case 3](prd-speedrun.md#10-cross-cutting-edge-cases)). The seed set is hand-reviewed; the Friday gold-set check ([source §7f](../../Speedrun_%20A%20Desktop%20+%20Mobile%20Study%20App%20Built%20on%20Anki.md)) extends this to generated content.
 
 **Where the cases come from ([D21](decisions.md#d21)).** A contrasting pair is a deliberate pedagogical artifact (two scenarios sharing one principle, differing on surface), not two auto-paired flashcards, so there is no free lunch. For Wednesday (no AI) the cases and scaffold items are **hand-authored or curated** into the note types for a small, complete seed topic set, with raw scenarios optionally adapted from open-licensed sources (e.g. OpenStax, CC BY) to cut authoring time. That is exactly why the seed is small (§9) and AI generation from a named source, gated by the gold-set checker, is the Friday scaling path.
 

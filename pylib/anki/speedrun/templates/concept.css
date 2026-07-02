@@ -1,31 +1,40 @@
-/* SpeedrunConcept styling. Reading-first layout: two cases to compare, a prompt
-   to articulate the shared idea, then the reveal. One accent, used sparingly. */
+/* SpeedrunConcept card. The "score instrument" identity: a cool paper ground,
+   charcoal ink, and one marigold signal spent on the ask and the payoff. A
+   monospace label system reads the card like an instrument. Two contrasting
+   cases to compare, a prompt to state the shared idea, then the reveal. Fonts
+   are system-first so the card renders the same offline on desktop Qt and
+   AnkiDroid, where web fonts can't be relied on. */
 
 .card {
-  /* Cool clinical neutral, deliberately not the warm-cream + serif default. */
-  background: #e9eeec;
+  --sr-paper: #e7eaec;
+  --sr-panel: #fcfcfc;
+  --sr-ink: #181b20;
+  --sr-ink-2: #565c64;
+  --sr-ink-3: #878d95;
+  --sr-line: #d5d9dc;
+  --sr-line-2: #c1c6cb;
+  --sr-signal: #df8f0a;
+  --sr-signal-ink: #3a2a05;
+  --sr-signal-weak: #f4e6cb;
+  --sr-signal-line: #e6c079;
+  --sr-radius: 8px;
+  --sr-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sr-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, "Cascadia Code",
+    "Roboto Mono", Consolas, monospace;
+
+  background: var(--sr-paper);
   padding: 0;
 }
 
 .speedrun {
-  --sr-ink: #16201d;
-  --sr-muted: #556862;
-  --sr-surface: #ffffff;
-  --sr-line: #d6e0dc;
-  --sr-accent: #0e7c66;
-  --sr-warn: #9a5b00;
-  --sr-radius: 10px;
-
   box-sizing: border-box;
-  max-width: 700px;
+  max-width: 680px;
   margin: 0 auto;
-  padding: 30px 22px 40px;
+  padding: 30px 24px 44px;
   text-align: left;
   color: var(--sr-ink);
-  /* Deliberate sans for dense scientific prose; system-first so it renders the
-     same offline on desktop Qt and AnkiDroid, where web fonts can't be relied on. */
-  font-family: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--sr-sans);
   font-size: 16px;
   line-height: 1.62;
   letter-spacing: -0.003em;
@@ -40,19 +49,20 @@
   box-sizing: border-box;
 }
 
-/* Topic breadcrumb: where this card sits in the AAMC hierarchy. Quiet by
-   default, the current (leaf) topic carries the accent. Separators are drawn in
-   CSS so the script only ever writes plain label text. */
+/* Topic breadcrumb: where this card sits in the AAMC hierarchy, set as a mono
+   readout. The leaf topic carries the signal. Separators are drawn in CSS so
+   the script only ever writes plain label text. */
 .sr-breadcrumb {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   margin: 0 0 22px;
+  font-family: var(--sr-mono);
   font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.09em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--sr-muted);
+  color: var(--sr-ink-3);
 }
 
 .sr-breadcrumb[hidden] {
@@ -60,28 +70,28 @@
 }
 
 .sr-breadcrumb__item + .sr-breadcrumb__item::before {
-  content: "›";
+  content: "/";
   margin: 0 8px;
-  color: var(--sr-muted);
-  font-weight: 400;
+  color: var(--sr-line-2);
 }
 
 .sr-breadcrumb__item:last-child {
-  color: var(--sr-accent);
+  color: var(--sr-signal);
 }
 
+/* Two cases, one panel split by a hairline. Mono tabs label each column. */
 .sr-cases {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
-  background: var(--sr-surface);
+  background: var(--sr-panel);
   border: 1px solid var(--sr-line);
   border-radius: var(--sr-radius);
   overflow: hidden;
 }
 
 .sr-case {
-  padding: 18px 20px 20px;
+  padding: 16px 20px 20px;
 }
 
 .sr-case + .sr-case {
@@ -89,64 +99,85 @@
 }
 
 .sr-case__label {
-  margin: 0 0 10px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--sr-line);
+  font-family: var(--sr-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--sr-accent);
+  color: var(--sr-ink-3);
 }
 
 .sr-case__body {
   margin: 0;
-  font-size: 15.5px;
+  font-size: 15px;
   line-height: 1.6;
 }
 
-/* Practice mode shows a single cue case, so the contrast grid collapses to one
-   column. */
+/* Practice mode shows a single cue case, so the contrast grid collapses. */
 .sr-concept--practice .sr-cases {
   grid-template-columns: 1fr;
 }
 
-/* The pivot of the card: articulate the shared idea. Set as the one clear
-   focal line, marked with the accent so the eye lands on the ask. */
+/* The pivot of the card: articulate the shared idea. One short signal rule
+   marks the ask; the line itself is the focal point. */
 .sr-prompt {
-  margin: 26px 0 16px;
-  padding-left: 14px;
-  border-left: 3px solid var(--sr-accent);
-  font-size: 18px;
-  font-weight: 620;
+  margin: 26px 0 18px;
+  font-size: 19px;
+  font-weight: 660;
   line-height: 1.4;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.012em;
+}
+
+.sr-prompt::before {
+  content: "";
+  display: block;
+  width: 34px;
+  height: 3px;
+  margin-bottom: 14px;
+  background: var(--sr-signal);
+  border-radius: 1px;
+}
+
+.sr-prompt[hidden] {
+  display: none;
 }
 
 .sr-answer__label {
   display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--sr-muted);
+  margin-bottom: 9px;
+  font-family: var(--sr-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sr-ink-3);
 }
 
 .sr-answer__input {
   display: block;
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   font: inherit;
   font-size: 16px;
   color: var(--sr-ink);
-  background: var(--sr-surface);
-  border: 1px solid var(--sr-line);
-  border-radius: var(--sr-radius);
+  background: var(--sr-panel);
+  border: 1px solid var(--sr-line-2);
+  border-radius: 6px;
   resize: vertical;
+}
+
+.sr-answer__input::placeholder {
+  color: var(--sr-ink-3);
 }
 
 .sr-answer__input:focus-visible,
 .sr-answer__input:focus {
-  outline: 2px solid var(--sr-accent);
+  outline: 2px solid var(--sr-signal);
   outline-offset: 1px;
-  border-color: var(--sr-accent);
+  border-color: var(--sr-signal);
 }
 
 .sr-answer__input.is-locked {
@@ -154,19 +185,25 @@
   resize: none;
 }
 
+/* Reveal (answer side): the recalled answer, then the shared concept as the
+   payoff, marked with the signal rule. */
 .sr-reveal {
-  margin-top: 20px;
+  margin-top: 22px;
+}
+
+.sr-reveal + .sr-reveal {
   padding-left: 14px;
-  border-left: 3px solid var(--sr-accent);
+  border-left: 3px solid var(--sr-signal);
 }
 
 .sr-reveal__label {
-  margin: 0 0 7px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  margin: 0 0 8px;
+  font-family: var(--sr-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--sr-muted);
+  color: var(--sr-ink-3);
 }
 
 .sr-your-answer {
@@ -175,7 +212,7 @@
 }
 
 .sr-blank {
-  color: var(--sr-muted);
+  color: var(--sr-ink-3);
   font-style: italic;
 }
 
@@ -194,15 +231,17 @@
   }
 }
 
-.nightMode .card {
-  background: #101513;
-}
-
-.nightMode .speedrun {
-  --sr-ink: #e6ece9;
-  --sr-muted: #91a39d;
-  --sr-surface: #1a201e;
-  --sr-line: #2e3835;
-  --sr-accent: #4fd1ac;
-  --sr-warn: #e0a35a;
+.nightMode .card,
+.night-mode .card {
+  --sr-paper: #131519;
+  --sr-panel: #1b1e22;
+  --sr-ink: #f0eee9;
+  --sr-ink-2: #a6abb2;
+  --sr-ink-3: #767c85;
+  --sr-line: #2a2e34;
+  --sr-line-2: #3a3f46;
+  --sr-signal: #f2a93b;
+  --sr-signal-ink: #1b1405;
+  --sr-signal-weak: #2c2314;
+  --sr-signal-line: #5a4620;
 }

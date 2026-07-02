@@ -18,6 +18,9 @@ from __future__ import annotations
 # circular import that hits if anki.decks is the first submodule loaded.
 from typing import cast
 
+import pytest
+
+from anki.cards import Card
 from anki.collection import Collection
 from anki.decks import DeckId
 from anki.models import NotetypeDict
@@ -232,6 +235,59 @@ def test_topic_grouped_queue_is_state_aware():
         assert kinetics_concept in served
         assert kinetics_app in served, "application served at hierarchy"
         assert structure_concept in served, "graduated topics are mixed in"
+    finally:
+        col.close()
+
+
+def test_answering_out_of_queue_allows_a_non_top_card():
+    """Regression: Speedrun Learn serves a card from its own topic-grouped
+    ordering, not the live study queue, so the served card usually isn't the
+    live queue's top. Grading it the normal way (from_queue=True) makes the
+    backend try to pop a non-top card and fail with "not at top of queue" —
+    the error users hit clicking the answer buttons. build_answer(from_queue=
+    False) must let it through."""
+    col = getEmptyCol()
+    try:
+        basic_nt = col.models.by_name("Basic")
+        assert basic_nt is not None
+        for i in range(3):
+            note = col.new_note(basic_nt)
+            note.fields[0] = f"q{i}"
+            col.add_note(note, DEFAULT_DECK)
+
+        sched = cast(V3Scheduler, col.sched)
+        # Build the live study queue (default order) as opening a deck does; its
+        # top is cards[0], so cards[1] is deliberately not at the top.
+        queued = sched.get_queued_cards(fetch_limit=10)
+        assert len(queued.cards) == 3
+        non_top = queued.cards[1]
+
+        def answer_for(from_queue: bool) -> CardAnswer:
+            card = Card(col, backend_card=non_top.card)
+            card.start_timer()
+            return sched.build_answer(
+                card=card,
+                states=non_top.states,
+                rating=CardAnswer.GOOD,
+                from_queue=from_queue,
+            )
+
+        # The old path (always from_queue=True) fails on the non-top card.
+        with pytest.raises(Exception) as excinfo:
+            sched.answer_card(answer_for(from_queue=True))
+        assert "top of queue" in str(excinfo.value)
+
+        # The Learn path grades it out of queue and succeeds, writing one revlog.
+        new_before = sched.counts()[0]
+        revlog_before = col.db.scalar("select count() from revlog")
+        sched.answer_card(answer_for(from_queue=False))
+        assert col.db.scalar("select count() from revlog") == revlog_before + 1, (
+            "the out-of-queue answer is recorded"
+        )
+        # The cached study queue is dropped after an out-of-queue answer, so the
+        # overview's counts() rebuild from the DB and reflect the graded card
+        # (one fewer new) instead of showing stale counts.
+        assert sched.counts()[0] == new_before - 1, "counts refresh, not stale"
     finally:
         col.close()
 

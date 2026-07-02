@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import enum
+import json
 import logging
 import mimetypes
 import os
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 from errno import EPROTOTYPE
 from http import HTTPStatus
 from pathlib import Path
+from typing import Any, cast
 
 import flask
 import stringcase
@@ -27,13 +29,21 @@ from waitress.server import create_server
 import aqt
 import aqt.main
 import aqt.operations
-from anki import hooks
+from anki import generic_pb2, hooks
+from anki.cards import CardId
 from anki.collection import OpChangesOnly, Progress, SearchNode
-from anki.decks import UpdateDeckConfigs, UpdateDeckConfigsMode
-from anki.scheduler.v3 import SchedulingStatesWithContext, SetSchedulingStatesRequest
+from anki.decks import DeckId, UpdateDeckConfigs, UpdateDeckConfigsMode
+from anki.notes import NoteId
+from anki.scheduler.v3 import (
+    CardAnswer,
+    SchedulingStatesWithContext,
+    SetSchedulingStatesRequest,
+)
+from anki.scheduler.v3 import Scheduler as V3Scheduler
+from anki.speedrun import authoring, materialize, study
 from anki.utils import dev_mode
 from aqt.changenotetype import ChangeNotetypeDialog
-from aqt.deckoptions import DeckOptionsDialog
+from aqt.deckoptions import DeckOptionsDialog, display_options_for_deck
 from aqt.operations import on_op_finished
 from aqt.operations.deck import update_deck_configs as update_deck_configs_op
 from aqt.progress import ProgressUpdate
@@ -423,6 +433,11 @@ def is_sveltekit_page(path: str) -> bool:
         "import-page",
         "image-occlusion",
         "speedrun-dashboard",
+        "speedrun-decks",
+        "speedrun-hierarchy",
+        "speedrun-study",
+        "speedrun-review",
+        "speedrun-review-demo",
     ]
 
 
@@ -705,6 +720,206 @@ def save_custom_colours() -> bytes:
     return b""
 
 
+# Speedrun authoring screens: JSON in/out via generic.Json, backed by the
+# Qt-free anki.speedrun.authoring store. The JSON <-> protobuf plumbing lives
+# here so the store stays unit-testable.
+def _speedrun_request() -> Any:
+    req = generic_pb2.Json()
+    req.ParseFromString(request.data)
+    return json.loads(req.json) if req.json else {}
+
+
+def _speedrun_response(payload: Any) -> bytes:
+    return generic_pb2.Json(json=json.dumps(payload).encode()).SerializeToString()
+
+
+def speedrun_list_decks() -> bytes:
+    return _speedrun_response(authoring.list_decks(aqt.mw.col))
+
+
+def speedrun_get_hierarchy() -> bytes:
+    deck_id = str(_speedrun_request().get("deckId", ""))
+    return _speedrun_response(authoring.get_hierarchy(aqt.mw.col, deck_id))
+
+
+def speedrun_save_hierarchy() -> bytes:
+    return _speedrun_response(authoring.save_hierarchy(aqt.mw.col, _speedrun_request()))
+
+
+def speedrun_delete_deck() -> bytes:
+    deck_id = str(_speedrun_request().get("deckId", ""))
+    authoring.delete_deck(aqt.mw.col, deck_id)
+    return _speedrun_response({})
+
+
+def speedrun_open_deck() -> bytes:
+    did = DeckId(int(_speedrun_request()["deckId"]))
+
+    def handle_on_main() -> None:
+        aqt.mw.col.decks.set_current(did)
+        aqt.mw.moveToState("overview")
+
+    aqt.mw.taskman.run_on_main(handle_on_main)
+    return _speedrun_response({"deckId": str(did)})
+
+
+def speedrun_study_summary() -> bytes:
+    """Today's Progress counts for the study screen: the deck's remaining
+    new/learn/review (from the due tree) and how many cards were studied in it
+    today."""
+    did = DeckId(int(_speedrun_request()["deckId"]))
+    col = aqt.mw.col
+    node = col.sched.deck_due_tree(did)
+    if node is None:
+        return _speedrun_response(
+            {"deckName": "", "new": 0, "learn": 0, "review": 0, "studiedToday": 0}
+        )
+    today = col._backend.counts_for_deck_today(did)
+    return _speedrun_response(
+        {
+            "deckName": node.name,
+            "new": node.new_count,
+            "learn": node.learn_count,
+            "review": node.review_count,
+            "studiedToday": today.new + today.review,
+        }
+    )
+
+
+def speedrun_start_study() -> bytes:
+    """Start a study session (the study overview's Study button handoff): set the
+    deck current and move to the bespoke Speedrun study state, which owns the
+    whole window and hides the top/bottom bars (the classic reviewer is no longer
+    used for Speedrun study). The RPC name/contract stays stable for callers."""
+    did = DeckId(int(_speedrun_request()["deckId"]))
+
+    def handle_on_main() -> None:
+        aqt.mw.col.decks.set_current(did)
+        aqt.mw.col.startTimebox()
+        aqt.mw.moveToState("speedrunStudy", did)
+
+    aqt.mw.taskman.run_on_main(handle_on_main)
+    return _speedrun_response({"deckId": str(did)})
+
+
+def speedrun_overview_action() -> bytes:
+    """Run one of the deck-overview secondary actions from the study screen's
+    overflow menu, reusing the existing Overview methods so every capability of
+    the old bottom bar is preserved."""
+    action = str(_speedrun_request().get("action", ""))
+
+    def handle_on_main() -> None:
+        overview = aqt.mw.overview
+        if action == "options":
+            display_options_for_deck(aqt.mw.col.decks.current())
+        elif action == "customStudy":
+            overview.onStudyMore()
+        elif action == "unbury":
+            overview.on_unbury()
+        elif action == "description":
+            overview.edit_description()
+        elif action == "rebuild":
+            overview.rebuild_current_filtered_deck()
+        elif action == "empty":
+            overview.empty_current_filtered_deck()
+
+    aqt.mw.taskman.run_on_main(handle_on_main)
+    return _speedrun_response({})
+
+
+def speedrun_show_decks() -> bytes:
+    aqt.mw.taskman.run_on_main(lambda: aqt.mw.moveToState("deckBrowser"))
+    return _speedrun_response({})
+
+
+# Bespoke card-study screen (speedrun-review). FSRS owns timing via
+# col.sched.answer_card on the materialized cards; anki.speedrun.study owns the
+# per-concept mastery state in collection config. These data RPCs run on the
+# media-server thread like the authoring ones (backend calls are self-locking).
+
+_RATING_BY_INDEX = {
+    1: CardAnswer.AGAIN,
+    2: CardAnswer.HARD,
+    3: CardAnswer.GOOD,
+    4: CardAnswer.EASY,
+}
+
+
+def speedrun_study_state() -> bytes:
+    deck_id = str(_speedrun_request()["deckId"])
+    return _speedrun_response(study.get_study_state(aqt.mw.col, deck_id))
+
+
+def _speedrun_review_card(col: Any, deck_id: str) -> dict[str, Any]:
+    """The next FSRS-due concept card for the deck, as a review payload, or a
+    done payload when the scheduler has nothing left today."""
+    did = DeckId(int(deck_id))
+    col.decks.set_current(did)
+    queued = col.sched.get_queued_cards(fetch_limit=1)
+    if not queued.cards:
+        return {"kind": "done"}
+    backend_card = queued.cards[0].card
+    concept_id = materialize.concept_id_for_note(col, NoteId(backend_card.note_id))
+    progress = study.get_study_state(col, deck_id)["progress"]
+    state = (progress.get(concept_id) or {}).get("state", study.STATE_PRACTICING)
+    return {
+        "kind": "review",
+        "cardId": str(backend_card.id),
+        "conceptId": concept_id,
+        "state": state,
+    }
+
+
+def speedrun_next_card() -> bytes:
+    """Reconcile the deck's cards, then return the learning block for the first
+    topic still being taught, else the next FSRS-due card, else done."""
+    deck_id = str(_speedrun_request()["deckId"])
+    col = aqt.mw.col
+    materialize.reconcile(col, deck_id)
+    hierarchy = authoring.get_hierarchy(col, deck_id)
+    progress = study.get_study_state(col, deck_id)["progress"]
+    block = study.next_learning_block(hierarchy, progress)
+    if block is not None:
+        return _speedrun_response({"kind": "learning_block", **block})
+    return _speedrun_response(_speedrun_review_card(col, deck_id))
+
+
+def speedrun_record_learned() -> bytes:
+    req = _speedrun_request()
+    deck_id = str(req["deckId"])
+    concept_ids = [str(cid) for cid in (req.get("conceptIds") or [])]
+    return _speedrun_response(study.record_learned(aqt.mw.col, deck_id, concept_ids))
+
+
+def speedrun_answer_card() -> bytes:
+    """Grade a concept card through real FSRS (col.sched.answer_card) and update
+    its mastery state. rating 1..4 = Again/Hard/Good/Easy."""
+    req = _speedrun_request()
+    deck_id = str(req["deckId"])
+    concept_id = str(req["conceptId"])
+    rating = int(req["rating"])
+    col = aqt.mw.col
+
+    sched = cast(V3Scheduler, col.sched)
+    card = col.get_card(CardId(int(req["cardId"])))
+    # build_answer reads card.time_taken(), which needs a started timer; the
+    # bespoke screen tracks its own timing, so a near-zero elapsed is fine (FSRS
+    # schedules on the rating, not the answer time).
+    card.start_timer()
+    states = col._backend.get_scheduling_states(card.id)
+    answer = sched.build_answer(
+        card=card,
+        states=states,
+        rating=_RATING_BY_INDEX[rating],
+        # served from the bespoke screen, not the live study queue, so grade it
+        # out of queue (still real FSRS; only skips the queue-pop assertion).
+        from_queue=False,
+    )
+    sched.answer_card(answer)
+
+    return _speedrun_response(study.record_answer(col, deck_id, concept_id, rating))
+
+
 post_handler_list = [
     congrats_info,
     get_deck_configs_for_update,
@@ -721,6 +936,19 @@ post_handler_list = [
     deck_options_require_close,
     deck_options_ready,
     save_custom_colours,
+    speedrun_list_decks,
+    speedrun_get_hierarchy,
+    speedrun_save_hierarchy,
+    speedrun_open_deck,
+    speedrun_delete_deck,
+    speedrun_study_summary,
+    speedrun_start_study,
+    speedrun_overview_action,
+    speedrun_show_decks,
+    speedrun_study_state,
+    speedrun_next_card,
+    speedrun_record_learned,
+    speedrun_answer_card,
 ]
 
 
@@ -767,6 +995,7 @@ exposed_backend_list = [
     "get_performance_score",
     "get_readiness_score",
     "get_speedrun_progress",
+    "get_speedrun_score_breakdown",
     # DeckConfigService
     "get_ignored_before_count",
     "get_retention_workload",

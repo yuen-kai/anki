@@ -13,8 +13,34 @@ from aqt import gui_hooks, props
 from aqt.qt import *
 from aqt.sync import get_sync_status
 from aqt.theme import theme_manager
-from aqt.utils import tr
+from aqt.utils import openLink, tr
 from aqt.webview import AnkiWebView, AnkiWebViewKind
+
+# Inline icons for the app bar. currentColor so they inherit theme + accent.
+_GAUGE_SVG = (
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">'
+    '<path d="M3.6 16.4a8.4 8.4 0 0 1 16.8 0" stroke="currentColor" stroke-width="2.3" '
+    'stroke-linecap="round"/><path d="M12 16.4l5-4.1" stroke="currentColor" '
+    'stroke-width="2.3" stroke-linecap="round"/><circle cx="12" cy="16.4" r="1.7" '
+    'fill="currentColor"/></svg>'
+)
+_PLUS_SVG = (
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">'
+    '<path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.8" '
+    'stroke-linecap="round"/></svg>'
+)
+_SYNC_SVG = (
+    '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">'
+    '<path d="M20 11a8 8 0 0 0-14.4-4.4M4 4.6V9h4.4" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+    '<path d="M4 13a8 8 0 0 0 14.4 4.4M20 19.4V15h-4.4" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+)
+_MENU_SVG = (
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">'
+    '<path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" '
+    'stroke-linecap="round"/></svg>'
+)
 
 
 class HideMode(enum.IntEnum):
@@ -273,6 +299,8 @@ class Toolbar:
         self.web = web
         self.link_handlers: dict[str, Callable] = {
             "study": self._studyLinkHandler,
+            "create": self._create_menu,
+            "menu": self._app_menu,
         }
         self.web.requiresCol = False
 
@@ -286,7 +314,9 @@ class Toolbar:
         link_handler = link_handler or self._linkHandler
         self.web.set_bridge_command(link_handler, web_context)
         body = self._body.format(
-            toolbar_content=self._centerLinks(),
+            gauge=_GAUGE_SVG,
+            nav_content=self._nav_links(),
+            actions_content=self._actions(),
             left_tray_content=self._left_tray_content(),
             right_tray_content=self._right_tray_content(),
         )
@@ -313,6 +343,7 @@ class Toolbar:
         func: Callable,
         tip: str | None = None,
         id: str | None = None,
+        active: bool = False,
     ) -> str:
         """Generates HTML link element and registers link handler
 
@@ -326,6 +357,7 @@ class Toolbar:
                                    over the link (default: {None})
             id: {Optional[str]} -- Optional id attribute to supply the link with
                                    (default: {None})
+            active {bool} -- Mark the nav item as the current section.
 
         Returns:
             str -- HTML link element
@@ -335,14 +367,17 @@ class Toolbar:
 
         title_attr = f'title="{tip}"' if tip else ""
         id_attr = f'id="{id}"' if id else ""
+        klass = "hitem active" if active else "hitem"
 
         return (
-            f"""<a class=hitem tabindex="-1" aria-label="{label}" """
+            f"""<a class="{klass}" tabindex="-1" aria-label="{label}" """
             f"""{title_attr} {id_attr} href=# onclick="return pycmd('{cmd}')">"""
             f"""{label}</a>"""
         )
 
-    def _centerLinks(self) -> str:
+    def _nav_links(self) -> str:
+        # The main window is always the deck flow, so Decks is the live section;
+        # Browse and Stats open their own windows over it.
         links = [
             self.create_link(
                 "decks",
@@ -350,13 +385,7 @@ class Toolbar:
                 self._deckLinkHandler,
                 tip=tr.actions_shortcut_key(val="D"),
                 id="decks",
-            ),
-            self.create_link(
-                "add",
-                tr.actions_add(),
-                self._addLinkHandler,
-                tip=tr.actions_shortcut_key(val="A"),
-                id="add",
+                active=True,
             ),
             self.create_link(
                 "browse",
@@ -374,11 +403,21 @@ class Toolbar:
             ),
         ]
 
-        links.append(self._create_sync_link())
-
         gui_hooks.top_toolbar_did_init_links(links, self)
 
         return "\n".join(links)
+
+    def _actions(self) -> str:
+        """The right cluster: Create, Sync, and the overflow menu."""
+        create = (
+            '<button class="create" tabindex="-1" title="Create" aria-label="Create" '
+            "onclick=\"return pycmd('create')\">{plus}<span>Create</span></button>"
+        ).format(plus=_PLUS_SVG)
+        menu = (
+            '<button id="appmenu" class="iconbtn" tabindex="-1" aria-label="Menu" '
+            'title="Menu" onclick="return pycmd(\'menu\')">{icon}</button>'
+        ).format(icon=_MENU_SVG)
+        return create + self._create_sync_link() + menu
 
     # Add-ons
     ######################################################################
@@ -406,8 +445,8 @@ class Toolbar:
         self.link_handlers[label] = self._syncLinkHandler
 
         return f"""
-<a class=hitem tabindex="-1" aria-label="{name}" title="{title}" id="{label}" href=# onclick="return pycmd('{label}')"
->{name}<img id=sync-spinner src='/_anki/imgs/refresh.svg'>
+<a class="iconbtn sync" tabindex="-1" aria-label="{name}" title="{name} ({title})" id="{label}" href=# onclick="return pycmd('{label}')"
+>{_SYNC_SVG}<img id=sync-spinner src='/_anki/imgs/refresh.svg'>
 </a>"""
 
     def set_sync_active(self, active: bool) -> None:
@@ -453,13 +492,67 @@ class Toolbar:
     def _syncLinkHandler(self) -> None:
         self.mw.on_sync_button_clicked()
 
+    # Create + overflow menus
+    ######################################################################
+
+    def _create_menu(self) -> None:
+        """The + Create menu: the app's single create surface."""
+        m = QMenu(self.mw)
+        # QMenu.addAction is typed Optional but never returns None here.
+        for label, handler in (
+            (tr.actions_add(), self._addLinkHandler),
+            (tr.decks_create_deck(), self._on_create_deck),
+            (tr.decks_import_file(), lambda: self.mw.onImport()),
+        ):
+            action = m.addAction(label)
+            assert action is not None
+            qconnect(action.triggered, handler)
+        m.addSeparator()
+        shared = m.addAction(tr.decks_get_shared())
+        assert shared is not None
+        qconnect(shared.triggered, lambda: openLink(f"{aqt.appShared}decks/"))
+        m.popup(QCursor.pos())
+
+    def _on_create_deck(self) -> None:
+        from aqt.operations.deck import add_deck_dialog
+
+        if op := add_deck_dialog(
+            parent=self.mw, default_text=self.mw.col.decks.current()["name"]
+        ):
+            op.run_in_background()
+
+    def _app_menu(self) -> None:
+        """The overflow menu. Mirrors the native menu bar so every action stays
+        reachable in-window; reuses the live QActions (dynamic labels, shortcuts,
+        and any add-on-added items come along for free)."""
+        f = self.mw.form
+        m = QMenu(self.mw)
+        # Undo / Redo lead.
+        m.addActions(f.menuEdit.actions())
+        m.addSeparator()
+        for src in (
+            f.menuCol,
+            f.menuTools,
+            f.menuqt_accel_view,
+            f.menuHelp,
+        ):
+            sub = m.addMenu(src.title())
+            assert sub is not None
+            sub.addActions(src.actions())
+        m.popup(QCursor.pos())
+
     # HTML & CSS
     ######################################################################
 
     _body = """
-<div class="header">
+<div class="appbar">
+  <a class="brand" tabindex="-1" href=# aria-label="Speedrun" onclick="return pycmd('decks')">
+    <span class="brand-mark">{gauge}</span><span class="brand-word">speedrun</span>
+  </a>
   <div class="left-tray">{left_tray_content}</div>
-  <div class="toolbar">{toolbar_content}</div>
+  <nav class="toolbar" aria-label="Primary">{nav_content}</nav>
+  <div class="appbar-spacer"></div>
+  <div class="actions">{actions_content}</div>
   <div class="right-tray">{right_tray_content}</div>
 </div>
 """

@@ -1,23 +1,25 @@
 # Spec: Engine, topic-grouped (blocked) queue
 
-> The required real Rust change. A new review order that serves due cards **grouped by AAMC topic**, ordered within a topic block by weakness × topic weight, exposed through a new protobuf message and called from Python, and inherited for free by the phone build. It is a new code path *alongside* Anki's existing interleaved queue, not a rewrite of the scheduler, so FSRS timing and undo stay untouched. Lives in `rslib/src/scheduler/queue/`. Companions: [`spec-topic-taxonomy`](spec-topic-taxonomy.md), [`spec-study-model`](spec-study-model.md), [`spec-mobile-shared-engine`](spec-mobile-shared-engine.md). Decisions: [D3](decisions.md#d3), [D16](decisions.md#d16), [D17](decisions.md#d17). Status: design locked, unbuilt.
+> The required real Rust change. A new review order that serves due cards **grouped by AAMC topic**, ordered within a topic block by weakness × topic weight, exposed through a new protobuf message and called from Python, and inherited for free by the phone build. It is a new code path _alongside_ Anki's existing interleaved queue, not a rewrite of the scheduler, so FSRS timing and undo stay untouched. Lives in `rslib/src/scheduler/queue/`. Companions: [`spec-topic-taxonomy`](spec-topic-taxonomy.md), [`spec-study-model`](spec-study-model.md), [`spec-mobile-shared-engine`](spec-mobile-shared-engine.md). Decisions: [D3](decisions.md#d3), [D16](decisions.md#d16), [D17](decisions.md#d17). Status: design locked, unbuilt.
 >
 > **Authority:** frozen initial design. For current truth read `AGENTS.md` + the [decision log](decisions.md); a later decision overrides this doc where they conflict.
 
 ## 1. The problem this fills
 
-Anki's queue builder interleaves due cards across the whole collection by design. The Brainlift's "block, then interleave" needs the *opposite* available as a mode: serve one topic's due cards together so the learner can build a schema before discrimination practice ([`spec-study-model`](spec-study-model.md) §3). That ordering does not exist in Anki, and faking it in Python would fail the "real Rust change" requirement ([source §7a](../../Speedrun_%20A%20Desktop%20+%20Mobile%20Study%20App%20Built%20on%20Anki.md); 50% grade cap). It belongs in Rust because it's queue construction over the whole due set, on the hot path, and must behave identically on desktop and phone.
+Anki's queue builder interleaves due cards across the whole collection by design. The Brainlift's "block, then interleave" needs the _opposite_ available as a mode: serve one topic's due cards together so the learner can build a schema before discrimination practice ([`spec-study-model`](spec-study-model.md) §3). That ordering does not exist in Anki, and faking it in Python would fail the "real Rust change" requirement ([source §7a](../../Speedrun_%20A%20Desktop%20+%20Mobile%20Study%20App%20Built%20on%20Anki.md); 50% grade cap). It belongs in Rust because it's queue construction over the whole due set, on the hot path, and must behave identically on desktop and phone.
 
 ## 2. Goals & non-goals
 
 **Goals**
+
 - A selectable **topic-grouped** review order producing topic-contiguous blocks.
 - Within-block ordering by weakness × topic weight ([D16](decisions.md#d16)).
 - A new protobuf message in `SchedulerService`, surfaced as a snake_case backend method, called from Python ([D17](decisions.md#d17)).
 - Provably safe: standard FSRS intervals unchanged, undo intact, no corruption.
 
 **Non-goals**
-- Changing *when* cards are due (no interval mutation, that was the rejected topic-aware-scheduling option, [D3](decisions.md#d3)).
+
+- Changing _when_ cards are due (no interval mutation, that was the rejected topic-aware-scheduling option, [D3](decisions.md#d3)).
 - Replacing the default queue (it stays the engine for **Practice** mode).
 - New-card gather/limit policy changes (reuse existing deck-config limits).
 
@@ -60,12 +62,12 @@ queue = flatten(
         ) ++ unmapped_block
 ```
 
-| Topic | weakness | exam_weight | block_priority | Order |
-| :-- | :-- | :-- | :-- | :-- |
-| Amino acid metabolism | 0.7 | 0.20 | 0.140 | 1 |
-| Enzyme kinetics | 0.5 | 0.18 | 0.090 | 2 |
-| Glycolysis | 0.3 | 0.22 | 0.066 | 3 |
-| (unmapped) | n/a | n/a | n/a | last |
+| Topic                 | weakness | exam_weight | block_priority | Order |
+| :-------------------- | :------- | :---------- | :------------- | :---- |
+| Amino acid metabolism | 0.7      | 0.20        | 0.140          | 1     |
+| Enzyme kinetics       | 0.5      | 0.18        | 0.090          | 2     |
+| Glycolysis            | 0.3      | 0.22        | 0.066          | 3     |
+| (unmapped)            | n/a      | n/a         | n/a            | last  |
 
 Ordering is **deterministic** given the same inputs, which is what makes it cleanly unit-testable.
 
@@ -88,6 +90,7 @@ message GetTopicGroupedQueueRequest {
 ## 7. Data model
 
 No new collection schema. The change reads:
+
 - due cards (existing tables),
 - the card→topic mapping + weights (shipped data, [`spec-topic-taxonomy`](spec-topic-taxonomy.md)),
 - FSRS retrievability (existing card state).
@@ -110,7 +113,7 @@ The brief requires proof that undo works and the collection doesn't corrupt ([so
 
 ## 10. Out of scope (now), tracked
 
-- Topic-aware *rescheduling* (interval changes), explicitly rejected for Wednesday ([D3](decisions.md#d3)); revisit only with strong evidence.
+- Topic-aware _rescheduling_ (interval changes), explicitly rejected for Wednesday ([D3](decisions.md#d3)); revisit only with strong evidence.
 - New-card blocking policy (Wednesday handles due reviews; new-card gather uses existing config).
 - Upstream contribution of the queue mode → Sunday stretch ([source §13](../../Speedrun_%20A%20Desktop%20+%20Mobile%20Study%20App%20Built%20on%20Anki.md)).
 

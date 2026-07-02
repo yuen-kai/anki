@@ -2,56 +2,61 @@
 
 > The alternatives ledger. Every meaningful choice in the [PRD](prd-speedrun.md) and specs traces to an entry here. IDs are stable and never renumbered; superseding choices get a new entry, not an edit. Shape is fixed: **Chose → Considered (why rejected) → Gaps / risks.**
 >
-> Scope: these are the *initial* decisions seeding the Wednesday milestone of Speedrun, with Friday/Sunday context where a Wednesday choice depends on it.
+> Scope: these are the _initial_ decisions seeding the Wednesday milestone of Speedrun, with Friday/Sunday context where a Wednesday choice depends on it.
 
 ## Index
 
-| ID | Title | Status |
-| :-- | :-- | :-- |
-| [D1](#d1) | Exam = MCAT | resolved |
-| [D2](#d2) | Two-section study model (blocked → interleaved) | superseded by D30 |
-| [D3](#d3) | Rust change = topic-grouped (blocked) queue | resolved |
-| [D4](#d4) | Blocked→interleaved transition is mastery-gated | superseded by D32 |
-| [D5](#d5) | Principle-first scaffold + static feedback map (no AI) | resolved |
-| [D6](#d6) | Concept teaching = contrasting cases, then tell | resolved |
-| [D7](#d7) | Three scores shown separately, never blended | resolved |
-| [D8](#d8) | Memory score = aggregated FSRS retrievability + range | resolved |
-| [D9](#d9) | Give-up rule threshold | resolved |
-| [D10](#d10) | Performance + Readiness designed-but-deferred | resolved |
-| [D11](#d11) | Topic taxonomy = AAMC content outline via tags | resolved |
-| [D12](#d12) | Coverage % computed from taxonomy vs deck | resolved |
-| [D13](#d13) | Mobile = fork AnkiDroid | resolved |
-| [D14](#d14) | Sync deferred to Friday | resolved |
-| [D15](#d15) | Docs home = `docs/plan/` | resolved |
-| [D16](#d16) | Blocked-queue ordering = weakness × topic weight | resolved |
-| [D17](#d17) | Expose the queue via a new protobuf message | resolved |
-| [D18](#d18) | MCAT deck/content source | open |
-| [D19](#d19) | App-teacher UI = note types + card-template JS | resolved |
-| [D20](#d20) | User-facing mode labels = Learn / Practice | resolved |
-| [D21](#d21) | Contrasting-case sourcing = authored seed, then AI | resolved |
-| [D22](#d22) | Taxonomy seed = inline Rust, leaf-only weights | resolved |
-| [D23](#d23) | Weakness proxy + card→topic mapping (Wednesday) | resolved |
-| [D24](#d24) | Memory score concretization (range, confidence, shared signals) | resolved |
-| [D25](#d25) | Defer AttemptLog table to Phase 3 / Friday | resolved |
-| [D26](#d26) | Learn entry = reviewer queue-swap to topic-grouped queue | resolved |
-| [D27](#d27) | Application-card Show-Answer gate (fail-open, at _showAnswer) | resolved |
-| [D28](#d28) | Preload the MCAT seed deck on collection load | resolved |
-| [D29](#d29) | Mobile shared-engine build (rsdroid repointed at the fork) | resolved |
-| [D30](#d30) | Four-state mastery progression (supersedes two-mode) | resolved |
-| [D31](#d31) | State-aware card modes + scaffold fade | resolved |
-| [D32](#d32) | Topic-state storage + transitions + demotion | resolved |
+| ID          | Title                                                           | Status            |
+| :---------- | :-------------------------------------------------------------- | :---------------- |
+| [D1](#d1)   | Exam = MCAT                                                     | resolved          |
+| [D2](#d2)   | Two-section study model (blocked → interleaved)                 | superseded by D30 |
+| [D3](#d3)   | Rust change = topic-grouped (blocked) queue                     | resolved          |
+| [D4](#d4)   | Blocked→interleaved transition is mastery-gated                 | superseded by D32 |
+| [D5](#d5)   | Principle-first scaffold + static feedback map (no AI)          | resolved          |
+| [D6](#d6)   | Concept teaching = contrasting cases, then tell                 | resolved          |
+| [D7](#d7)   | Three scores shown separately, never blended                    | resolved          |
+| [D8](#d8)   | Memory score = aggregated FSRS retrievability + range           | resolved          |
+| [D9](#d9)   | Give-up rule threshold                                          | resolved          |
+| [D10](#d10) | Performance + Readiness designed-but-deferred                   | resolved          |
+| [D11](#d11) | Topic taxonomy = AAMC content outline via tags                  | resolved          |
+| [D12](#d12) | Coverage % computed from taxonomy vs deck                       | resolved          |
+| [D13](#d13) | Mobile = fork AnkiDroid                                         | resolved          |
+| [D14](#d14) | Sync deferred to Friday                                         | resolved          |
+| [D15](#d15) | Docs home = `docs/plan/`                                        | resolved          |
+| [D16](#d16) | Blocked-queue ordering = weakness × topic weight                | resolved          |
+| [D17](#d17) | Expose the queue via a new protobuf message                     | resolved          |
+| [D18](#d18) | MCAT deck/content source                                        | open              |
+| [D19](#d19) | App-teacher UI = note types + card-template JS                  | resolved          |
+| [D20](#d20) | User-facing mode labels = Learn / Practice                      | resolved          |
+| [D21](#d21) | Contrasting-case sourcing = authored seed, then AI              | resolved          |
+| [D22](#d22) | Taxonomy seed = inline Rust, leaf-only weights                  | resolved          |
+| [D23](#d23) | Weakness proxy + card→topic mapping (Wednesday)                 | resolved          |
+| [D24](#d24) | Memory score concretization (range, confidence, shared signals) | resolved          |
+| [D25](#d25) | Defer AttemptLog table to Phase 3 / Friday                      | resolved          |
+| [D26](#d26) | Learn entry = reviewer queue-swap to topic-grouped queue        | resolved          |
+| [D27](#d27) | Application-card Show-Answer gate (fail-open, at _showAnswer)   | resolved          |
+| [D28](#d28) | Preload the MCAT seed deck on collection load                   | resolved          |
+| [D29](#d29) | Mobile shared-engine build (rsdroid repointed at the fork)      | resolved          |
+| [D30](#d30) | Four-state mastery progression (supersedes two-mode)            | resolved          |
+| [D31](#d31) | State-aware card modes + scaffold fade                          | resolved          |
+| [D32](#d32) | Topic-state storage + transitions + demotion                    | resolved          |
+| [D33](#d33) | Performance + Readiness built now (supersedes D10)              | resolved          |
+| [D34](#d34) | Scores open from the deck overview, not Tools menu              | resolved          |
+| [D35](#d35) | Bespoke deck screens + native authoring store                   | resolved          |
 
 ---
 
 <a id="d1"></a>
+
 ### D1: Exam = MCAT
 
 - **Status:** resolved
 - **Chose:** Build the whole product against the MCAT (472–528; four sections 118–132).
 - **Considered:** LSAT (almost no facts to memorize, a flashcard-based score model is genuinely weak there); GMAT Focus (adaptive scoring adds modeling load); USMLE Step 1 (pass/fail only since 2022, no number to project). All rejected as worse fits for a memory-first, coverage-heavy app.
-- **Gaps / risks:** MCAT's huge fact base makes *coverage* the hard part; a deck that skips a high-weight section can look "ready", mitigated by the coverage gate ([D12](#d12)).
+- **Gaps / risks:** MCAT's huge fact base makes _coverage_ the hard part; a deck that skips a high-weight section can look "ready", mitigated by the coverage gate ([D12](#d12)).
 
 <a id="d2"></a>
+
 ### D2: Two-section study model (blocked → interleaved)
 
 - **Status:** superseded by [D30](#d30) (the flat Learn/Practice split became a per-topic four-state progression; blocked→interleaved is retained inside it)
@@ -60,38 +65,43 @@
 - **Gaps / risks:** Two modes is more UI and more state; learners may skip Learn and lose the scaffold, mitigated by routing new topics through Learn first.
 
 <a id="d3"></a>
+
 ### D3: Rust change = topic-grouped (blocked) queue
 
 - **Status:** resolved
 - **Chose:** The required engine change ([source §7a](../../Speedrun_%20A%20Desktop%20+%20Mobile%20Study%20App%20Built%20on%20Anki.md)) is a new **blocked-by-topic queue builder**: a review order that serves due cards grouped by AAMC topic, ordered by weakness × weight, as a mode distinct from regular SR.
-- **Considered:** *Topic-aware scheduling* (mutating FSRS intervals to pull weak topics back, rejected for Wednesday: touches the scheduler, undo, and corruption guarantees, and is the worst upstream-merge risk); *mastery query only* (a read path, too thin as the headline engine change, kept as a supporting query); *points-at-stake queue alone* (good, but folded into the blocked mode's ordering, see [D16](#d16)).
-- **Gaps / risks:** A new queue path must coexist with the standard scheduler without violating FSRS interval validity or undo; needs careful integration tests. Grouping changes due-card *order*, not *timing*, which keeps it safe.
+- **Considered:** _Topic-aware scheduling_ (mutating FSRS intervals to pull weak topics back, rejected for Wednesday: touches the scheduler, undo, and corruption guarantees, and is the worst upstream-merge risk); _mastery query only_ (a read path, too thin as the headline engine change, kept as a supporting query); _points-at-stake queue alone_ (good, but folded into the blocked mode's ordering, see [D16](#d16)).
+- **Gaps / risks:** A new queue path must coexist with the standard scheduler without violating FSRS interval validity or undo; needs careful integration tests. Grouping changes due-card _order_, not _timing_, which keeps it safe.
 
 <a id="d4"></a>
+
 ### D4: Blocked→interleaved transition is mastery-gated
 
 - **Status:** superseded by [D32](#d32) (mastery-gating retained, now per-state across the four-state lifecycle, with demotion on lapse)
 - **Chose:** A topic graduates from Learn (blocked) to Practice (interleaved) when a per-topic understanding signal is met, not after a fixed count or time.
 - **Considered:** Fixed-count switch (e.g., "after N cards", simple but ignores whether the learner actually understands); always-interleaved (rejected, see grounding below).
-- **Gaps / risks:** Defining the understanding signal is itself a tuning problem; Wednesday uses a simple proxy (per-topic recent accuracy + FSRS stability over a threshold) and flags it for refinement. **Grounding:** interleaving introduced before a topic is understood is an "undesirable difficulty" that backfires, especially for shaky material (Hwang 2024, *Language Learning* doi:10.1111/lang.12659; "No Simple Solutions" 2024, PMC10950551, the optimal switch point "depends on what each learner has been able to understand"; Kaminske et al. 2020).
+- **Gaps / risks:** Defining the understanding signal is itself a tuning problem; Wednesday uses a simple proxy (per-topic recent accuracy + FSRS stability over a threshold) and flags it for refinement. **Grounding:** interleaving introduced before a topic is understood is an "undesirable difficulty" that backfires, especially for shaky material (Hwang 2024, _Language Learning_ doi:10.1111/lang.12659; "No Simple Solutions" 2024, PMC10950551, the optimal switch point "depends on what each learner has been able to understand"; Kaminske et al. 2020).
 
 <a id="d5"></a>
+
 ### D5: Principle-first scaffold + static feedback map (no AI)
 
 - **Status:** resolved
 - **Chose:** Before an application card reveals its solution, the learner drills a **hierarchy of choices** mirroring the taxonomy, Foundation → Content Category → Topic (i.e. principle → concept → procedure, the Dufresne/Mestre HAT). A **static, authored feedback map** gives discriminating-cue feedback on a wrong choice at any level; only a complete correct path unlocks the solution. No model calls, satisfies Wednesday's no-AI rule.
-- **Considered:** A single flat principle pick (rejected, it skips the level-by-level discrimination the HAT relies on); AI free-response grading of the analysis (rejected for Wednesday, no AI; deferred to Friday); no feedback, just record the choice (rejected, the literature says the scaffold *needs* feedback to improve problem solving).
-- **Gaps / risks:** Authoring the feedback map is manual content work and only covers authored items; AI generalization is the Friday upgrade. **Grounding:** Dufresne, Gerace, Hardiman & Mestre 1992 (JLS 2(3):307–331) shifts novices to deep-structure categorization; the ERIC fulltext (ED310931) notes the scaffold needed *feedback and coaching* to convert into problem-solving gains, which the feedback map supplies.
+- **Considered:** A single flat principle pick (rejected, it skips the level-by-level discrimination the HAT relies on); AI free-response grading of the analysis (rejected for Wednesday, no AI; deferred to Friday); no feedback, just record the choice (rejected, the literature says the scaffold _needs_ feedback to improve problem solving).
+- **Gaps / risks:** Authoring the feedback map is manual content work and only covers authored items; AI generalization is the Friday upgrade. **Grounding:** Dufresne, Gerace, Hardiman & Mestre 1992 (JLS 2(3):307–331) shifts novices to deep-structure categorization; the ERIC fulltext (ED310931) notes the scaffold needed _feedback and coaching_ to convert into problem-solving gains, which the feedback map supplies.
 
 <a id="d6"></a>
+
 ### D6: Concept teaching = contrasting cases, then tell
 
 - **Status:** resolved
-- **Chose:** Teach a concept by presenting two contrasting worked cases first, prompting the learner to articulate the **shared underlying concept** (what the cases have in common), *then* stating it.
-- **Considered:** Asking what *differs* between the cases (rejected, the schema forms from describing the analogs' similarity, not their contrasts, per Gick & Holyoak); tell-then-practice (the default; weaker transfer, telling first blunts the benefit of the cases); single worked example (a single example transfers poorly).
+- **Chose:** Teach a concept by presenting two contrasting worked cases first, prompting the learner to articulate the **shared underlying concept** (what the cases have in common), _then_ stating it.
+- **Considered:** Asking what _differs_ between the cases (rejected, the schema forms from describing the analogs' similarity, not their contrasts, per Gick & Holyoak); tell-then-practice (the default; weaker transfer, telling first blunts the benefit of the cases); single worked example (a single example transfers poorly).
 - **Gaps / risks:** Requires authored contrasting pairs per concept; quality varies with authoring. **Grounding:** Gick & Holyoak 1983 (two contrasting analogs → induced schema → transfer; one example fails); Schwartz, Chase, Oppezzo & Chin 2011 (inventing-with-contrasting-cases before telling beats tell-first); Steenhof et al. 2019 (productive failure in clinical learning).
 
 <a id="d7"></a>
+
 ### D7: Three scores shown separately, never blended
 
 - **Status:** resolved
@@ -100,14 +110,16 @@
 - **Gaps / risks:** Three numbers + ranges is more UI and more explaining; users may still anchor on readiness, mitigated by always pairing it with coverage % and the give-up rule.
 
 <a id="d8"></a>
+
 ### D8: Memory score = aggregated FSRS retrievability + range
 
 - **Status:** resolved
 - **Chose:** Wednesday's Memory score aggregates per-card FSRS retrievability over the in-scope cards into a point estimate, with a distribution-based range (e.g., bootstrap or interval over the per-card probabilities).
 - **Considered:** Training a custom memory model now (premature, calibration proof is Sunday; FSRS is already validated); a single mean with no range (violates the evidence envelope).
-- **Gaps / risks:** FSRS retrievability is a per-card recall probability, not a calibrated *aggregate*; calibration is proven Sunday on held-out reviews (Brier/log-loss). The range reflects spread, not yet model uncertainty.
+- **Gaps / risks:** FSRS retrievability is a per-card recall probability, not a calibrated _aggregate_; calibration is proven Sunday on held-out reviews (Brier/log-loss). The range reflects spread, not yet model uncertainty.
 
 <a id="d9"></a>
+
 ### D9: Give-up rule threshold
 
 - **Status:** resolved
@@ -116,6 +128,7 @@
 - **Gaps / risks:** Thresholds are a guess pending data; exposed as tunable constants and revisited once real study histories exist.
 
 <a id="d10"></a>
+
 ### D10: Performance + Readiness designed-but-deferred
 
 - **Status:** resolved
@@ -124,6 +137,7 @@
 - **Gaps / risks:** The Wednesday schema must already carry per-attempt timing and item provenance so Friday doesn't require a migration.
 
 <a id="d11"></a>
+
 ### D11: Topic taxonomy = AAMC content outline via tags
 
 - **Status:** resolved
@@ -132,6 +146,7 @@
 - **Gaps / risks:** Tag→topic mapping is imperfect for messy community decks; needs a reviewed mapping table and an "untagged/unmapped" bucket surfaced honestly.
 
 <a id="d12"></a>
+
 ### D12: Coverage % computed from taxonomy vs deck
 
 - **Status:** resolved
@@ -140,6 +155,7 @@
 - **Gaps / risks:** Topic granularity drives the number; the same deck reads differently at concept vs category level, granularity is fixed in [`spec-topic-taxonomy`](spec-topic-taxonomy.md).
 
 <a id="d13"></a>
+
 ### D13: Mobile = fork AnkiDroid
 
 - **Status:** resolved
@@ -148,14 +164,16 @@
 - **Gaps / risks:** Rebuilding `rsdroid` against a forked backend is non-trivial toolchain work and is the single most likely Wednesday blocker, front-load it. iOS is out of scope this phase.
 
 <a id="d14"></a>
+
 ### D14: Sync deferred to Friday
 
 - **Status:** resolved
-- **Chose:** Wednesday delivers shared-engine *review* on both apps (same deck, same engine); two-way + offline sync and conflict resolution land Friday.
+- **Chose:** Wednesday delivers shared-engine _review_ on both apps (same deck, same engine); two-way + offline sync and conflict resolution land Friday.
 - **Considered:** Building sync by Wednesday (rejected, the brief explicitly says Wednesday needs reviewing the same deck, not two-way sync; sync is where data-loss bugs live and needs its own test pass).
 - **Gaps / risks:** Choosing AnkiWeb sync vs a custom server is a Friday decision; the Wednesday data model must not assume single-device-only state.
 
 <a id="d15"></a>
+
 ### D15: Docs home = `docs/plan/`
 
 - **Status:** resolved
@@ -164,6 +182,7 @@
 - **Gaps / risks:** None material; a new convention for this fork.
 
 <a id="d16"></a>
+
 ### D16: Blocked-queue ordering = weakness × topic weight
 
 - **Status:** resolved
@@ -172,6 +191,7 @@
 - **Gaps / risks:** "Weakness" needs a definition pre-Performance-model; Wednesday uses recent per-topic accuracy + FSRS stability as the proxy.
 
 <a id="d17"></a>
+
 ### D17: Expose the queue via a new protobuf message
 
 - **Status:** resolved
@@ -180,14 +200,16 @@
 - **Gaps / risks:** Proto changes require a full build (`just check`) before downstream code sees them; sequence the proto edit first.
 
 <a id="d18"></a>
+
 ### D18: MCAT deck/content source
 
 - **Status:** open
-- **Chose:** *(assumed)* Use a redistributable MCAT deck (or an authored subset) as "the exam deck," pre-tagged or mappable to AAMC topics, with licensing compatible with an AGPL fork.
+- **Chose:** _(assumed)_ Use a redistributable MCAT deck (or an authored subset) as "the exam deck," pre-tagged or mappable to AAMC topics, with licensing compatible with an AGPL fork.
 - **Considered:** A large popular community deck (richest coverage, but redistribution/licensing is unclear) vs a small authored deck (clean license, thin coverage, risks failing the coverage gate it's meant to demonstrate).
 - **Gaps / risks:** Licensing must be confirmed before redistribution; content quality (opposite-fact cards, duplicates) feeds the authoring quality bar in [`spec-study-model`](spec-study-model.md) §10. **Owner to confirm before build.**
 
 <a id="d19"></a>
+
 ### D19: App-teacher UI = note types + card-template JS
 
 - **Status:** resolved
@@ -196,6 +218,7 @@
 - **Gaps / risks:** card-template JS cannot cleanly write structured logs on AnkiDroid for Wednesday, so pick-logging is desktop-first via `pycmd` and mobile logging is deferred (revlog grades still captured). The Show-Answer gate depends on template JS plus the desktop hook, and must fail open so a template bug never traps the learner on a card.
 
 <a id="d20"></a>
+
 ### D20: User-facing mode labels = "Learn" and "Practice"
 
 - **Status:** resolved
@@ -204,6 +227,7 @@
 - **Gaps / risks:** "Practice" slightly overlaps the everyday sense of practising problems; accepted, because the alternative ("Review") is already overloaded in Anki.
 
 <a id="d21"></a>
+
 ### D21: Contrasting-case sourcing = authored/curated seed, then AI
 
 - **Status:** resolved
@@ -212,6 +236,7 @@
 - **Gaps / risks:** authoring is manual and slow, so coverage is thin until Friday's AI path (the cold-start risk in [`spec-study-model`](spec-study-model.md) §9); curated third-party scenarios must keep license compatibility ([D18](#d18)).
 
 <a id="d22"></a>
+
 ### D22: Taxonomy seed = inline Rust data, leaf-only weights
 
 - **Status:** resolved
@@ -220,6 +245,7 @@
 - **Gaps / risks:** seed `exam_weight`s are placeholder proportions, not a specific AAMC table, and biomolecules-only; the section-mapping layer ([`spec-topic-taxonomy`](spec-topic-taxonomy.md) §4) is deferred. Both are intended future extensions; weights stay data-tunable.
 
 <a id="d23"></a>
+
 ### D23: Weakness proxy + card→topic mapping (Wednesday)
 
 - **Status:** resolved (concretizes [D16](#d16))
@@ -228,6 +254,7 @@
 - **Gaps / risks:** the 50-review window, the 0.9 prior, and the fallback are untuned heuristics; swap to the Performance-model signal in Friday/Sunday. One `get_note` per due card is O(n) DB reads, not yet benchmarked against the PRD p95<100ms target (see [B009] note on perf; tracked for Phase 2b/3).
 
 <a id="d24"></a>
+
 ### D24: Memory score concretization (range, confidence, shared card signals)
 
 - **Status:** resolved (concretizes [D8](#d8), [D9](#d9))
@@ -236,6 +263,7 @@
 - **Gaps / risks:** thresholds (200 / 0.50 / confidence bands) untuned ([D9](#d9) gap); the range tightens with n (honest spread, not calibration); per-card `get_note` + `get_revlog` is O(n) ([B013] perf).
 
 <a id="d25"></a>
+
 ### D25: Defer AttemptLog table to Phase 3 / Friday
 
 - **Status:** resolved (overrides [`spec-scores`](spec-scores.md) §7/§9.5 "from Wednesday")
@@ -244,6 +272,7 @@
 - **Gaps / risks:** Friday's Performance model will add the table + a migration; ensure revlog + the scaffold-pick logs capture timing/provenance so nothing is lost in the interim. **Overrides** spec-scores §7/§9.5 (see the override ledger in [README](README.md)).
 
 <a id="d26"></a>
+
 ### D26: Learn entry = reviewer queue-swap to the topic-grouped queue
 
 - **Status:** resolved
@@ -252,6 +281,7 @@
 - **Gaps / risks:** Learn re-queries per card, so the leading block can shift mid-session (freeze the ordered id list at session start, [B013](backlog.md#b013)); Learn serves due reviews only ([B019](backlog.md#b019)).
 
 <a id="d27"></a>
+
 ### D27: Application-card Show-Answer gate (fail-open, at `_showAnswer`)
 
 - **Status:** resolved
@@ -260,6 +290,7 @@
 - **Gaps / risks:** desktop-only (pycmd seam; mobile deferred, [D19](#d19)); pick-signal format reconciliation ([B020](backlog.md#b020)).
 
 <a id="d28"></a>
+
 ### D28: Preload the MCAT seed deck on collection load
 
 - **Status:** resolved
@@ -268,6 +299,7 @@
 - **Gaps / risks:** seeds 4 cards (the small authored seed; scale via Friday AI authoring); the cards are NEW, so they appear under **Practice** now and not under **Learn** until [B019](backlog.md#b019) (include new cards in the topic queue) lands; modifies the collection on first open (acceptable for the fork/demo).
 
 <a id="d29"></a>
+
 ### D29: Mobile shared-engine build (rsdroid repointed at the fork)
 
 - **Status:** resolved (resolves [B001](backlog.md#b001))
@@ -276,6 +308,7 @@
 - **Gaps / risks:** AnkiDroid (25.09-era) vs engine (26.05) skew cost one `Deck.kt` branch (`RELATIVE_OVERDUENESS`) and future proto changes may need more compat patches; `out/strings.json` must be pre-generated (`STRINGS_JSON`); built arm64 debug only; the stock AnkiDroid UI doesn't call the new RPCs yet ([B025](backlog.md#b025)); the AnkiDroid + backend repo changes are uncommitted (env-specific).
 
 <a id="d30"></a>
+
 ### D30: Four-state mastery progression (supersedes the two-mode model)
 
 - **Status:** resolved (supersedes [D2](#d2), [D4](#d4))
@@ -284,6 +317,7 @@
 - **Gaps / risks:** more state to track + UI; transition tuning ([D32](#d32)); the application card is suppressed until `hierarchy`, so the engine must know each note's kind (concept vs application).
 
 <a id="d31"></a>
+
 ### D31: State-aware card modes + scaffold fade
 
 - **Status:** resolved (extends [D5](#d5), [D19](#d19), [D27](#d27))
@@ -292,6 +326,7 @@
 - **Gaps / risks:** dynamic injection means the reviewer must set the mode before render; desktop-first (pycmd seam; mobile deferred, [D19](#d19)).
 
 <a id="d32"></a>
+
 ### D32: Topic-state storage + transitions + demotion (supersedes D4)
 
 - **Status:** resolved (supersedes [D4](#d4))
@@ -300,20 +335,31 @@
 - **Gaps / risks:** thresholds untuned; a config write per transition (small JSON, fine); cross-device sync of the map is automatic via config but untested.
 
 <a id="d33"></a>
+
 ### D33: Build Performance + Readiness on Wednesday from real data (supersedes D10)
 
 - **Status:** resolved (supersedes [D10](#d10))
 - **Chose:** build and show all three scores now (the brief's §4: "Build and show all three"), each separate, each with the shared evidence envelope + give-up rule ([D7](#d7), [D9](#d9)). **Performance** = exam-weight-weighted accuracy over graded `SpeedrunApplication` (exam-style) card attempts, a construct deliberately distinct from Memory's FSRS recall. **Readiness** = project Performance onto the 472-528 scale with a coverage-widened range, abstaining whenever Performance does. A shared `ScoreEnvelope` proto carries a `format` hint (`ratio` for Memory/Performance, `points` for Readiness) so the tiles render each correctly.
 - **Considered:** keeping them deferred ([D10](#d10); rejected, the brief wants three real scores now); an AI grader for Performance (that is the Friday paraphrase-test validation; the honest Wednesday signal is real application accuracy, no model needed); a blended "overall" number (forbidden, [D7](#d7)).
-- **Gaps / risks:** Performance measures *practiced* application items, not yet *unseen* ones, so it can partly echo Memory until the paraphrase test (Friday); the score says so in its reasons. Readiness is a linear projection, not calibrated to real MCAT outcomes until Sunday; it says so too. Give-up thresholds (30 application attempts, 50% coverage) are tunable guesses. Persisting per-attempt `AttemptLog` (spec §8) is still deferred ([D25](#d25)); both scores read existing revlog.
+- **Gaps / risks:** Performance measures _practiced_ application items, not yet _unseen_ ones, so it can partly echo Memory until the paraphrase test (Friday); the score says so in its reasons. Readiness is a linear projection, not calibrated to real MCAT outcomes until Sunday; it says so too. Give-up thresholds (30 application attempts, 50% coverage) are tunable guesses. Persisting per-attempt `AttemptLog` (spec §8) is still deferred ([D25](#d25)); both scores read existing revlog.
 
 <a id="d34"></a>
+
 ### D34: Score dashboard opens from the deck overview, not the Tools menu
 
 - **Status:** resolved
 - **Chose:** open a deck's score dashboard from a **Scores** action on the deck overview's bottom bar (beside Options), and remove the Tools-menu entry. The dashboard is per-deck, so it belongs on the deck you are looking at, and it is far more discoverable there than buried in the topbar.
 - **Considered:** keeping the Tools menu item (topbar, not per-deck-contextual, easy to miss); a loud button next to Study (the bottom bar is already where per-deck actions live, so Scores sits with Options / Custom study instead of competing with the primary Study action).
 - **Gaps / risks:** the action also shows on filtered decks (the score then covers the filtered cards; acceptable); `speedrun_dashboard.show_speedrun_dashboard_for_current_deck` is now unused but kept as a small public helper.
+
+<a id="d35"></a>
+
+### D35: Bespoke deck screens hide the deck browser; native authoring store
+
+- **Status:** resolved
+- **Chose:** Pivot the deck-related screens to bespoke SvelteKit pages: a **Decks** home (Name / To Do), a **Create/Edit Hierarchy** editor, a **Concepts** view, and a **Concept modal** with 4-choice MCQ practice problems. These **hide the old deck browser** (its HTML render path is retired; the native menus stay reachable). Authored structure lives in a **native Speedrun store in the collection config** (one JSON blob per deck under `speedrun_authoring`, so it syncs), **independent of Anki notes and the scheduler**. Clicking a deck row **routes to the existing overview (Study) screen**; a separate edit affordance opens the hierarchy editor for authoring. Same SvelteKit stack as `speedrun-dashboard`; the config-store pattern mirrors [D32](#d32); Python-handled frontend RPCs exchange JSON (the `SaveCustomColours` pattern), no Rust.
+- **Considered:** reusing Anki **decks/notes** for the hierarchy/concepts (rejected: the deck tree entangles authoring with scheduler state and SR noise, caps nesting, and can't cleanly model per-node concepts/problems; contrast [D19](#d19), which deliberately keeps _teaching_ content in note types for cross-platform review); a **UI-only stub** with mock data (rejected: authored content must survive restart and sync across devices, which a stub can't); **plain-HTML or Qt-widget** rendering (rejected: diverges from the SvelteKit dashboard stack, doesn't render in AnkiDroid's webview, and duplicates the app's component/theming layer).
+- **Gaps / risks:** the **study engine, scores, and taxonomy** (currently inline Rust) are **not yet wired** to authored content, so Study and the scores don't yet reflect it; **To Do shows 0** for decks with no materialized cards (new hierarchies, until their content is turned into cards in a later pass); **AnkiDroid parity** for these screens is **deferred**.
 
 ---
 

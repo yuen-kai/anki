@@ -4,42 +4,43 @@
 
 ## Index
 
-| ID | Title | Type | Status |
-| :-- | :-- | :-- | :-- |
-| [B001](#b001) | rsdroid rebuild against modified backend (mobile long-pole) | issue | resolved |
-| [B002](#b002) | oneshot verify.sh doesn't match Anki's build | issue | open |
-| [B003](#b003) | Anki build does not auto-install n2/ninja | bug | known-gap |
-| [B004](#b004) | Planning docs + project memory are untracked | issue | fixed |
-| [B005](#b005) | Fresh worktree build needs ftl submodule init + PROTOC | issue | open |
-| [B006](#b006) | pylib/tests/__init__.py eager backend import blocks pure pytest | issue | known-gap |
-| [B007](#b007) | Scaffold seed references foundation ids absent from taxonomy seed | issue | open |
-| [B008](#b008) | `just check` qt installer tests fail in sandbox (Briefcase cache) | issue | known-gap |
-| [B009](#b009) | Scaffold template JS + note-type installer lack automated tests | refactor | open |
-| [B010](#b010) | Scaffold sessionStorage keys shared across cards | bug | open |
-| [B011](#b011) | `cargo build -p anki` fails standalone (use `cargo test`) | issue | known-gap |
-| [B012](#b012) | Committed tree not dprint/rustfmt-clean (`just fix-fmt` rewrites files) | refactor | open |
-| [B013](#b013) | Topic-queue perf unbenchmarked (O(n) get_note vs p95<100ms) | issue | open |
-| [B014](#b014) | Sandbox blocks tsx IPC pipe in `just test-py` build | issue | known-gap |
-| [B015](#b015) | Topic-queue undo/interval-equivalence proof untested | issue | fixed |
-| [B016](#b016) | Topic queue leaves `active_decks` pointing at its deck | bug | open |
-| [B017](#b017) | Memory score refinements (range semantics, scope, tests) | issue | open |
-| [B018](#b018) | Markdown not dprint-clean fails `just check` (check:format) | issue | known-gap |
-| [B019](#b019) | Learn shows due reviews only (new/learning excluded) | issue | fixed |
-| [B020](#b020) | Scaffold pick-signal format reconciliation | issue | open |
-| [B021](#b021) | No automated UI regression test (dashboard + Qt Learn flow) | refactor | open |
-| [B022](#b022) | Gate lacks a manual reveal-anyway override (D19 tension) | issue | open |
-| [B023](#b023) | Gate-wiring + timing capture lack tests | refactor | open |
-| [B024](#b024) | Phase 3 polish bundle (dyn-deck Learn, dashboard i18n, nits) | issue | open |
-| [B025](#b025) | AnkiDroid UI doesn't call the new RPCs yet | issue | open |
-| [B026](#b026) | Blocked precedence can starve graduated topics' due reviews | issue | fixed |
-| [B027](#b027) | `window.speedrunCardMode` leaks across cards (no reset) | bug | fixed |
-| [B028](#b028) | `speedrun_record_answer` mutates state for any tagged card | bug | fixed |
-| [B029](#b029) | Speedrun UI has no live visual QA pass (no browser in sandbox) | issue | open |
-| [B030](#b030) | Performance/Readiness validation (paraphrase test, calibration) deferred | issue | open |
+| ID            | Title                                                                    | Type     | Status    |
+| :------------ | :----------------------------------------------------------------------- | :------- | :-------- |
+| [B001](#b001) | rsdroid rebuild against modified backend (mobile long-pole)              | issue    | resolved  |
+| [B002](#b002) | oneshot verify.sh doesn't match Anki's build                             | issue    | open      |
+| [B003](#b003) | Anki build does not auto-install n2/ninja                                | bug      | known-gap |
+| [B004](#b004) | Planning docs + project memory are untracked                             | issue    | fixed     |
+| [B005](#b005) | Fresh worktree build needs ftl submodule init + PROTOC                   | issue    | open      |
+| [B006](#b006) | pylib/tests/**init**.py eager backend import blocks pure pytest          | issue    | known-gap |
+| [B007](#b007) | Scaffold seed references foundation ids absent from taxonomy seed        | issue    | open      |
+| [B008](#b008) | `just check` qt installer tests fail in sandbox (Briefcase cache)        | issue    | known-gap |
+| [B009](#b009) | Scaffold template JS + note-type installer lack automated tests          | refactor | open      |
+| [B010](#b010) | Scaffold sessionStorage keys shared across cards                         | bug      | open      |
+| [B011](#b011) | `cargo build -p anki` fails standalone (use `cargo test`)                | issue    | known-gap |
+| [B012](#b012) | Committed tree not dprint/rustfmt-clean (`just fix-fmt` rewrites files)  | refactor | open      |
+| [B013](#b013) | Topic-queue perf unbenchmarked (O(n) get_note vs p95<100ms)              | issue    | open      |
+| [B014](#b014) | Sandbox blocks tsx IPC pipe in `just test-py` build                      | issue    | known-gap |
+| [B015](#b015) | Topic-queue undo/interval-equivalence proof untested                     | issue    | fixed     |
+| [B016](#b016) | Topic queue leaves `active_decks` pointing at its deck                   | bug      | open      |
+| [B017](#b017) | Memory score refinements (range semantics, scope, tests)                 | issue    | open      |
+| [B018](#b018) | Markdown not dprint-clean fails `just check` (check:format)              | issue    | known-gap |
+| [B019](#b019) | Learn shows due reviews only (new/learning excluded)                     | issue    | fixed     |
+| [B020](#b020) | Scaffold pick-signal format reconciliation                               | issue    | open      |
+| [B021](#b021) | No automated UI regression test (dashboard + Qt Learn flow)              | refactor | open      |
+| [B022](#b022) | Gate lacks a manual reveal-anyway override (D19 tension)                 | issue    | open      |
+| [B023](#b023) | Gate-wiring + timing capture lack tests                                  | refactor | open      |
+| [B024](#b024) | Phase 3 polish bundle (dyn-deck Learn, dashboard i18n, nits)             | issue    | open      |
+| [B025](#b025) | AnkiDroid UI doesn't call the new RPCs yet                               | issue    | open      |
+| [B026](#b026) | Blocked precedence can starve graduated topics' due reviews              | issue    | fixed     |
+| [B027](#b027) | `window.speedrunCardMode` leaks across cards (no reset)                  | bug      | fixed     |
+| [B028](#b028) | `speedrun_record_answer` mutates state for any tagged card               | bug      | fixed     |
+| [B029](#b029) | Speedrun UI has no live visual QA pass (no browser in sandbox)           | issue    | open      |
+| [B030](#b030) | Performance/Readiness validation (paraphrase test, calibration) deferred | issue    | open      |
 
 ---
 
 <a id="b001"></a>
+
 ### B001: rsdroid must be rebuilt against the modified rslib for engine changes to reach mobile
 
 - **Type:** issue · **Status:** resolved · **Severity:** high
@@ -49,6 +50,7 @@
 - **Resolution (Phase 4):** rebuilt `Anki-Android-Backend` (rsdroid) off its `main` (anki 26.05b1) with its `anki` mount symlinked to our fork, produced a local arm64 `.aar`, consumed it in the AnkiDroid fork (`local_backend=true`), and ran it on the emulator. The new RPCs are verified on-device at four levels (generated `GeneratedBackend.kt`, the `.aar`, the APK dex, and a runtime smoke whose native lib reports our fork's buildhash `8ecbfac04`). One compat fix (`Deck.kt` `RELATIVE_OVERDUENESS`) covered the AnkiDroid-25.09 vs engine-26.05 skew. See [D29](decisions.md#d29); remaining mobile-UI work is [B025](#b025).
 
 <a id="b002"></a>
+
 ### B002: oneshot `verify.sh` does not verify Anki
 
 - **Type:** issue · **Status:** open · **Severity:** medium
@@ -58,6 +60,7 @@
 - **Resolution (planned):** set `SMOKE_CMD` / verify per task to the real recipe (`cargo test -p anki <module>`, `just test-rust`, `just check`) rather than the generic harness.
 
 <a id="b003"></a>
+
 ### B003: `just run` aborts: n2/ninja missing, not auto-installed
 
 - **Type:** bug · **Status:** known-gap
@@ -67,6 +70,7 @@
 - **Resolution:** install once (`bash tools/install-n2` or `cargo install --git https://github.com/evmar/n2.git`). Documented in [README](README.md). Not our bug to fix (upstream); just a setup prerequisite.
 
 <a id="b004"></a>
+
 ### B004: Planning docs + project memory are untracked
 
 - **Type:** issue · **Status:** fixed
@@ -76,6 +80,7 @@
 - **Resolution:** specs already tracked at `13f38ee`; README/backlog/design-iterations committed on `main` as the foundation, so worktrees branched from HEAD inherit the full plan.
 
 <a id="b005"></a>
+
 ### B005: Fresh worktree build needs ftl submodule init + PROTOC
 
 - **Type:** issue · **Status:** open · **Severity:** medium
@@ -85,15 +90,17 @@
 - **Workaround (bootstrap every Rust worktree):** `git submodule update --init ftl/core-repo ftl/qt-repo` (add `qt/installer/mac-template` before `just test-py`) and `export PROTOC="$(git rev-parse --show-toplevel)/out/extracted/protoc/bin/protoc"`. **Sandbox note:** worktrees live outside the sandbox's writable root, so `cargo`/`git`/`just` must run with the sandbox disabled, otherwise they silently operate on the main repo (hit in Phase 2a). Baked into the Phase 2 prompts.
 
 <a id="b006"></a>
+
 ### B006: `pylib/tests/__init__.py` eager backend import blocks pure pytest
 
 - **Type:** issue · **Status:** known-gap · **Severity:** low
 - **Discovered:** 2026-06-30 by the Phase 1B subagent.
 - **Ref:** `pylib/tests/__init__.py` (`from anki.lang import set_lang` → imports `anki._backend` / `_rsbridge`).
-- **Context:** any pure pylib test fails at pytest *collection* without a full backend build, because the test package's `__init__` imports the Rust backend. Speedrun's pure tests were verified via `python3 -m unittest` instead (22/22).
+- **Context:** any pure pylib test fails at pytest _collection_ without a full backend build, because the test package's `__init__` imports the Rust backend. Speedrun's pure tests were verified via `python3 -m unittest` instead (22/22).
 - **Possible fix:** a guarded/lazy import there or a `conftest.py` so pure tests run under pytest without a build. Not our bug; low priority.
 
 <a id="b007"></a>
+
 ### B007: Scaffold seed references foundation ids absent from the taxonomy seed
 
 - **Type:** issue · **Status:** open · **Severity:** low
@@ -103,6 +110,7 @@
 - **Next:** when the taxonomy grows beyond biomolecules, align these ids/labels with the canonical AAMC foundation names.
 
 <a id="b008"></a>
+
 ### B008: `just check` qt installer tests fail in the sandbox (Briefcase cache dir)
 
 - **Type:** issue · **Status:** known-gap (environmental) · **Severity:** low
@@ -112,6 +120,7 @@
 - **Workaround:** set `BRIEFCASE_HOME` to a writable dir and run with network / outside the sandbox for a fully-green `just check`. For feature verification, the Rust + Python + lint portion is the relevant gate and it passed.
 
 <a id="b009"></a>
+
 ### B009: Scaffold template JS + note-type installer lack automated tests
 
 - **Type:** refactor · **Status:** open · **Severity:** medium
@@ -121,6 +130,7 @@
 - **Next:** add a jsdom/e2e test under `ts/tests/e2e/` for the template chooser, and a backend-level test for `add_seed_notes` idempotency, when Phase 3 wires the `aqt` hook + seeding.
 
 <a id="b010"></a>
+
 ### B010: Scaffold sessionStorage keys are shared across cards
 
 - **Type:** bug · **Status:** open · **Severity:** low
@@ -130,6 +140,7 @@
 - **Next:** namespace the key by card/note id when wiring the reviewer hook in Phase 3.
 
 <a id="b011"></a>
+
 ### B011: `cargo build -p anki` fails standalone; use `cargo test`
 
 - **Type:** issue · **Status:** known-gap · **Severity:** low
@@ -137,6 +148,7 @@
 - **Context:** `cargo build -p anki` fails because the workspace's tokio features don't enable `io-util`; `cargo test -p anki` works because dev-deps (wiremock/reqwest) unify the feature in. Use `cargo test` for Rust verification, or `just` recipes for real builds.
 
 <a id="b012"></a>
+
 ### B012: Committed tree isn't dprint/rustfmt-clean
 
 - **Type:** refactor · **Status:** in-progress · **Severity:** low
@@ -146,15 +158,17 @@
 - **Remaining:** markdown `dprint` is split out to [B018](#b018); the user's root source docs are excluded (their inputs, not project source).
 
 <a id="b013"></a>
+
 ### B013: Topic-grouped queue performance is unbenchmarked
 
 - **Type:** issue · **Status:** open · **Severity:** medium
 - **Discovered:** 2026-06-30, Phase 2a code review.
 - **Ref:** `rslib/src/scheduler/queue/topic_grouped.rs` (one `get_note` per due card).
-- **Context:** per due card the queue does a `get_note` + a *full* revlog load, nothing is cached, and because ordering is global the entire due set is rescanned on every call (so `fetch_limit`/paging stays O(n) per call). The PRD targets p95<100ms on a 50k deck ([`prd-speedrun`](prd-speedrun.md) §7); the Phase 2a review judged the current design will likely miss it.
+- **Context:** per due card the queue does a `get_note` + a _full_ revlog load, nothing is cached, and because ordering is global the entire due set is rescanned on every call (so `fetch_limit`/paging stays O(n) per call). The PRD targets p95<100ms on a 50k deck ([`prd-speedrun`](prd-speedrun.md) §7); the Phase 2a review judged the current design will likely miss it.
 - **Next:** dedicated perf pass before the reviewer hot path / mobile: cache the ordered build per session, replace per-card `get_note` + full-revlog loads with a single join, then benchmark on the 50k deck.
 
 <a id="b014"></a>
+
 ### B014: Sandbox blocks tsx IPC pipe (`just test-py` build step)
 
 - **Type:** issue · **Status:** known-gap (environmental) · **Severity:** low
@@ -164,6 +178,7 @@
 - **Workaround:** run `just test-py` with the sandbox disabled. `cargo test` for Rust is unaffected.
 
 <a id="b015"></a>
+
 ### B015: Topic-queue undo / interval-equivalence proof untested
 
 - **Type:** issue · **Status:** fixed · **Severity:** medium
@@ -173,6 +188,7 @@
 - **Resolution:** Phase 2b added `answering_topic_queue_card_is_undoable_and_matches_default_interval` (`topic_grouped.rs`): answers via the unchanged path, undoes (asserts card row + revlog restored), and confirms the interval matches the default queue. Green on merged `main`.
 
 <a id="b016"></a>
+
 ### B016: Topic queue leaves `active_decks` pointing at its deck
 
 - **Type:** bug · **Status:** open · **Severity:** low
@@ -182,15 +198,17 @@
 - **Next:** when Phase 3 wires Learn/Practice switching, snapshot/restore `active_decks` around the RPC or pass the actually-studied deck.
 
 <a id="b017"></a>
+
 ### B017: Memory score refinements (range semantics, scope, tests)
 
 - **Type:** issue · **Status:** open · **Severity:** low
 - **Discovered:** 2026-06-30, Phase 2b review (Important #1 + Minors).
 - **Ref:** `rslib/src/speedrun/memory_score.rs`; `pylib/tests/test_speedrun_memory_score.py`.
-- **Items:** (a) range is a 95% CI of the *mean* (tightens with n): product sign-off on whether to show per-card spread instead ([D24](decisions.md#d24)); (b) give-up is whole-deck-only (no per-topic abstention yet, though spec §5 allows per-scope); (c) the give-up boundary (exactly 200 / 0.50) is untested; (d) the Python e2e only exercises the 0.9 no-memory prior (degenerate range): add a real-memory-state case; (e) `graded_reviews` includes learning-state ratings (decide whether Memory should count review-state only).
+- **Items:** (a) range is a 95% CI of the _mean_ (tightens with n): product sign-off on whether to show per-card spread instead ([D24](decisions.md#d24)); (b) give-up is whole-deck-only (no per-topic abstention yet, though spec §5 allows per-scope); (c) the give-up boundary (exactly 200 / 0.50) is untested; (d) the Python e2e only exercises the 0.9 no-memory prior (degenerate range): add a real-memory-state case; (e) `graded_reviews` includes learning-state ratings (decide whether Memory should count review-state only).
 - **Next:** address in Friday/Sunday score work; add boundary + real-memory tests.
 
 <a id="b018"></a>
+
 ### B018: Markdown not dprint-clean fails `just check` (check:format)
 
 - **Type:** issue · **Status:** known-gap · **Severity:** low
@@ -200,6 +218,7 @@
 - **Next:** optionally dprint `docs/plan/` in a cleanup; do NOT auto-reformat the user's root source docs (their inputs); exclude them from the check or leave as pre-existing.
 
 <a id="b019"></a>
+
 ### B019: Learn shows due reviews only (new/learning excluded)
 
 - **Type:** issue · **Status:** fixed · **Severity:** medium
@@ -209,6 +228,7 @@
 - **Resolution:** the queue now gathers New + due Review + interday Learning and threads each card's real `QueueEntryKind` through ordering into the returned `QueuedCard` (per-kind counts too). New cards are grouped, tagged `New`, and answer/undo-equivalent to the default new-card path (9/9 Rust tests incl. `new_cards_are_included...` + `answering_new_card...`, plus the new-card pylib e2e). Merged to `main`. (Intraday learning steps stay in the default queue by design.)
 
 <a id="b020"></a>
+
 ### B020: Scaffold pick-signal format reconciliation
 
 - **Type:** issue · **Status:** open · **Severity:** low
@@ -218,6 +238,7 @@
 - **Next:** align the template emit, hook parse, and spec on a single pick-signal schema.
 
 <a id="b021"></a>
+
 ### B021: No automated UI regression test (dashboard + Qt Learn flow)
 
 - **Type:** refactor · **Status:** open · **Severity:** low
@@ -227,6 +248,7 @@
 - **Next:** add a Playwright smoke for the dashboard page (mirror `ts/tests/e2e/sanity.test.ts`); evaluate a Qt-level test for the Learn flow.
 
 <a id="b022"></a>
+
 ### B022: Gate lacks a manual reveal-anyway override (D19 tension)
 
 - **Type:** issue · **Status:** open · **Severity:** medium
@@ -236,6 +258,7 @@
 - **Next:** add a manual override (second consecutive Show-Answer press, or reveal after N attempts) to fully honor D19.
 
 <a id="b023"></a>
+
 ### B023: Gate-wiring + timing capture lack tests
 
 - **Type:** refactor · **Status:** open · **Severity:** low
@@ -245,6 +268,7 @@
 - **Next:** extract the callback decision into a pure helper and assert it; add a wiring test.
 
 <a id="b024"></a>
+
 ### B024: Phase 3 polish bundle (dyn-deck Learn, dashboard i18n, nits)
 
 - **Type:** issue · **Status:** open · **Severity:** low
@@ -253,6 +277,7 @@
 - **Next:** address in a polish pass / the Friday i18n cycle.
 
 <a id="b025"></a>
+
 ### B025: AnkiDroid UI doesn't call the new RPCs yet
 
 - **Type:** issue · **Status:** open · **Severity:** medium
@@ -261,6 +286,7 @@
 - **Next:** add AnkiDroid Kotlin UI that calls the new RPCs (a mobile-UI phase, post-Wednesday). Also: the seed deck must reach the phone (import, or Friday's two-way sync, [D14](decisions.md#d14)) for an on-device Speedrun review session.
 
 <a id="b026"></a>
+
 ### B026: Blocked precedence can starve graduated topics' due reviews
 
 - **Type:** issue · **Status:** fixed · **Severity:** medium
@@ -270,15 +296,17 @@
 - **Fixed:** 2026-06-30. `select_blocked_or_mixed` now serves the single highest-priority learning block **plus** already-graduated topics' due reviews + interday-learning (other learning topics' first-exposures stay withheld). Test `blocked_phase_serves_graduated_reviews_but_withholds_other_new_topics`; `blocked_phase_serves_one_learning_block_then_mixes` updated. Spec §6 amended.
 
 <a id="b027"></a>
+
 ### B027: `window.speedrunCardMode` leaks across cards (no reset)
 
 - **Type:** bug · **Status:** fixed · **Severity:** medium
 - **Discovered:** 2026-06-30, progression review (Important #1).
 - **Ref:** `qt/aqt/speedrun.py` `card_context_inject_script`; `qt/aqt/reviewer.py` (card content swapped via `web.eval`, no page reload).
 - **Context:** the injected `window.speedrunCardMode` persisted between cards; a card that resolved to `none` injected nothing and inherited the previous card's mode. In a mixed/normal queue, a below-`hierarchy` or non-Speedrun card shown after a `mastering` card could render unscaffolded and the Show-Answer gate fail open, bypassing the scaffold.
-- **Fixed:** 2026-06-30. `card_context_inject_script` now always emits a reset of *both* `window.speedrunCardMode` and `window.speedrunTopicPath` (to values or `null`) for every card in a Speedrun collection, so nothing leaks; a plain build (no RPC) is still untouched. The dead `card_mode_inject_script` was removed. Tests in `qt/tests/test_speedrun.py` (`test_nothing_to_inject_resets_both_globals`).
+- **Fixed:** 2026-06-30. `card_context_inject_script` now always emits a reset of _both_ `window.speedrunCardMode` and `window.speedrunTopicPath` (to values or `null`) for every card in a Speedrun collection, so nothing leaks; a plain build (no RPC) is still untouched. The dead `card_mode_inject_script` was removed. Tests in `qt/tests/test_speedrun.py` (`test_nothing_to_inject_resets_both_globals`).
 
 <a id="b028"></a>
+
 ### B028: `speedrun_record_answer` mutates topic state for any tagged card
 
 - **Type:** bug · **Status:** fixed · **Severity:** medium
@@ -288,6 +316,7 @@
 - **Fixed:** 2026-06-30. `speedrun_record_answer` early-returns when `note_kind == Other`, so only Speedrun notes move their topic's state. Test `record_answer_ignores_non_speedrun_note_kind`.
 
 <a id="b029"></a>
+
 ### B029: Speedrun UI has no live visual QA pass
 
 - **Type:** issue · **Status:** open · **Severity:** low
@@ -296,11 +325,12 @@
 - **Next:** with the app running (`just run`), open Tools → Speedrun dashboard on the seeded MCAT deck and review the dashboard (scores + topics ladder), a concept card, and an application card in light + dark; adjust spacing/accent as needed. Or install Playwright chromium outside the sandbox and screenshot `speedrun-dashboard/<deckId>` off the running mediasrv (`:40000`).
 
 <a id="b030"></a>
+
 ### B030: Performance/Readiness validation (paraphrase test + calibration) deferred
 
 - **Type:** issue · **Status:** open · **Severity:** medium
 - **Discovered:** 2026-06-30, [D33](decisions.md#d33) (building all three scores now).
-- **Context:** Performance is honest but measures *practiced* application items, so until the **paraphrase test** (30 cards x 2 reworded questions, spec-scores §7) it can partly echo Memory rather than proving transfer. Readiness is a linear projection onto 472-528, not **calibrated** against real outcomes (Brier/log-loss on held-out reviews, spec-scores §10) until Sunday. Both scores already state these caveats in their `reasons`, and the give-up thresholds (30 application attempts, 50% coverage) are tunable guesses.
+- **Context:** Performance is honest but measures _practiced_ application items, so until the **paraphrase test** (30 cards x 2 reworded questions, spec-scores §7) it can partly echo Memory rather than proving transfer. Readiness is a linear projection onto 472-528, not **calibrated** against real outcomes (Brier/log-loss on held-out reviews, spec-scores §10) until Sunday. Both scores already state these caveats in their `reasons`, and the give-up thresholds (30 application attempts, 50% coverage) are tunable guesses.
 - **Next (Friday/Sunday):** implement the paraphrase test and report the recall-vs-reworded gap; add the calibration chart + report the Readiness projection's error against held-out data; retune thresholds once real study histories exist.
 
 ---

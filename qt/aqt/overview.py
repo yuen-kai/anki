@@ -14,7 +14,6 @@ from anki.scheduler import UnburyDeck
 from aqt import gui_hooks
 from aqt.deckdescription import DeckDescriptionDialog
 from aqt.deckoptions import display_options_for_deck
-from aqt.operations import QueryOp
 from aqt.operations.scheduling import (
     empty_filtered_deck,
     rebuild_filtered_deck,
@@ -59,21 +58,25 @@ class Overview:
 
     def show(self) -> None:
         av_player.stop_and_clear_queue()
-        self.web.set_bridge_command(self._linkHandler, self)
+        # the bespoke study screen owns the whole window: hide the top/bottom
+        # bars and the reviewer/overview webview, and render into the dedicated
+        # Speedrun webview (mirrors DeckBrowser). Called on every entry to the
+        # overview state, so it also re-hides the bars idempotently on return
+        # from the reviewer.
+        self.mw.toolbarWeb.hide()
+        self.mw.bottomWeb.hide()
+        self.mw.web.hide()
+        self.mw.speedrunWeb.show()
         self.mw.setStateShortcuts(self._shortcutKeys())
         self.refresh()
 
     def refresh(self) -> None:
-        def success(_counts: tuple) -> None:
-            self._refresh_needed = False
-            self._renderPage()
-            self._renderBottom()
-            self.mw.web.setFocus()
-            gui_hooks.overview_did_refresh(self)
-
-        QueryOp(
-            parent=self.mw, op=lambda col: col.sched.counts(), success=success
-        ).run_in_background()
+        # the study screen is a SvelteKit page hosted in the Speedrun webview;
+        # (re)load it for the current deck so its counts and scores stay current
+        self._refresh_needed = False
+        did = self.mw.col.decks.get_current_id()
+        self.mw.speedrunWeb.load_sveltekit_page(f"speedrun-study/{did}")
+        gui_hooks.overview_did_refresh(self)
 
     def refresh_if_needed(self) -> None:
         if self._refresh_needed:
@@ -107,10 +110,12 @@ class Overview:
             display_options_for_deck(self.mw.col.decks.current())
         elif url == "scores":
             # Speedrun: open this deck's score dashboard from inside the deck,
-            # rather than the Tools menu (decision D34).
-            import aqt.speedrun_dashboard
+            # rather than the Tools menu (decision D34). Import the submodule via
+            # `from` so the local name is `speedrun_dashboard`, not `aqt` (a bare
+            # `import aqt.speedrun_dashboard` rebinds `aqt` for this whole scope).
+            from aqt import speedrun_dashboard
 
-            aqt.speedrun_dashboard.show_speedrun_dashboard(self.mw.col.decks.current())
+            speedrun_dashboard.show_speedrun_dashboard(self.mw.col.decks.current())
         elif url == "cram":
             aqt.dialogs.open("FilteredDeckConfigDialog", self.mw)
         elif url == "refresh":

@@ -339,6 +339,27 @@ impl crate::services::SchedulerService for Collection {
         Ok(scheduler::SpeedrunProgress { topics })
     }
 
+    fn get_speedrun_score_breakdown(
+        &mut self,
+        input: anki_proto::decks::DeckId,
+    ) -> Result<scheduler::SpeedrunScoreBreakdown> {
+        let topics = self
+            .get_speedrun_score_breakdown(input.did.into())?
+            .into_iter()
+            .map(|stat| scheduler::speedrun_score_breakdown::TopicStat {
+                topic_id: stat.topic_id,
+                path: stat.path,
+                mean_retrievability: stat.mean_retrievability,
+                application_accuracy: stat.application_accuracy,
+                application_attempts: stat.application_attempts,
+                memory_reviews: stat.memory_reviews,
+                exam_weight: stat.exam_weight,
+                has_application_data: stat.has_application_data,
+            })
+            .collect();
+        Ok(scheduler::SpeedrunScoreBreakdown { topics })
+    }
+
     fn custom_study(
         &mut self,
         input: scheduler::CustomStudyRequest,
@@ -541,8 +562,9 @@ fn fsrs_review_proto_to_fsrs(review: anki_proto::scheduler::FsrsReview) -> FSRSR
     }
 }
 
-/// Map the shared Rust [`ScoreEnvelope`](crate::speedrun::scores::ScoreEnvelope)
-/// (Performance / Readiness) onto its protobuf form.
+/// Map the shared Rust
+/// [`ScoreEnvelope`](crate::speedrun::scores::ScoreEnvelope) (Performance /
+/// Readiness) onto its protobuf form.
 fn score_envelope_to_proto(
     score: crate::speedrun::scores::ScoreEnvelope,
 ) -> scheduler::ScoreEnvelope {
@@ -608,6 +630,7 @@ mod tests {
                 rating: rating as i32,
                 answered_at_millis: TimestampMillis::now().0,
                 milliseconds_taken: 0,
+                from_queue: None,
             },
         )
         .unwrap();

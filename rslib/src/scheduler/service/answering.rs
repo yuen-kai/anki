@@ -21,7 +21,10 @@ impl From<anki_proto::scheduler::CardAnswer> for CardAnswer {
             answered_at: TimestampMillis(answer.answered_at_millis),
             milliseconds_taken: answer.milliseconds_taken,
             custom_data,
-            from_queue: true,
+            // Unset preserves the historical behavior (pop from the live queue);
+            // only a caller that explicitly serves cards out of queue (the
+            // Speedrun Learn reviewer) sends false.
+            from_queue: answer.from_queue.unwrap_or(true),
         }
     }
 }

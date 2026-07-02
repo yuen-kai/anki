@@ -18,13 +18,13 @@
 //! On top of the ordering, the queue honors each topic's mastery state
 //! ([`crate::speedrun::progression`]):
 //!
-//! - **Suppression:** a `SpeedrunApplication` card is dropped while its topic is
-//!   below `hierarchy` (no applying before the concept is in hand).
-//! - **Blocked vs mixed:** if any in-scope topic is still `learning`, the single
-//!   highest-priority learning block is served (blocked first-exposure) together
-//!   with already-graduated topics' due reviews, so blocking a new topic never
-//!   starves earlier topics' retention (B026); otherwise the whole mixed pool is
-//!   served, ordered by block priority as before.
+//! - **Suppression:** a `SpeedrunApplication` card is dropped while its topic
+//!   is below `hierarchy` (no applying before the concept is in hand).
+//! - **Blocked vs mixed:** if any in-scope topic is still `learning`, the
+//!   single highest-priority learning block is served (blocked first-exposure)
+//!   together with already-graduated topics' due reviews, so blocking a new
+//!   topic never starves earlier topics' retention (B026); otherwise the whole
+//!   mixed pool is served, ordered by block priority as before.
 //!
 //! Both are pure presentation: no card is mutated and the state map is only
 //! read, so FSRS scheduling and undo stay untouched.
@@ -247,10 +247,11 @@ impl Collection {
 /// The kind a queued entry contributes to the topic-grouped queue, or `None`
 /// for entries the Learn ordering deliberately leaves to the default queue.
 ///
-/// New, due Review and *interday* (day-granularity) Learning cards are the daily
-/// study set we regroup by topic. Intraday learning steps (due in minutes) carry
-/// their own short-term sequence and are skipped, so a card mid-step isn't pulled
-/// out of order — it still surfaces normally in the default queue.
+/// New, due Review and *interday* (day-granularity) Learning cards are the
+/// daily study set we regroup by topic. Intraday learning steps (due in
+/// minutes) carry their own short-term sequence and are skipped, so a card
+/// mid-step isn't pulled out of order — it still surfaces normally in the
+/// default queue.
 fn topic_queue_kind(entry: &QueueEntry) -> Option<QueueEntryKind> {
     match entry {
         QueueEntry::Main(e) => Some(match e.kind {
@@ -321,18 +322,18 @@ fn order_cards(
 /// Apply the state-aware selection (spec-mastery-progression §6): if any mapped
 /// in-scope topic in the servable set is still `learning`, serve the single
 /// highest-priority learning block (blocked first-exposure) **plus** the due
-/// maintenance of already-graduated topics; otherwise serve the whole mixed pool
-/// unchanged. `ordered` is already block-priority ordered, so the first mapped
-/// `learning` card marks the highest-priority learning topic, and the retained
-/// cards keep that order.
+/// maintenance of already-graduated topics; otherwise serve the whole mixed
+/// pool unchanged. `ordered` is already block-priority ordered, so the first
+/// mapped `learning` card marks the highest-priority learning topic, and the
+/// retained cards keep that order.
 ///
-/// The one blocked block is the only first-exposure study served: other learning
-/// topics' cards stay withheld so the learner takes on one new topic at a time.
-/// But a graduated topic's due reviews and interday-learning cards keep flowing
-/// (B026), because with the single Study button there is no separate Practice
-/// pass to catch them, so blocking a new topic must never starve retention of
-/// earlier ones. Unmapped cards never trigger the blocked phase and are excluded
-/// from it (a learning block is a single mapped topic).
+/// The one blocked block is the only first-exposure study served: other
+/// learning topics' cards stay withheld so the learner takes on one new topic
+/// at a time. But a graduated topic's due reviews and interday-learning cards
+/// keep flowing (B026), because with the single Study button there is no
+/// separate Practice pass to catch them, so blocking a new topic must never
+/// starve retention of earlier ones. Unmapped cards never trigger the blocked
+/// phase and are excluded from it (a learning block is a single mapped topic).
 fn select_blocked_or_mixed(ordered: Vec<QueueCardData>) -> Vec<QueueCardData> {
     let blocked_topic = ordered.iter().find_map(|d| match &d.topic {
         Some(topic) if d.state == TopicState::Learning => Some(topic.clone()),
@@ -344,10 +345,7 @@ fn select_blocked_or_mixed(ordered: Vec<QueueCardData>) -> Vec<QueueCardData> {
             .filter(|d| {
                 d.topic.as_deref() == Some(topic.as_str())
                     || (d.state != TopicState::Learning
-                        && matches!(
-                            d.kind,
-                            QueueEntryKind::Review | QueueEntryKind::Learning
-                        ))
+                        && matches!(d.kind, QueueEntryKind::Review | QueueEntryKind::Learning))
             })
             .collect(),
         None => ordered,
@@ -461,7 +459,8 @@ mod tests {
     }
 
     /// Create and persist a minimal note type with the given `name`, so the
-    /// queue's note-kind logic classifies its cards (e.g. "SpeedrunApplication").
+    /// queue's note-kind logic classifies its cards (e.g.
+    /// "SpeedrunApplication").
     fn add_notetype_named(col: &mut Collection, name: &str) -> Notetype {
         let mut nt = Notetype {
             name: name.to_string(),
@@ -717,8 +716,9 @@ mod tests {
     }
 
     /// (c) An application card is suppressed while its topic is below
-    /// `hierarchy` (learning/practicing) and served once it reaches `hierarchy`;
-    /// a non-application card in the same topic is never suppressed.
+    /// `hierarchy` (learning/practicing) and served once it reaches
+    /// `hierarchy`; a non-application card in the same topic is never
+    /// suppressed.
     #[test]
     fn application_cards_suppressed_below_hierarchy() {
         let mut col = Collection::new();
@@ -797,9 +797,10 @@ mod tests {
         );
     }
 
-    /// B026: while a new topic is blocked, a *graduated* topic's due review keeps
-    /// flowing (retention isn't starved), but another *learning* topic's new
-    /// first-exposure card stays withheld (one new topic at a time).
+    /// B026: while a new topic is blocked, a *graduated* topic's due review
+    /// keeps flowing (retention isn't starved), but another *learning*
+    /// topic's new first-exposure card stays withheld (one new topic at a
+    /// time).
     #[test]
     fn blocked_phase_serves_graduated_reviews_but_withholds_other_new_topics() {
         let mut col = Collection::new();
@@ -829,8 +830,9 @@ mod tests {
     /// Button-merge fallback (spec-mastery-progression §6): a deck with no
     /// Speedrun topics leaves every card unmapped, so the blocked phase never
     /// triggers and nothing is suppressed — the topic-grouped queue serves
-    /// exactly the same actionable cards as the default queue. This is what lets
-    /// the single "Study" button behave like normal study on a normal deck.
+    /// exactly the same actionable cards as the default queue. This is what
+    /// lets the single "Study" button behave like normal study on a normal
+    /// deck.
     #[test]
     fn non_speedrun_deck_matches_default_queue() {
         let mut col = Collection::new();
@@ -978,8 +980,8 @@ mod tests {
 
     /// Answers `cid` Good at a fixed instant via the standard path (out of
     /// queue, as the reviewer does for a card the topic queue surfaced) and
-    /// returns the resulting card. A fixed `at` keeps a learning card's due time
-    /// comparable across two separate answers.
+    /// returns the resulting card. A fixed `at` keeps a learning card's due
+    /// time comparable across two separate answers.
     fn answer_good_at(
         col: &mut Collection,
         cid: CardId,
@@ -1000,7 +1002,8 @@ mod tests {
         col.storage.get_card(cid).unwrap().unwrap()
     }
 
-    /// The scheduling-relevant fields of a card, for comparing two answer paths.
+    /// The scheduling-relevant fields of a card, for comparing two answer
+    /// paths.
     fn sched_outcome(card: &Card) -> (CardType, CardQueue, i32, u32, u32, u32) {
         (
             card.ctype,
@@ -1014,8 +1017,8 @@ mod tests {
 
     /// B019 safety proof for new cards: a new card the topic queue surfaces
     /// reports the same scheduling states as the default new-card path, grades
-    /// through the unchanged `answer_card` path to an identical outcome, and the
-    /// answer undoes cleanly back to the pristine new card.
+    /// through the unchanged `answer_card` path to an identical outcome, and
+    /// the answer undoes cleanly back to the pristine new card.
     #[test]
     fn answering_new_card_from_topic_queue_matches_default_and_is_undoable() {
         let mut col = Collection::new();

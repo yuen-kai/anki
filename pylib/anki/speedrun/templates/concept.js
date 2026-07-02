@@ -6,112 +6,112 @@
 //                      no re-teaching both cases.
 // An absent or unrecognised mode falls back to concept_learn, so the current
 // behaviour is never broken. Pure DOM + sessionStorage, no network or model calls.
-(function () {
-  "use strict";
+(function() {
+    "use strict";
 
-  var STORE_KEY = "speedrun:concept:answer";
+    var STORE_KEY = "speedrun:concept:answer";
 
-  // Only the practice string switches behaviour; anything else (absent, unknown,
-  // or a wrong-family value) stays on the safe concept-learn default.
-  var practice = window.speedrunCardMode === "concept_practice";
+    // Only the practice string switches behaviour; anything else (absent, unknown,
+    // or a wrong-family value) stays on the safe concept-learn default.
+    var practice = window.speedrunCardMode === "concept_practice";
 
-  // Draw the topic breadcrumb the reviewer injects as window.speedrunTopicPath
-  // (foundation -> leaf). textContent only, never innerHTML, so an authored
-  // label can render no markup; the "›" separators come from CSS. An absent or
-  // empty path leaves the element hidden, so a non-Speedrun render shows nothing.
-  function renderBreadcrumb() {
-    var nav = document.getElementById("sr-breadcrumb");
-    if (!nav) return;
-    var raw = Array.isArray(window.speedrunTopicPath) ? window.speedrunTopicPath : [];
-    var labels = raw.filter(function (label) {
-      return typeof label === "string" && label;
-    });
-    nav.textContent = "";
-    if (!labels.length) {
-      nav.hidden = true;
-      return;
+    // Draw the topic breadcrumb the reviewer injects as window.speedrunTopicPath
+    // (foundation -> leaf). textContent only, never innerHTML, so an authored
+    // label can render no markup; the "›" separators come from CSS. An absent or
+    // empty path leaves the element hidden, so a non-Speedrun render shows nothing.
+    function renderBreadcrumb() {
+        var nav = document.getElementById("sr-breadcrumb");
+        if (!nav) { return; }
+        var raw = Array.isArray(window.speedrunTopicPath) ? window.speedrunTopicPath : [];
+        var labels = raw.filter(function(label) {
+            return typeof label === "string" && label;
+        });
+        nav.textContent = "";
+        if (!labels.length) {
+            nav.hidden = true;
+            return;
+        }
+        labels.forEach(function(label) {
+            var item = document.createElement("span");
+            item.className = "sr-breadcrumb__item";
+            item.textContent = label;
+            nav.appendChild(item);
+        });
+        nav.hidden = false;
     }
-    labels.forEach(function (label) {
-      var item = document.createElement("span");
-      item.className = "sr-breadcrumb__item";
-      item.textContent = label;
-      nav.appendChild(item);
-    });
-    nav.hidden = false;
-  }
 
-  renderBreadcrumb();
+    renderBreadcrumb();
 
-  function read() {
-    try {
-      return sessionStorage.getItem(STORE_KEY) || "";
-    } catch (e) {
-      return "";
+    function read() {
+        try {
+            return sessionStorage.getItem(STORE_KEY) || "";
+        } catch (e) {
+            return "";
+        }
     }
-  }
 
-  function write(value) {
-    try {
-      sessionStorage.setItem(STORE_KEY, value);
-    } catch (e) {
-      /* private mode / storage disabled: degrade to no echo */
+    function write(value) {
+        try {
+            sessionStorage.setItem(STORE_KEY, value);
+        } catch (e) {
+            /* private mode / storage disabled: degrade to no echo */
+        }
     }
-  }
 
-  function setText(el, text) {
-    if (el) el.textContent = text;
-  }
+    function setText(el, text) {
+        if (el) { el.textContent = text; }
+    }
 
-  // Strip the pair down to a single cue + recall ask. Runs on both the question
-  // and the answer render (the answer pulls the front in via {{FrontSide}}), so
-  // the answer side does not re-teach both cases either.
-  function applyPractice() {
-    var root = document.querySelector(".sr-concept");
-    if (root) root.classList.add("sr-concept--practice");
-    var caseB = document.querySelector(".sr-case--b");
-    if (caseB) caseB.hidden = true;
-    var prompt = document.querySelector(".sr-prompt");
-    if (prompt) prompt.hidden = true;
-    // The remaining case is a worked example, not one half of a contrast.
-    setText(document.querySelector(".sr-case--a .sr-case__label"), "Example");
-    setText(document.querySelector(".sr-answer__label"), "Recall the concept");
-    var box = document.getElementById("sr-similarity");
-    if (box) box.setAttribute("placeholder", "Recall the concept, then reveal.");
-  }
+    // Strip the pair down to a single cue + recall ask. Runs on both the question
+    // and the answer render (the answer pulls the front in via {{FrontSide}}), so
+    // the answer side does not re-teach both cases either.
+    function applyPractice() {
+        var root = document.querySelector(".sr-concept");
+        if (root) { root.classList.add("sr-concept--practice"); }
+        var caseB = document.querySelector(".sr-case--b");
+        if (caseB) { caseB.hidden = true; }
+        var prompt = document.querySelector(".sr-prompt");
+        if (prompt) { prompt.hidden = true; }
+        // The remaining case is a worked example, not one half of a contrast.
+        setText(document.querySelector(".sr-case--a .sr-case__label"), "Example");
+        setText(document.querySelector(".sr-answer__label"), "Recall the concept");
+        var box = document.getElementById("sr-similarity");
+        if (box) { box.setAttribute("placeholder", "Recall the concept, then reveal."); }
+    }
 
-  if (practice) applyPractice();
+    if (practice) { applyPractice(); }
 
-  // The answer block is appended after {{FrontSide}}, so its presence is how we
-  // tell the front render from the back render (the whole card is parsed before
-  // scripts re-run, so this check is reliable on both desktop and AnkiDroid).
-  var answer = document.querySelector(".sr-concept--answer");
-  var input = document.getElementById("sr-similarity");
+    // The answer block is appended after {{FrontSide}}, so its presence is how we
+    // tell the front render from the back render (the whole card is parsed before
+    // scripts re-run, so this check is reliable on both desktop and AnkiDroid).
+    var answer = document.querySelector(".sr-concept--answer");
+    var input = document.getElementById("sr-similarity");
 
-  if (answer) {
+    if (answer) {
+        if (input) {
+            input.readOnly = true;
+            input.classList.add("is-locked");
+        }
+        var out = document.getElementById("sr-your-answer");
+        var saved = read();
+        if (out && saved.trim()) {
+            out.textContent = saved;
+            out.classList.remove("sr-blank");
+        }
+        return;
+    }
+
     if (input) {
-      input.readOnly = true;
-      input.classList.add("is-locked");
+        write("");
+        input.addEventListener("input", function() {
+            write(input.value);
+        });
+        if (typeof input.focus === "function") {
+            try {
+                input.focus({ preventScroll: true });
+            } catch (e) {
+                input.focus();
+            }
+        }
     }
-    var out = document.getElementById("sr-your-answer");
-    var saved = read();
-    if (out && saved.trim()) {
-      out.textContent = saved;
-      out.classList.remove("sr-blank");
-    }
-    return;
-  }
-
-  if (input) {
-    write("");
-    input.addEventListener("input", function () {
-      write(input.value);
-    });
-    if (typeof input.focus === "function") {
-      try {
-        input.focus({ preventScroll: true });
-      } catch (e) {
-        input.focus();
-      }
-    }
-  }
 })();

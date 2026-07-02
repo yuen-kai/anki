@@ -13,6 +13,7 @@ Students want one number: "am I ready?" That number, unbacked, is the single thi
 ## 2. Goals & non-goals
 
 **Goals**
+
 - Three independent scores, never combined into one ([D7](decisions.md#d7)).
 - A shared evidence envelope rendered identically for all three.
 - A single give-up rule, applied per score and per scope ([D9](decisions.md#d9)).
@@ -20,17 +21,18 @@ Students want one number: "am I ready?" That number, unbacked, is the single thi
 - A data model that already carries what Performance/Readiness need ([D10](decisions.md#d10)).
 
 **Non-goals**
+
 - A blended "overall" score, anywhere, ever ([D7](decisions.md#d7)).
 - Proving readiness against real exam outcomes this week (no honest data exists in a week; [source §9](../../Speedrun_%20A%20Desktop%20+%20Mobile%20Study%20App%20Built%20on%20Anki.md)).
 - Shipping Performance/Readiness numbers on Wednesday ([D10](decisions.md#d10)).
 
 ## 3. The three scores
 
-| Score | Question | Wednesday input | Later input |
-| :-- | :-- | :-- | :-- |
-| **Memory** | Recall a taught fact now? | FSRS retrievability aggregated over in-scope cards ([D8](decisions.md#d8)) | calibration-corrected per Sunday eval |
-| **Performance** | Get a *new* exam-style question right? | abstains | model over topic mastery, item difficulty, timing, coverage; validated by the paraphrase test |
-| **Readiness** | Score on 472–528 today? | abstains | performance → score mapping with a range, weighted by coverage |
+| Score           | Question                               | Wednesday input                                                            | Later input                                                                                   |
+| :-------------- | :------------------------------------- | :------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| **Memory**      | Recall a taught fact now?              | FSRS retrievability aggregated over in-scope cards ([D8](decisions.md#d8)) | calibration-corrected per Sunday eval                                                         |
+| **Performance** | Get a _new_ exam-style question right? | abstains                                                                   | model over topic mastery, item difficulty, timing, coverage; validated by the paraphrase test |
+| **Readiness**   | Score on 472–528 today?                | abstains                                                                   | performance → score mapping with a range, weighted by coverage                                |
 
 They are deliberately decoupled: a great memory model is not a great score model, and conflating them hides the memory→performance bridge the project is graded on.
 
@@ -92,7 +94,7 @@ topic_weakness(topic) = w1 * (1 - recent_topic_accuracy(topic))
                       + w2 * mean(1 - R_i for cards in topic)
 ```
 
-This is the one place weakness is defined; [`spec-engine-topic-queue`](spec-engine-topic-queue.md) §5 and [`spec-study-model`](spec-study-model.md) §4 consume it. Calibration (does "80%" mean 80%?) is *proven* Sunday via Brier/log-loss on held-out reviews; Wednesday's claim is only "aggregated FSRS recall with an honest range," not "calibrated."
+This is the one place weakness is defined; [`spec-engine-topic-queue`](spec-engine-topic-queue.md) §5 and [`spec-study-model`](spec-study-model.md) §4 consume it. Calibration (does "80%" mean 80%?) is _proven_ Sunday via Brier/log-loss on held-out reviews; Wednesday's claim is only "aggregated FSRS recall with an honest range," not "calibrated."
 
 ## 7. Performance & Readiness (designed, deferred) ([D10](decisions.md#d10))
 

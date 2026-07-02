@@ -68,20 +68,19 @@ class DeckBrowser:
 
     def __init__(self, mw: AnkiQt) -> None:
         self.mw = mw
-        self.web = mw.web
+        self.web = mw.speedrunWeb
         self.bottom = BottomBar(mw, mw.bottomWeb)
         self.scrollPos = QPoint(0, 0)
         self._refresh_needed = False
 
     def show(self) -> None:
         av_player.stop_and_clear_queue()
-        self.web.set_bridge_command(self._linkHandler, self)
-        # redraw top bar for theme change
-        self.mw.toolbar.redraw()
         self.refresh()
 
     def refresh(self) -> None:
-        self._renderPage()
+        # the deck home is a SvelteKit page hosted in the Speedrun webview;
+        # (re)load it so the decks list and To Do counts stay current
+        self.web.load_sveltekit_page("speedrun-decks")
         self._refresh_needed = False
 
     def refresh_if_needed(self) -> None:
@@ -144,15 +143,29 @@ class DeckBrowser:
     # HTML generation
     ##########################################################################
 
-    _body = """
-<center>
-<table cellspacing=0 cellpadding=3>
-%(tree)s
-</table>
+    # Per-deck options trigger (rename / options / export / delete). A quiet
+    # "more" glyph that surfaces on row hover, distinct from the top-bar menu.
+    _DOTS_SVG = (
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" '
+        'aria-hidden="true"><circle cx="5" cy="12" r="1.8"/>'
+        '<circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>'
+    )
 
-<br>
-%(stats)s
-</center>
+    _body = """
+<div class="home">
+  <header class="home-head">
+    <h1 class="home-title">%(title)s</h1>
+    %(stats)s
+  </header>
+  <div class="deck-card">
+    <table class="decks" cellspacing=0 cellpadding=0>
+%(tree)s
+    </table>
+    <button class="new-deck" onclick='pycmd("create")'>
+      <span class="new-deck__plus">+</span>%(newdeck)s
+    </button>
+  </div>
+</div>
 """
 
     def _renderPage(self, reuse: bool = False) -> None:
@@ -187,7 +200,13 @@ class DeckBrowser:
         gui_hooks.deck_browser_will_render_content(self, content)
         self.web.stdHtml(
             self._v1_upgrade_message(data.sched_upgrade_required)
-            + self._body % content.__dict__,
+            + self._body
+            % {
+                "tree": content.tree,
+                "stats": content.stats,
+                "title": tr.actions_decks(),
+                "newdeck": tr.decks_create_deck(),
+            },
             css=["css/deckbrowser.css"],
             js=[
                 "js/vendor/jquery.min.js",
@@ -211,11 +230,11 @@ class DeckBrowser:
 
     def _renderDeckTree(self, top: DeckTreeNode) -> str:
         buf = """
-<tr><th colspan=5 align=start>{}</th>
-<th class=count>{}</th>
-<th class=count>{}</th>
-<th class=count>{}</th>
-<th class=optscol></th></tr>""".format(
+<tr class=head><th colspan=5 class=h-deck>{}</th>
+<th class=h-count>{}</th>
+<th class=h-count>{}</th>
+<th class=h-count>{}</th>
+<th class=h-opts></th></tr>""".format(
             tr.decks_deck(),
             tr.actions_new(),
             tr.decks_learn_header(),
@@ -231,13 +250,9 @@ class DeckBrowser:
         return buf
 
     def _render_deck_node(self, node: DeckTreeNode, ctx: RenderDeckNodeContext) -> str:
-        if node.collapsed:
-            prefix = "+"
-        else:
-            prefix = "−"
+        prefix = "\u25b8" if node.collapsed else "\u25be"  # ▸ / ▾
 
-        def indent() -> str:
-            return "&nbsp;" * 6 * (node.level - 1)
+        indent = f'<span class="indent" style="width:{16 * (node.level - 1)}px"></span>'
 
         if node.deck_id == ctx.current_deck_id:
             klass = "deck current"
@@ -252,7 +267,7 @@ class DeckBrowser:
                 node.deck_id,
             )
         )
-        # deck link
+        # collapse chevron
         if node.children:
             collapse = (
                 "<a class=collapse href=# onclick='return pycmd(\"collapse:%d\")'>%s</a>"
@@ -265,34 +280,31 @@ class DeckBrowser:
         else:
             extraclass = ""
         buf += """
-
-        <td class=decktd colspan=5>%s%s<a class="deck %s"
+        <td class=decktd colspan=5>%s%s<a class="deckname %s"
         href=# onclick="return pycmd('open:%d')">%s</a></td>""" % (
-            indent(),
+            indent,
             collapse,
             extraclass,
             node.deck_id,
             html.escape(node.name),
         )
 
-        # due counts
-        def nonzeroColour(cnt: int, klass: str) -> str:
+        # due counts, rendered as tabular chips; zero counts stay muted
+        def chip(cnt: int, klass: str) -> str:
             if not cnt:
                 klass = "zero-count"
-            return f'<span class="{klass}">{cnt}</span>'
+            return f'<span class="cnt {klass}">{cnt}</span>'
 
-        review = nonzeroColour(node.review_count, "review-count")
-        learn = nonzeroColour(node.learn_count, "learn-count")
-
-        buf += ("<td align=end>%s</td>" * 3) % (
-            nonzeroColour(node.new_count, "new-count"),
-            learn,
-            review,
+        buf += ("<td class=cntcol>%s</td>" * 3) % (
+            chip(node.new_count, "new-count"),
+            chip(node.learn_count, "learn-count"),
+            chip(node.review_count, "review-count"),
         )
-        # options
+        # per-deck options
         buf += (
-            "<td align=center class=opts><a onclick='return pycmd(\"opts:%d\");'>"
-            "<img src='/_anki/imgs/gears.svg' class=gears></a></td></tr>" % node.deck_id
+            "<td class=optscol><a class=deckopts onclick='return pycmd(\"opts:%d\");' "
+            "title='%s' aria-label='%s'>%s</a></td></tr>"
+            % (node.deck_id, tr.actions_options(), tr.actions_options(), self._DOTS_SVG)
         )
         # children
         if not node.collapsed:

@@ -16,15 +16,15 @@ A fork of Anki that adds a desktop + mobile study app for **one exam (MCAT)**, b
 
 ## Doc map
 
-| Doc | Role | Lifecycle |
-| :-- | :-- | :-- |
-| `README.md` (this) | Front door + current state + authority order | living |
-| [`prd-speedrun.md`](prd-speedrun.md) | User-facing contract | frozen |
-| [`spec-*.md`](.) | Implementation design (taxonomy, engine queue, study model, scores, mobile) | frozen |
-| [`decisions.md`](decisions.md) | Decision log D1–D32 (Chose / Considered / Gaps) | append-only |
-| [`design-iterations.md`](design-iterations.md) | Dated, feedback-driven design changes | append-only |
-| [`backlog.md`](backlog.md) | Bugs / refactors / open issues | updated in place |
-| [`requirements.md`](requirements.md) | Requirements ledger (every ask → status), reconcile before "done" | living |
+| Doc                                            | Role                                                                        | Lifecycle        |
+| :--------------------------------------------- | :-------------------------------------------------------------------------- | :--------------- |
+| `README.md` (this)                             | Front door + current state + authority order                                | living           |
+| [`prd-speedrun.md`](prd-speedrun.md)           | User-facing contract                                                        | frozen           |
+| [`spec-*.md`](.)                               | Implementation design (taxonomy, engine queue, study model, scores, mobile) | frozen           |
+| [`decisions.md`](decisions.md)                 | Decision log D1–D32 (Chose / Considered / Gaps)                             | append-only      |
+| [`design-iterations.md`](design-iterations.md) | Dated, feedback-driven design changes                                       | append-only      |
+| [`backlog.md`](backlog.md)                     | Bugs / refactors / open issues                                              | updated in place |
+| [`requirements.md`](requirements.md)           | Requirements ledger (every ask → status), reconcile before "done"           | living           |
 
 ## Authority order (what wins when docs conflict)
 

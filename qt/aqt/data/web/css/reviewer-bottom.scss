@@ -7,10 +7,24 @@
 
 :root {
     --focus-color: #{palette-of(border-focus)};
+    --sr-signal: #df8f0a;
+    --sr-signal-strong: #c67d06;
+    --sr-signal-ink: #2f2204;
+    --sr-danger: #b23b2e;
+    --sr-danger-soft: #f6e3df;
+    --sr-hover: rgba(24, 20, 12, 0.06);
 
     .isMac {
         --focus-color: rgba(0 103 244 / 0.247);
     }
+}
+.nightMode {
+    --sr-signal: #f2a93b;
+    --sr-signal-strong: #f7bd5e;
+    --sr-signal-ink: #1b1405;
+    --sr-danger: #e2705f;
+    --sr-danger-soft: #3a201b;
+    --sr-hover: rgba(255, 255, 255, 0.08);
 }
 
 body {
@@ -23,15 +37,81 @@ body {
     position: relative;
 }
 
+/* Answer + ease buttons: tactile, tabular, keyboard-legible. */
 button {
-    min-width: 60px;
+    font-family: inherit;
+    min-width: 66px;
+    margin: 9px 5px;
+    padding: 9px 16px;
+    border: 1px solid color(border-subtle);
+    border-radius: 10px;
+    background: color(canvas);
+    color: color(fg);
+    font-size: 14px;
+    font-weight: 620;
+    letter-spacing: -0.005em;
     white-space: nowrap;
-    margin: 9px;
     position: relative;
+    cursor: pointer;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease,
+        transform 60ms ease;
+}
+button:hover {
+    border-color: color(border);
+    background: color(canvas-elevated);
+}
+button:active {
+    transform: translateY(1px);
+}
+button:focus-visible {
+    outline: 2px solid var(--sr-signal);
+    outline-offset: 2px;
 }
 
-.hitem {
-    margin-top: 2px;
+/* Again reads as the one "missed it" signal. */
+button[data-ease="1"] {
+    color: var(--sr-danger);
+}
+button[data-ease="1"]:hover {
+    border-color: var(--sr-danger);
+    background: var(--sr-danger-soft);
+}
+
+/* The recommended grade wears the marigold outline. */
+#defease {
+    border-color: var(--sr-signal);
+    box-shadow: inset 0 0 0 1px var(--sr-signal);
+}
+
+/* Show Answer is the primary action. */
+#ansbut {
+    min-width: 210px;
+    background: var(--sr-signal);
+    border-color: var(--sr-signal);
+    color: var(--sr-signal-ink);
+    font-weight: 680;
+}
+#ansbut:hover {
+    background: var(--sr-signal-strong);
+    border-color: var(--sr-signal-strong);
+}
+
+/* Edit + More are quiet, out of the way of the graded decision. */
+.stat button {
+    min-width: 0;
+    padding: 8px 11px;
+    border: none;
+    background: transparent;
+    color: color(fg-subtle);
+    font-size: 13px;
+    font-weight: 560;
+}
+.stat button:hover {
+    color: color(fg);
+    background: var(--sr-hover);
 }
 
 .stat {
@@ -47,10 +127,7 @@ button {
     font-weight: normal;
 }
 
-:focus {
-    border-color: color(border-focus);
-}
-
+/* Per-grade interval estimates + remaining counts sit above the buttons. */
 .nobold,
 .stattxt {
     position: absolute;
@@ -66,19 +143,15 @@ button {
 .spacer {
     height: 18px;
 }
-
 .spacer2 {
     height: 16px;
 }
 
-#outer {
-    border-top: 1px solid color(border);
-    /* Better compatibility with graphics pad/touchscreen */
-    -webkit-user-select: none;
-}
-
-.nightMode {
-    #outer {
-        border-top-color: color(border-subtle);
+@media (prefers-reduced-motion: reduce) {
+    button {
+        transition: none;
     }
+}
+.reduce-motion button {
+    transition: none;
 }
