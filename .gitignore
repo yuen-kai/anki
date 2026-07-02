@@ -24,3 +24,12 @@ ts/.svelte-kit
 docs/_build/
 docs/autoapi/
 .complexipy_cache
+
+# Android app + bridge (rsdroid) build outputs
+android/**/build/
+android/**/.gradle/
+android/**/.kotlin/
+android/**/.cxx/
+android/**/local.properties
+android/**/*.aar
+android/bridge/target/

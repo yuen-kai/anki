@@ -21,6 +21,10 @@ members = [
   "rslib/sync",
   "tools/minilints",
 ]
+# android/bridge (rsdroid + build_rust) is a self-contained Cargo workspace for the
+# Android engine-bridge; keep it out of the desktop workspace so desktop builds are
+# unaffected. It still depends on the in-repo `anki` crate via a path dependency.
+exclude = ["android/bridge"]
 resolver = "2"
 
 [workspace.dependencies.percent-encoding-iri]

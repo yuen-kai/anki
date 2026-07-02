@@ -5,8 +5,32 @@ code is laid out, how the layers talk to each other, and where the Speedrun
 additions live. This is a code map, not a product or design doc.
 
 Last updated: 2026-07-02. The study-engine consolidation has landed: there is one
-study engine (authored hierarchy) and the note/taxonomy study path is gone. Prefer
-module and function names over line numbers when navigating.
+study engine (authored hierarchy) and the note/taxonomy study path is gone. The
+desktop and Android apps now live in this one repo (the Android host is under
+`android/`), and the Android app is verified building and running on an arm64 emulator
+from the in-repo engine. Prefer module and function names over line numbers when
+navigating.
+
+## Repo layout (the four-way split)
+
+One monorepo, four parts. The shared engine and shared UI are not duplicated per
+platform; each host embeds them.
+
+- Backend (shared engine): `rslib/` (Rust core) with `proto/` contracts and the
+  `pylib/rsbridge` / `android/bridge` language bridges into it.
+- Frontend (shared UI): `ts/` (the SvelteKit app both hosts render).
+- Desktop host: `qt/` (the PyQt app) + `pylib/` (the Python layer it uses to reach
+  the engine).
+- Android host: `android/app` (the AnkiDroid Kotlin app) + `android/bridge` (rsdroid,
+  the JNI engine-bridge + `.aar` packaging, the Android analog of `pylib/rsbridge`).
+
+There is no "android backend": the backend is the shared `rslib`. The Android side
+was merged in from two former repos (`Anki-Android` -> `android/app`,
+`Anki-Android-Backend` -> `android/bridge`), history dropped, no longer tied to the
+upstream `ankidroid/*` remotes. `android/bridge` is excluded from the desktop Cargo
+workspace; its rsdroid crate depends on the in-repo `rslib` by relative path (no
+symlink). Android build outputs are gitignored and `android/**/local.properties` is
+machine-local.
 
 ## Layers
 
@@ -28,6 +52,8 @@ Anki is multi-layer, tied together by a protobuf contract.
   Rust, Python, and TS. Edit `ftl/core` (or `ftl/qt` for Qt-only strings).
 - `build/` + `justfile` — build system. Use `just` recipes only (`just --list`); do
   not call `./ninja`, `./run`, or `tools/*` directly. Generated output lands in `out/`.
+- `android/` — the Android host (see "Repo layout" above): `android/app` (the
+  AnkiDroid app) + `android/bridge` (rsdroid, the JNI engine bridge + `.aar`).
 
 ## RPC and data flow
 
@@ -60,6 +86,14 @@ and `rslib/src/backend/mod.rs`.
   are whitelisted in `mediasrv.py` (`is_sveltekit_page`).
 - `.proto` changes need a full build to regenerate bindings.
 - Generated cross-language code: `out/{pylib/anki,qt/_aqt,ts/lib/generated}`.
+- Android (verified building + running on an arm64 emulator): build the bridge from
+  `android/bridge` (`cargo run -p build_rust`: ninja web artifacts -> `cargo ndk`
+  cross-compile -> gradle `assembleRelease`), then the app from `android/app`
+  (`./gradlew assembleFullDebug`). Needs `JAVA_HOME` (JDK 17+), `ANDROID_NDK_HOME`
+  (NDK 29), and `android/{app,bridge}/local.properties` (machine-local; the app's also
+  sets `local_backend=true`). The bridge bundles the shared `out/sveltekit` web assets
+  into the `.aar`. The dev build is single-arch (arm64 on Apple Silicon); use
+  `ALL_ARCHS=1 RELEASE=1` for a multi-arch release `.aar`.
 
 ## Base Anki: key files
 
