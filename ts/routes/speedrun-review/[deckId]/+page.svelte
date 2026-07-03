@@ -6,14 +6,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { onMount } from "svelte";
 
     import ConceptLearn from "../ConceptLearn.svelte";
+    import GuidedCard from "../GuidedCard.svelte";
     import {
+        type AnswerResult,
         answerCard,
         type Concept,
         findConcept,
+        type LearnedResult,
         type LearningBlock,
         nextCard,
         type Node,
         openDeck,
+        pathToNode,
         type Problem,
         type Rating,
         type ReviewCard as ReviewCardData,
@@ -25,11 +29,22 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import NewTopicIntro from "../NewTopicIntro.svelte";
     import PracticeRecall from "../PracticeRecall.svelte";
     import ProblemCard from "../ProblemCard.svelte";
-    import ScaffoldPicker from "../ScaffoldPicker.svelte";
+    import TopicLearned from "../TopicLearned.svelte";
     import UpgradeAnimation from "../UpgradeAnimation.svelte";
     import type { PageData } from "./$types";
 
     export let data: PageData;
+
+    // The callbacks a graded card needs: `answer` runs the FSRS grade (returning
+    // the next interval for the card to show), `onDone` advances carrying the
+    // result (so a level-up can follow), and `onError` routes a failed grade to
+    // the error view. Kept here so the RPC and its error handling stay in the
+    // orchestrator while the interval is shown on the card.
+    type Graded = {
+        answer: (rating: Rating) => Promise<AnswerResult>;
+        onDone: (result: AnswerResult) => void;
+        onError: (err: unknown) => void;
+    };
 
     // The active screen. Every study step becomes a `View` whose callback
     // resolves the promise the driver is awaiting, so the loop below reads as
@@ -45,16 +60,35 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
               total: number;
               onNext: () => void;
           }
-        | { kind: "practice"; concept: Concept; onRate: (rating: Rating) => void }
-        | { kind: "scaffold"; root: Node; conceptId: string; onComplete: () => void }
-        | {
+        | ({ kind: "practice"; concept: Concept } & Graded)
+        | ({
+              kind: "guided";
+              root: Node;
+              concept: Concept;
+              conceptId: string;
+              problem: Problem | null;
+          } & Graded)
+        | ({
               kind: "problem";
               concept: Concept;
               problem: Problem | null;
               state: string;
-              onRate: (rating: Rating) => void;
+          } & Graded)
+        | {
+              kind: "upgrade";
+              concept: string;
+              from: string;
+              to: string;
+              onDone: () => void;
           }
-        | { kind: "upgrade"; from: string; to: string; onDone: () => void }
+        | {
+              kind: "topicLearned";
+              topic: string;
+              items: { title: string }[];
+              from: string;
+              to: string;
+              onDone: () => void;
+          }
         | { kind: "done" };
 
     let view: View = data.hierarchy
@@ -74,9 +108,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // Applying/Mastering rotate through a concept's problems, one per review.
     const rotation = new Map<string, number>();
 
-    function step<T>(make: (resolve: (value: T) => void) => View): Promise<T> {
-        return new Promise<T>((resolve) => {
-            view = make(resolve);
+    function step<T>(
+        make: (resolve: (value: T) => void, reject: (err: unknown) => void) => View,
+    ): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            view = make(resolve, reject);
         });
     }
 
@@ -100,59 +136,67 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         return current;
     }
 
-    async function grade(
-        cardId: string,
-        conceptId: string,
-        rating: Rating,
-    ): Promise<void> {
-        const result = await answerCard(deckId, cardId, conceptId, rating);
+    // Grade a card through the card component: `answer` runs the RPC (so the
+    // card can show the returned interval), then the card resolves this step
+    // with the result. A level-up follows an individual advance.
+    async function runReview(card: ReviewCardData): Promise<void> {
+        const concept = conceptFor(card.conceptId);
+        const answer = (rating: Rating): Promise<AnswerResult> =>
+            answerCard(deckId, card.cardId, card.conceptId, rating);
+        let result: AnswerResult;
+        if (card.state === "practicing") {
+            result = await step<AnswerResult>((resolve, reject) => ({
+                kind: "practice",
+                concept,
+                answer,
+                onDone: resolve,
+                onError: reject,
+            }));
+        } else if (
+            card.state === "hierarchy" &&
+            root &&
+            scaffoldSteps(root, card.conceptId).length
+        ) {
+            // Guided: locate + MCQ + grading on one progressive screen.
+            const problem = rotateProblem(
+                concept.problems,
+                nextRotation(card.conceptId),
+            );
+            result = await step<AnswerResult>((resolve, reject) => ({
+                kind: "guided",
+                root,
+                concept,
+                conceptId: card.conceptId,
+                problem,
+                answer,
+                onDone: resolve,
+                onError: reject,
+            }));
+        } else {
+            // Solo (and Guided with nothing to locate): MCQ + grading only.
+            const problem = rotateProblem(
+                concept.problems,
+                nextRotation(card.conceptId),
+            );
+            result = await step<AnswerResult>((resolve, reject) => ({
+                kind: "problem",
+                concept,
+                problem,
+                state: card.state,
+                answer,
+                onDone: resolve,
+                onError: reject,
+            }));
+        }
         if (result.upgraded) {
             await step<void>((resolve) => ({
                 kind: "upgrade",
+                concept: concept.title,
                 from: result.from,
                 to: result.to,
                 onDone: resolve,
             }));
         }
-    }
-
-    async function runReview(card: ReviewCardData): Promise<void> {
-        const concept = conceptFor(card.conceptId);
-        let rating: Rating;
-        if (card.state === "practicing") {
-            rating = await step<Rating>((resolve) => ({
-                kind: "practice",
-                concept,
-                onRate: resolve,
-            }));
-        } else {
-            // Applying scaffolds down the tree first; Mastering (and anything
-            // unexpected) goes straight to the MCQ.
-            if (
-                card.state === "hierarchy" &&
-                root &&
-                scaffoldSteps(root, card.conceptId).length
-            ) {
-                await step<void>((resolve) => ({
-                    kind: "scaffold",
-                    root,
-                    conceptId: card.conceptId,
-                    onComplete: resolve,
-                }));
-            }
-            const problem = rotateProblem(
-                concept.problems,
-                nextRotation(card.conceptId),
-            );
-            rating = await step<Rating>((resolve) => ({
-                kind: "problem",
-                concept,
-                problem,
-                state: card.state,
-                onRate: resolve,
-            }));
-        }
-        await grade(card.cardId, card.conceptId, rating);
     }
 
     async function runLearningBlock(block: LearningBlock): Promise<void> {
@@ -167,7 +211,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }));
 
         const pending = block.conceptIds.filter((id) => !seen.has(id));
-        let upgraded = false;
+        // The whole leaf flips learning -> practicing together (topic-gated), so
+        // capture that flip and show ONE topic-learned screen instead of a
+        // per-concept level-up.
+        let flip: LearnedResult | null = null;
         for (let i = 0; i < pending.length; i++) {
             const id = pending[i];
             await step<void>((resolve) => ({
@@ -180,29 +227,44 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             seen.add(id);
             const result = await recordLearned(deckId, [id]);
             if (result.upgraded) {
-                upgraded = true;
-                await step<void>((resolve) => ({
-                    kind: "upgrade",
-                    from: result.from,
-                    to: result.to,
-                    onDone: resolve,
-                }));
+                flip = result;
             }
         }
 
         // A resumed block can arrive with everything already seen; force the
         // topic-gated flip so it never stalls.
-        if (!upgraded) {
+        if (!flip) {
             const result = await recordLearned(deckId, block.conceptIds);
             if (result.upgraded) {
-                await step<void>((resolve) => ({
-                    kind: "upgrade",
-                    from: result.from,
-                    to: result.to,
-                    onDone: resolve,
-                }));
+                flip = result;
             }
         }
+
+        if (flip) {
+            await showTopicLearned(block.topicNodeId, flip);
+        }
+    }
+
+    // The topic-gated flip upgraded the whole leaf at once: name the topic and
+    // list every concept advancing Learn -> Practice in unison.
+    async function showTopicLearned(
+        topicNodeId: string,
+        flip: LearnedResult,
+    ): Promise<void> {
+        if (!root) {
+            return;
+        }
+        const path = pathToNode(root, topicNodeId);
+        const topic = path && path.length ? path[path.length - 1].title : "Topic";
+        const items = flip.conceptIds.map((id) => ({ title: conceptFor(id).title }));
+        await step<void>((resolve) => ({
+            kind: "topicLearned",
+            topic,
+            items,
+            from: flip.from,
+            to: flip.to,
+            onDone: resolve,
+        }));
     }
 
     async function run(): Promise<void> {
@@ -301,28 +363,53 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         />
     {:else if view.kind === "learn"}
         <ConceptLearn
+            {root}
             concept={view.concept}
             current={view.current}
             total={view.total}
             onNext={view.onNext}
         />
     {:else if view.kind === "practice"}
-        <PracticeRecall concept={view.concept} onRate={view.onRate} />
-    {:else if view.kind === "scaffold"}
-        <ScaffoldPicker
+        <PracticeRecall
+            concept={view.concept}
+            answer={view.answer}
+            onDone={view.onDone}
+            onError={view.onError}
+        />
+    {:else if view.kind === "guided"}
+        <GuidedCard
             root={view.root}
+            concept={view.concept}
             conceptId={view.conceptId}
-            onComplete={view.onComplete}
+            problem={view.problem}
+            answer={view.answer}
+            onDone={view.onDone}
+            onError={view.onError}
         />
     {:else if view.kind === "problem"}
         <ProblemCard
             concept={view.concept}
             problem={view.problem}
             state={view.state}
-            onRate={view.onRate}
+            answer={view.answer}
+            onDone={view.onDone}
+            onError={view.onError}
         />
     {:else if view.kind === "upgrade"}
-        <UpgradeAnimation from={view.from} to={view.to} onDone={view.onDone} />
+        <UpgradeAnimation
+            concept={view.concept}
+            from={view.from}
+            to={view.to}
+            onDone={view.onDone}
+        />
+    {:else if view.kind === "topicLearned"}
+        <TopicLearned
+            topic={view.topic}
+            items={view.items}
+            from={view.from}
+            to={view.to}
+            onDone={view.onDone}
+        />
     {:else if view.kind === "done"}
         <div class="message">
             <p class="eyebrow">Session complete</p>
@@ -473,5 +560,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         outline: 2px solid var(--sr-signal);
         outline-offset: 2px;
         border-radius: 6px;
+    }
+
+    // Phone: every tappable control in a session (grade buttons, MCQ choices,
+    // locate chips, reveal/continue) clears the 44px touch target. The session
+    // is already single-card and the card components carry their own reduced-
+    // motion fallbacks, so this is the only cross-cutting phone rule needed here.
+    @media (max-width: 34rem) {
+        .stage :global(button) {
+            min-height: 44px;
+        }
     }
 </style>

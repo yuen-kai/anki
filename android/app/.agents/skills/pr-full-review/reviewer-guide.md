@@ -2,8 +2,8 @@
 
 ## How to use this guide
 
-This is the **standards corpus** for reviewing AnkiDroid changes - *what* to check, not
-*how* to run a review. It distills the project's documented standards into an actionable
+This is the **standards corpus** for reviewing AnkiDroid changes - _what_ to check, not
+_how_ to run a review. It distills the project's documented standards into an actionable
 checklist so a reviewer (human or agent) can work without opening ten other files.
 
 Two rules of engagement:
@@ -43,24 +43,27 @@ Request changes if any of these fail — they're table stakes before deeper revi
   [`.github/workflows/README.md`](../../../.github/workflows/README.md).
 - **PR template is filled in** (Purpose / Approach / How tested) and the PR is **linked to
   an issue** (`Fixes #`) where one applies.
-- **Commit hygiene:** no merge commits in the history (rebase and force push, don't merge); 
-  each commit compiles and does one thing. Commit titles should not be longer than 80 chars. 
+- **Commit hygiene:** no merge commits in the history (rebase and force push, don't merge);
+  each commit compiles and does one thing. Commit titles should not be longer than 80 chars.
   There is a suggestion for a <= 50 char title. Only flag this if you provide a reworded title.
 - **New source files carry an licensing header:** see [Licensing](#licensing).
 
 ## What to check
 
 ### Correctness & clarity
+
 - The codebase is better after the change than before.
 - Edge cases and exceptions are handled.
 - Names are understandable; hard-to-follow code is commented.
 
-### Bug fixes 
-- Bug fix commits must contain a confirmation that the author reproduced the bug, unless the bug 
+### Bug fixes
+
+- Bug fix commits must contain a confirmation that the author reproduced the bug, unless the bug
   is obvious, or the submitter has specifically stated why they were unable to reproduce it.
 - Trace the code path and the values it reads to confirm the claimed trigger occurs.
 
 ### Tests
+
 - Significant new logic ships with tests, **or** is annotated
   [`@NeedsTest("reason")`](../../../common/src/main/java/com/ichi2/anki/common/annotations/NeedsTest.kt)
   explaining why the test is deferred. The annotation exists so we signal that we care about
@@ -71,35 +74,44 @@ Request changes if any of these fail — they're table stakes before deeper revi
   should not copy production code into tests to ensure correctness.
 
 ### Scope
-- Each commit must be focused. Refactors should be split from functional changes. 
+
+- Each commit must be focused. Refactors should be split from functional changes.
 - Flag unnecessary whitespace churn. Flag if a PR unnecessarily affects more than one concern.
 
 ### Commit messages
+
 - Flag if a 'refactor:' commit title is used for a functional change.
 
 ### GitHub
+
 - For new contributors, flag commits whose `user.email` isn't linked to a GitHub account, as
   they won't receive attribution on their GitHub heatmap.
 
 ### Licensing
+
 - **Never remove an existing copyright header** unless it is your own. See
   [`docs/contributing/copyright-headers.md`](../../../docs/contributing/copyright-headers.md).
 - New external dependencies/resources: ensure the PR fills the **Licenses** table in the
   template, and apply the `Licenses` label / update the licenses wiki on merge.
 
 ### AI-use policy
+
 Per [`AI_POLICY.md`](../../../AI_POLICY.md):
+
 - Use the current documentation and determine if the user is a new contributor. Ensure that AI-use
   restrictions are appropriately applied.
 
 ### UI changes
-- A Roborazzi test of large UI changes is optional, but greatly appreciated. 
+
+- A Roborazzi test of large UI changes is optional, but greatly appreciated.
 - Screenshots of **all** affected screens (especially new/changed strings).
 - Large changed are tested with the Google Accessibility Scanner.
 
 ### Compose
+
 For code under `com.ichi2.anki.ui.compose.*` (see
 [`docs/development/compose.md`](../../../docs/development/compose.md)):
+
 - Pure "migrate this XML screen to Compose" PRs aren't accepted — there must be another
   reason to touch the screen.
 - No `Anki` prefix on component names; let the package path namespace them.

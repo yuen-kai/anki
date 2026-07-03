@@ -11,7 +11,14 @@ import {
     speedrunStudySummary,
 } from "@generated/backend";
 
-import { gaugePercent, MASTERY_STAGES, type ScoreEnvelope, STAGE_COUNT, stageIndex } from "../speedrun-dashboard/lib";
+import {
+    gaugePercent,
+    MASTERY_STAGES,
+    type ScoreEnvelope,
+    STAGE_COUNT,
+    stageColor,
+    stageIndex,
+} from "../speedrun-dashboard/lib";
 import { dec, enc, type Hierarchy, isMobileShell, type Node, quiet } from "../speedrun-hierarchy/lib";
 import type { StudyProgress } from "../speedrun-review/lib";
 
@@ -147,7 +154,7 @@ export interface ConceptTreeNode {
     // Leaf mastery stage index (0-3), or null when the leaf maps to no tracked
     // topic ("not started"). Branches carry null.
     stage: number | null;
-    // "Learning".."Mastering" for a mapped leaf, "Not started" for an unmapped
+    // "Learn".."Solo" for a mapped leaf, "Not started" for an unmapped
     // one, "" for a branch.
     stageLabel: string;
     // 0-1 completion for the node's meter: a leaf from its own stage, a branch
@@ -155,6 +162,9 @@ export interface ConceptTreeNode {
     fraction: number;
     // Leaf descendants under this node (1 for a leaf); drives the branch summary.
     leafCount: number;
+    // Authored concepts at this node (a leaf) or summed over its descendants (a
+    // branch); feeds the header's "N topics · M concepts" count.
+    conceptCount: number;
 }
 
 // A mapped leaf's completion: mastering fills the bar, learning a quarter, an
@@ -163,7 +173,7 @@ function leafFraction(stage: number | null): number {
     return stage === null ? 0 : (stage + 1) / STAGE_COUNT;
 }
 
-function makeLeaf(id: string, title: string, stage: number | null): ConceptTreeNode {
+function makeLeaf(id: string, title: string, stage: number | null, conceptCount: number): ConceptTreeNode {
     return {
         id,
         title: title || "Untitled",
@@ -173,6 +183,7 @@ function makeLeaf(id: string, title: string, stage: number | null): ConceptTreeN
         stageLabel: stage === null ? NOT_STARTED_LABEL : MASTERY_STAGES[stage].label,
         fraction: leafFraction(stage),
         leafCount: 1,
+        conceptCount,
     };
 }
 
@@ -190,6 +201,7 @@ function makeBranch(id: string, title: string, children: ConceptTreeNode[]): Con
         stageLabel: "",
         fraction: leafCount > 0 ? weighted / leafCount : 0,
         leafCount,
+        conceptCount: children.reduce((n, c) => n + c.conceptCount, 0),
     };
 }
 
@@ -212,7 +224,7 @@ function leafStage(node: Node, progress: StudyProgress | null): number | null {
 
 function mapAuthored(node: Node, progress: StudyProgress | null): ConceptTreeNode {
     if (node.children.length === 0) {
-        return makeLeaf(node.id, node.title, leafStage(node, progress));
+        return makeLeaf(node.id, node.title, leafStage(node, progress), node.concepts.length);
     }
     return makeBranch(node.id, node.title, node.children.map((child) => mapAuthored(child, progress)));
 }
@@ -232,6 +244,37 @@ export function buildConceptTree(
     // A single authored root wraps everything; render its own subtree so the
     // header isn't a redundant top node.
     return mapAuthored(root, progress);
+}
+
+// A node's height above the leaves: 0 for a leaf, else one more than its tallest
+// child. Drives the "pulse up the branches" rollup — the lowest branches fill
+// first and the delay grows with height, so progress reads as flowing up to the
+// root.
+export function nodeHeight(node: ConceptTreeNode): number {
+    if (node.isLeaf || node.children.length === 0) {
+        return 0;
+    }
+    return 1 + Math.max(...node.children.map(nodeHeight));
+}
+
+// Every leaf under a node, in author order. The canvas tree draws exactly three
+// tiers (deck -> group -> topic), so a group column lists all of its leaf
+// descendants as rows, flattening any intermediate branches.
+export function flattenLeaves(node: ConceptTreeNode): ConceptTreeNode[] {
+    return node.isLeaf ? [node] : node.children.flatMap(flattenLeaves);
+}
+
+// The stage index a branch's rollup bar is coloured by: the rounded mean stage
+// of its leaves (a not-started leaf counts as below Learn, pulling a barely
+// touched group toward the inactive colour). Feed it to stageColor(), which
+// resolves the out-of-range -1 to the inactive segment colour.
+export function rollupStage(fraction: number): number {
+    return Math.round(fraction * STAGE_COUNT - 1);
+}
+
+// The rollup bar colour for a branch node (a group header), from rollupStage().
+export function rollupColor(fraction: number): string {
+    return stageColor(rollupStage(fraction));
 }
 
 // ---------------------------------------------------------------------------
@@ -311,4 +354,35 @@ export function buildSubjectBreakdown(breakdown: SpeedrunScoreBreakdown | null):
         subjects,
         hasData: subjects.some((s) => s.hasMemoryData || s.hasApplicationData),
     };
+}
+
+// The subject holding readiness back the most: the largest exam-weighted gap,
+// `examWeight * (1 - strength)`, where strength is the mean of the signals the
+// subject actually has (Coverage always counts; Memory and Performance when
+// present). A weak subject the exam leans on outranks a weak niche one; ties
+// fall to lower coverage. Null until some subject has evidence, so nothing is
+// flagged on an untouched deck. `examWeight || 1` keeps the ranking sane if the
+// blueprint shares never loaded.
+export function bottleneckSubject(breakdown: SubjectBreakdown): string | null {
+    if (!breakdown.hasData) {
+        return null;
+    }
+    const strength = (s: SubjectRow): number => {
+        const parts = [s.coverage];
+        if (s.hasMemoryData) {
+            parts.push(s.meanRetrievability);
+        }
+        if (s.hasApplicationData) {
+            parts.push(s.applicationAccuracy);
+        }
+        return parts.reduce((total, part) => total + part, 0) / parts.length;
+    };
+    const impact = (s: SubjectRow): number => (s.examWeight || 1) * (1 - strength(s));
+    let worst: SubjectRow | null = null;
+    for (const s of breakdown.subjects) {
+        if (!worst || impact(s) > impact(worst) || (impact(s) === impact(worst) && s.coverage < worst.coverage)) {
+            worst = s;
+        }
+    }
+    return worst?.id ?? null;
 }

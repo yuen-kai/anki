@@ -1,26 +1,33 @@
 <!--
 Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+Practice (free recall): given the concept title, the learner recites the
+description from memory, then the saved description drops in below on the same
+card (via the seam) to self-check against. Grading rides at the bottom.
 -->
 <script lang="ts">
     import DifficultyBar from "./DifficultyBar.svelte";
-    import { type Concept, type Rating } from "./lib";
+    import { type AnswerResult, type Concept, type Rating } from "./lib";
     import MasteryBadge from "./MasteryBadge.svelte";
     import ReviewCard from "./ReviewCard.svelte";
+    import Seam from "./Seam.svelte";
 
     export let concept: Concept;
-    export let onRate: (rating: Rating) => void;
+    export let answer: (rating: Rating) => Promise<AnswerResult>;
+    export let onDone: (result: AnswerResult) => void;
+    export let onError: (err: unknown) => void = () => {};
 
     let revealed = false;
-    let answer = "";
+    let recall = "";
 
     // Fresh card, fresh recall attempt.
     $: if (concept) {
         revealed = false;
-        answer = "";
+        recall = "";
     }
 
-    $: cue = concept.title.trim() || "Untitled concept";
+    $: title = concept.title.trim() || "Untitled concept";
     $: content = concept.content.trim();
 </script>
 
@@ -29,123 +36,101 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <MasteryBadge state="practicing" />
     </svelte:fragment>
 
-    <p class="eyebrow">Recall</p>
-    <h1 class="cue">{cue}</h1>
-
-    <label class="field">
-        <span class="label">Say it in your own words</span>
+    <div class="sc-sec">
+        <p class="step">Step ① · Recall from the title</p>
+        <h2 class="cue">{title}</h2>
+        <p class="field-label">Your recall</p>
         <textarea
-            class="text"
+            class="recall"
             rows="3"
-            bind:value={answer}
-            placeholder="Explain the concept from memory"
+            bind:value={recall}
+            placeholder="Say the description from memory"
         ></textarea>
-    </label>
+        <button class="check-btn" type="button" on:click={() => (revealed = true)}>
+            Check against description
+        </button>
+    </div>
 
     {#if revealed}
-        <div class="reveal">
-            <p class="label">The concept</p>
+        <Seam label="saved text drops in below · same screen" />
+        <div class="sc-sec sc-sec--reveal">
+            <p class="step green">Step ② · Self-check</p>
+            <p class="field-label">Saved description</p>
             {#if content}
-                <p class="body">{content}</p>
+                <p class="saved">{content}</p>
             {:else}
-                <p class="body none">No description was authored for this concept.</p>
+                <p class="saved none">No description was authored for this concept.</p>
             {/if}
         </div>
-    {/if}
 
-    <svelte:fragment slot="footer">
-        {#if revealed}
-            <DifficultyBar {onRate} />
-        {:else}
-            <button class="btn" on:click={() => (revealed = true)}>Show answer</button>
-        {/if}
-    </svelte:fragment>
+        <Seam label="same screen · now rate the card" />
+        <div class="sc-sec sc-sec--grade">
+            <p class="step">Step ③ · Rate difficulty</p>
+            <DifficultyBar {answer} {onDone} {onError} />
+        </div>
+    {/if}
 </ReviewCard>
 
 <style lang="scss">
-    .eyebrow {
-        margin: 0;
-        font-family: var(--sr-mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--sr-ink-3);
+    @use "$lib/sass/speedrun-synapse" as syn;
+    @use "./sr-tokens" as srt;
+
+    .step {
+        @include srt.step;
+    }
+    .step.green {
+        --step-color: var(--sr-stage-solo-deep);
     }
     .cue {
-        margin: 0;
-        font-size: 1.6rem;
-        font-weight: 680;
-        letter-spacing: -0.015em;
-        line-height: 1.15;
-    }
-    .field {
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-    }
-    .label {
-        margin: 0;
-        font-family: var(--sr-mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
-        color: var(--sr-ink-3);
-    }
-    .text {
-        width: 100%;
-        border: 1px solid var(--sr-line-2);
-        background: var(--sr-panel-2);
+        margin: 9px 0 0;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: var(--sr-tighten);
         color: var(--sr-ink);
-        border-radius: 6px;
-        padding: 0.55rem 0.65rem;
-        font: inherit;
+    }
+    .field-label {
+        margin: 12px 0 6px;
+        font-family: var(--sr-mono);
+        font-weight: 500;
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--sr-faint);
+    }
+    .recall {
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--sr-white);
+        border: 1.5px solid var(--sr-line-strong);
+        border-radius: var(--sr-radius-tile);
+        padding: 11px 13px;
+        font-family: var(--sr-sans);
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--sr-ink);
+        caret-color: var(--sr-signal);
         resize: vertical;
-        min-height: 4rem;
+        min-height: 3.4rem;
     }
-    .text:focus {
+    .recall:focus {
         outline: none;
-        border-color: var(--sr-signal-line);
-        background: var(--sr-panel);
+        border-color: var(--sr-signal);
     }
-    .text::placeholder {
-        color: var(--sr-ink-3);
+    .recall::placeholder {
+        color: var(--sr-faint);
     }
-    .reveal {
-        border-top: 1px solid var(--sr-line);
-        padding-top: 0.9rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
+    .check-btn {
+        @include syn.btn;
+        @include syn.btn-primary;
+        @include syn.btn-block;
+        margin-top: 12px;
     }
-    .body {
+    .saved {
+        @include syn.explain;
         margin: 0;
-        line-height: 1.6;
-        max-width: 42rem;
     }
-    .body.none {
+    .saved.none {
         color: var(--sr-ink-3);
         font-style: italic;
-    }
-    .btn {
-        appearance: none;
-        border: 1px solid var(--sr-line-2);
-        border-radius: 8px;
-        padding: 0.6rem 1.4rem;
-        background: var(--sr-panel);
-        color: var(--sr-ink);
-        font: inherit;
-        font-weight: 560;
-        cursor: pointer;
-    }
-    .btn:hover {
-        border-color: var(--sr-ink-3);
-        background: var(--sr-panel-2);
-    }
-    @media (max-width: 34rem) {
-        .cue {
-            font-size: 1.35rem;
-        }
     }
 </style>

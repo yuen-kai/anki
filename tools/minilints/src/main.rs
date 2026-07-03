@@ -30,6 +30,9 @@ const NONSTANDARD_HEADER: &[&str] = &[
 const IGNORED_FOLDERS: &[&str] = &[
     "./out",
     "./node_modules",
+    // The vendored AnkiDroid fork + native bridge: a separate project with its
+    // own licensing and Gradle build outputs, not policed by this repo's lints.
+    "./android",
     "./qt/aqt/forms",
     "./tools/workspace-hack",
     "./target",
@@ -37,6 +40,9 @@ const IGNORED_FOLDERS: &[&str] = &[
     "./extra",
     "./ts/.svelte-kit",
     "./.venv",
+    // A local Python venv used for the MCAT PDF tooling (vendored deps with
+    // their own licences); like ./.venv it is not policed by this repo's lints.
+    "./.pdfwork",
     "./qt/installer/windows-template",
     "./qt/installer/mac-template",
 ];

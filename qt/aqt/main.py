@@ -690,6 +690,13 @@ class AnkiQt(QMainWindow):
         except Exception:
             logging.getLogger(__name__).exception("speedrun: demo deck seed skipped")
 
+        try:
+            from anki.speedrun.seed_mcat_ch31_35 import seed as seed_mcat_deck
+
+            seed_mcat_deck(self.col)
+        except Exception:
+            logging.getLogger(__name__).exception("speedrun: MCAT deck seed skipped")
+
     def _loadCollection(self) -> None:
         cpath = self.pm.collectionPath()
         self.col = Collection(cpath, backend=self.backend)

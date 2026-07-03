@@ -18,6 +18,10 @@ run *args:
 run-optimized *args:
     {{ if os() == "windows" { "$env:RELEASE='1'; .\\run.bat" } else { "RELEASE=1 ./run" } }} {{ args }}
 
+# Build, install and launch AnkiDroid (debug) on a device/emulator
+android-run:
+    ./android/run
+
 # Watch web sources and rebuild/reload Anki's web stack on change (macOS/Linux)
 web-watch:
     ./tools/web-watch

@@ -8,7 +8,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let problem: Problem;
     export let onChange: () => void;
 
-    const LETTERS = ["A", "B", "C", "D"];
     const groupName = `sr-correct-${problem.id}`;
 
     function setCorrect(index: number): void {
@@ -22,101 +21,108 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </script>
 
 <fieldset class="choices">
-    <legend class="sr-only">Answer choices; select the correct one</legend>
+    <legend class="sr-only">Answer choices; mark the correct one</legend>
     {#each [0, 1, 2, 3] as i (i)}
-        <div class="choice" class:correct={problem.correctIndex === i}>
-            <span class="letter" aria-hidden="true">{LETTERS[i]}</span>
-            <label class="sr-only" for={`sr-choice-${problem.id}-${i}`}>
-                Choice {LETTERS[i]}
-            </label>
+        {@const correct = problem.correctIndex === i}
+        <div class="choice" class:correct>
             <input
-                id={`sr-choice-${problem.id}-${i}`}
-                class="choice-input"
-                bind:value={problem.choices[i]}
-                on:input={onChoiceInput}
-                placeholder={`Choice ${LETTERS[i]}`}
-            />
-            <input
-                class="mark"
+                class="mark sr-only"
+                id={`${groupName}-${i}`}
                 type="radio"
                 name={groupName}
-                checked={problem.correctIndex === i}
+                checked={correct}
                 on:change={() => setCorrect(i)}
-                title="Mark correct"
-                aria-label={`Mark choice ${LETTERS[i]} correct`}
+            />
+            <label
+                class="bubble"
+                for={`${groupName}-${i}`}
+                aria-label={`Mark answer ${i + 1} correct`}
+            >
+                {#if correct}✓{/if}
+            </label>
+            <input
+                class="text"
+                bind:value={problem.choices[i]}
+                on:input={onChoiceInput}
+                placeholder={`Answer ${i + 1}`}
+                aria-label={`Answer ${i + 1}`}
             />
         </div>
     {/each}
 </fieldset>
 
 <style lang="scss">
+    @use "$lib/sass/speedrun-synapse" as syn;
+
     .choices {
         border: none;
         margin: 0;
         padding: 0;
-        display: grid;
-        gap: 0.3rem;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
     }
+
+    // The answer row: the shared MCQ primitive, tightened to the builder frame's
+    // resting tile.
     .choice {
+        @include syn.answer;
+
+        background: var(--sr-tile);
+        gap: 9px;
+        padding: 8px 11px;
+        border-radius: var(--sr-radius-sm);
+        font-size: 11.5px;
+    }
+    .choice.correct {
+        @include syn.answer-correct;
+
+        padding: 8px 11px;
+        border-radius: var(--sr-radius-sm);
+    }
+
+    // The mark control is an accessible radio, drawn as the answer bubble: an
+    // empty ring, or a filled coral-green check once correct.
+    .bubble {
+        @include syn.radio;
+
         display: flex;
         align-items: center;
-        gap: 0.6rem;
-        padding: 0.1rem 0.1rem;
-    }
-
-    // The answer-sheet bubble: a mono letter that fills marigold when correct.
-    .letter {
-        flex-shrink: 0;
-        width: 1.5rem;
-        height: 1.5rem;
-        display: inline-flex;
-        align-items: center;
         justify-content: center;
+        cursor: pointer;
         font-family: var(--sr-mono);
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: var(--sr-ink-3);
-        background: var(--sr-panel);
-        border: 1px solid var(--sr-line-2);
-        border-radius: 5px;
+        font-weight: 700;
+        font-size: 9px;
+        color: transparent;
     }
-    .choice.correct .letter {
-        color: var(--sr-signal-ink);
-        background: var(--sr-signal-weak);
-        border-color: var(--sr-signal-line);
+    .choice.correct .bubble {
+        border: none;
+        background: var(--sr-stage-solo);
+        color: #fff;
     }
-    :global(.night-mode) .choice.correct .letter {
-        color: var(--sr-signal);
+    .mark:focus-visible + .bubble {
+        outline: 2px solid var(--sr-signal);
+        outline-offset: 2px;
     }
 
-    // Each choice sits on its own answer line.
-    .choice-input {
+    // Each choice sits on its own editable answer line.
+    .text {
         flex: 1 1 auto;
         min-width: 0;
         border: none;
-        border-bottom: 1px solid var(--sr-line-2);
         background: none;
-        padding: 0.3rem 0.15rem;
-        font: inherit;
-        color: var(--sr-ink);
+        padding: 0;
+        font-family: var(--sr-sans);
+        font-size: 11.5px;
+        color: var(--sr-ink-2);
+        caret-color: var(--sr-signal);
     }
-    .choice-input::placeholder {
-        color: var(--sr-ink-3);
+    .choice.correct .text {
+        color: var(--sr-stage-solo-deep);
+        font-weight: 600;
     }
-    .choice-input:focus {
-        outline: none;
-        border-bottom-color: var(--sr-signal);
-    }
-    .choice.correct .choice-input {
-        border-bottom-color: var(--sr-signal-line);
-    }
-
-    .mark {
-        flex-shrink: 0;
-        width: 1.05rem;
-        height: 1.05rem;
-        accent-color: var(--sr-signal);
-        cursor: pointer;
+    .text::placeholder {
+        color: var(--sr-faint);
     }
 
     .sr-only {

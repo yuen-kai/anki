@@ -11,16 +11,48 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let ancestors: string[] = [];
     export let depth = 0;
     export let onRemove: (() => void) | null = null;
+    // A monotonic revision from the editor. Child nodes mutate the shared tree in
+    // place, so an edit deep in the branch does not change any ancestor's object
+    // identity; threading `rev` down forces the rolled-up counts below to recompute.
+    export let rev = 0;
 
     const ctx = getTreeContext();
     const { selectedId, pulseState } = ctx;
 
     const STAGGER_MS = 70;
 
-    $: leaf = node.children.length === 0;
+    $: isRoot = depth === 0;
+    $: hasChildren = node.children.length > 0;
+    $: leaf = !isRoot && !hasChildren;
     $: selected = $selectedId === node.id;
+    // A branch tints coral while it is the direct parent of the open leaf, echoing
+    // the builder frame's active group.
+    $: isSelectedParent = !isRoot && node.children.some((c) => c.id === $selectedId);
     $: childAncestors = [...ancestors, node.id];
     $: pulseIndex = $pulseState ? $pulseState.ids.indexOf(node.id) : -1;
+    // `rev` is only referenced to make this a tracked dependency (see above).
+    $: rollup = summarise(rev, node);
+
+    const plural = (n: number, word: string): string =>
+        `${n} ${word}${n === 1 ? "" : "s"}`;
+
+    // A branch reads as the sum of its leaves: total leaf topics + concepts
+    // beneath it. Authoring has no per-concept study state, so these are the
+    // authored counts, not a mastery meter.
+    function summarise(_rev: number, n: Node): { topics: number; concepts: number } {
+        return { topics: countTopics(n), concepts: countConcepts(n) };
+    }
+    function countTopics(n: Node): number {
+        return n.children.length === 0
+            ? 1
+            : n.children.reduce((sum, child) => sum + countTopics(child), 0);
+    }
+    function countConcepts(n: Node): number {
+        return (
+            n.concepts.length +
+            n.children.reduce((sum, child) => sum + countConcepts(child), 0)
+        );
+    }
 
     // The edited node pulses first, then each ancestor in turn, root last.
     function selfChain(): string[] {
@@ -30,12 +62,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     function onTitleInput(): void {
         ctx.change();
     }
-
     function commitTitle(): void {
         ctx.change();
         ctx.pulse(selfChain());
     }
-
     function onKeydown(event: KeyboardEvent): void {
         if (event.key === "Enter") {
             event.preventDefault();
@@ -57,67 +87,100 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         ctx.change();
         ctx.pulse(selfChain());
     }
+
+    // Focusing a leaf's name opens it: the concepts list follows the open leaf,
+    // and the same field renames it. Branch names only rename.
+    function onNameFocus(): void {
+        if (leaf) {
+            ctx.select(node.id);
+        }
+    }
 </script>
 
-<li class="node" class:child={depth > 0}>
-    {#if $pulseState && pulseIndex >= 0 && depth > 0}
-        {#key $pulseState.seq}
-            <span
-                class="climb"
-                style="--pulse-delay: {pulseIndex * STAGGER_MS}ms"
-                aria-hidden="true"
-            ></span>
-        {/key}
-    {/if}
-    <div class="row" class:selected={selected && leaf}>
-        <label class="sr-only" for={`sr-node-${node.id}`}>
-            {depth === 0 ? "Deck name" : "Topic name"}
-        </label>
-        <input
-            id={`sr-node-${node.id}`}
-            class="title-input"
-            class:root={depth === 0}
-            bind:value={node.title}
-            on:input={onTitleInput}
-            on:change={commitTitle}
-            on:keydown={onKeydown}
-            placeholder={depth === 0 ? "Deck name" : "Topic"}
-        />
+<li class="node">
+    <div
+        class="row"
+        class:root={isRoot}
+        class:branch={!isRoot && hasChildren}
+        class:leaf
+        class:selected={leaf && selected}
+        class:active={isSelectedParent}
+    >
+        {#if $pulseState && pulseIndex >= 0}
+            {#key $pulseState.seq}
+                <span
+                    class="pulse"
+                    style="--pulse-delay: {pulseIndex * STAGGER_MS}ms"
+                    aria-hidden="true"
+                ></span>
+            {/key}
+        {/if}
 
-        <div class="controls">
-            {#if leaf}
-                <button
-                    class="concepts"
-                    class:active={selected}
-                    on:click={() => ctx.select(node.id)}
-                >
-                    <span>Concepts</span>
-                    {#if node.concepts.length}
-                        <span class="count">{node.concepts.length}</span>
-                    {/if}
-                </button>
+        {#if isRoot || hasChildren}
+            <span class="caret" aria-hidden="true">▾</span>
+        {/if}
+
+        {#if isRoot}
+            <span class="name name-text">{node.title.trim() || "Untitled deck"}</span>
+        {:else}
+            <input
+                id={`sr-node-${node.id}`}
+                class="name name-input"
+                bind:value={node.title}
+                on:input={onTitleInput}
+                on:change={commitTitle}
+                on:keydown={onKeydown}
+                on:focus={onNameFocus}
+                placeholder="Name"
+                aria-label={leaf ? "Topic name" : "Group name"}
+            />
+        {/if}
+
+        {#if isRoot || hasChildren}
+            {#if hasChildren}
+                <span class="rollup">
+                    {plural(rollup.topics, "topic")}
+                    <span class="dot" aria-hidden="true">·</span>
+                    {plural(rollup.concepts, "concept")}
+                </span>
             {/if}
-            <button class="ctrl" on:click={addChild} aria-label="Add sub-topic">
-                +
-            </button>
-            {#if onRemove}
-                <button class="ctrl del" on:click={onRemove} aria-label="Delete topic">
-                    ×
+        {:else}
+            <span class="leaf-meta">{plural(node.concepts.length, "concept")}</span>
+        {/if}
+
+        {#if leaf}
+            <div class="controls">
+                <button class="mini" on:click={addChild} aria-label="Add subtopic">
+                    +
                 </button>
-            {/if}
-        </div>
+                {#if onRemove}
+                    <button class="mini" on:click={onRemove} aria-label="Delete topic">
+                        ×
+                    </button>
+                {/if}
+            </div>
+        {:else if onRemove}
+            <button class="del" on:click={onRemove} aria-label="Delete topic">×</button>
+        {/if}
     </div>
 
-    {#if node.children.length}
-        <ul class="children">
+    {#if isRoot || hasChildren}
+        <ul class="children" class:root-children={isRoot}>
             {#each node.children as child (child.id)}
                 <svelte:self
                     node={child}
                     ancestors={childAncestors}
                     depth={depth + 1}
+                    {rev}
                     onRemove={() => removeChild(child.id)}
                 />
             {/each}
+            <li class="affordance-item">
+                <button class="affordance" class:topic={isRoot} on:click={addChild}>
+                    <span class="plus" aria-hidden="true">+</span>
+                    {isRoot ? "Add topic" : "Add subtopic"}
+                </button>
+            </li>
         </ul>
     {/if}
 </li>
@@ -126,193 +189,280 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .node {
         list-style: none;
     }
+
     .row {
         position: relative;
         display: flex;
         align-items: center;
-        gap: 0.4rem;
-        min-height: 2.1rem;
-        padding: 0 0.4rem;
-        border-radius: 6px;
-    }
-    .row.selected {
-        background: var(--sr-signal-weak);
-        box-shadow: inset 0 0 0 1px var(--sr-signal-line);
+        gap: 12px;
     }
 
-    // An inline editable label on the schematic: an underline, never a box.
-    .title-input {
-        flex: 1 1 auto;
-        min-width: 4rem;
-        border: none;
-        border-bottom: 1px solid transparent;
-        background: none;
-        padding: 0.25rem 0.1rem;
-        font: inherit;
-        color: var(--sr-ink);
+    // Deck root: a white node with the strong control edge.
+    .row.root {
+        background: var(--sr-white);
+        border: 1px solid var(--sr-line-strong);
+        border-radius: 12px;
+        padding: 12px 16px;
     }
-    .title-input::placeholder {
-        color: var(--sr-ink-3);
+    // Group branch: a nested surface, tinting coral while it holds the open leaf
+    // or while its own name is being edited.
+    .row.branch {
+        background: var(--sr-panel-2);
+        border: 1.5px solid transparent;
+        border-radius: 11px;
+        padding: 11px 14px;
     }
-    .title-input:hover {
-        border-bottom-color: var(--sr-line-2);
+    .row.branch.active,
+    .row.branch:focus-within {
+        background: var(--sr-white);
+        border-color: var(--sr-signal);
     }
-    .title-input:focus {
-        border-bottom-color: var(--sr-signal);
-        outline: none;
+    // Leaf topic: the near-white builder row.
+    .row.leaf {
+        background: var(--sr-tile);
+        border: 1.5px solid var(--sr-line);
+        border-radius: 10px;
+        padding: 9px 12px;
     }
-    .title-input.root {
-        font-weight: 700;
-        font-size: 1.15rem;
-        letter-spacing: -0.01em;
+    .row.leaf.selected {
+        background: var(--sr-white);
+        border-color: var(--sr-signal);
     }
 
-    .controls {
+    .caret {
+        flex-shrink: 0;
         display: flex;
         align-items: center;
-        gap: 0.3rem;
-        flex-shrink: 0;
+        justify-content: center;
+        color: var(--sr-ink-2);
     }
-    // Add/delete stay quiet until the row is hovered or its field is focused.
-    .ctrl {
-        width: 1.6rem;
-        height: 1.6rem;
+    .row.root .caret {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        background: var(--sr-inset);
+        font-size: 11px;
+    }
+    .row.branch .caret {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        background: var(--sr-track);
+        font-size: 10px;
+    }
+    .row.branch.active .caret,
+    .row.branch:focus-within .caret {
+        background: var(--sr-signal-weak);
+        color: var(--sr-signal);
+    }
+    :global(.night-mode) .row.branch.active .caret,
+    :global(.night-mode) .row.branch:focus-within .caret {
+        color: var(--sr-signal-ink);
+    }
+
+    .name {
+        flex: 1;
+        min-width: 0;
+        color: var(--sr-ink);
+    }
+    .name-text {
+        font-weight: 700;
+        font-size: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    // Inline rename: a quiet field that shows a coral dashed underline on focus,
+    // never a box.
+    .name-input {
+        border: none;
+        border-bottom: 1px dashed transparent;
+        background: none;
+        padding: 2px 1px;
+        font-family: var(--sr-sans);
+        color: var(--sr-ink);
+        caret-color: var(--sr-signal);
+    }
+    .row.branch .name-input {
+        font-weight: 600;
+        font-size: 13px;
+    }
+    .row.leaf .name-input {
+        font-weight: 500;
+        font-size: 12.5px;
+    }
+    .name-input::placeholder {
+        color: var(--sr-faint);
+    }
+    .name-input:focus {
+        outline: none;
+        border-bottom-color: var(--sr-signal);
+    }
+
+    .rollup {
+        flex-shrink: 0;
+        margin-left: auto;
+        font-family: var(--sr-mono);
+        font-size: 9.5px;
+        color: var(--sr-ink-3);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .row.root .rollup {
+        font-size: 10px;
+    }
+    .rollup .dot {
+        margin: 0 0.2em;
+    }
+    .leaf-meta {
+        flex-shrink: 0;
+        margin-left: auto;
+        font-family: var(--sr-mono);
+        font-size: 10px;
+        color: var(--sr-faint);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    // Per-leaf controls stay hidden until the row is hovered or focused.
+    .controls {
+        flex-shrink: 0;
+        display: flex;
+        gap: 4px;
+        opacity: 0;
+        transition: opacity 0.12s ease;
+    }
+    .row.leaf:hover .controls,
+    .row.leaf:focus-within .controls,
+    .row.leaf.selected .controls {
+        opacity: 1;
+    }
+    .mini {
+        width: 22px;
+        height: 22px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         border: 1px solid var(--sr-line-2);
-        background: var(--sr-panel);
-        border-radius: 5px;
+        background: var(--sr-white);
         color: var(--sr-ink-3);
-        font-size: 1.05rem;
+        border-radius: 7px;
+        font-size: 0.9rem;
         line-height: 1;
         cursor: pointer;
-        opacity: 0;
-        transition:
-            opacity 0.12s ease,
-            color 0.12s ease,
-            border-color 0.12s ease;
     }
-    .row:hover .ctrl,
-    .row:focus-within .ctrl {
-        opacity: 1;
-    }
-    .ctrl:hover {
+    .mini:hover {
         color: var(--sr-ink);
         border-color: var(--sr-ink-3);
     }
 
-    // Discoverable affordance: a marigold-outlined chip, always visible.
-    .concepts {
+    // Branch / root delete: quiet until the row is hovered or focused.
+    .del {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
-        border: 1px solid var(--sr-signal-line);
-        background: var(--sr-panel);
-        border-radius: 999px;
-        padding: 0.18rem 0.6rem;
-        font: inherit;
-        font-size: 0.78rem;
-        font-weight: 560;
-        color: var(--sr-ink-2);
+        justify-content: center;
+        border: 1px solid var(--sr-line-2);
+        background: var(--sr-white);
+        border-radius: 7px;
+        color: var(--sr-ink-3);
+        font-size: 1rem;
+        line-height: 1;
         cursor: pointer;
-        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 0.12s ease;
     }
-    .concepts:hover,
-    .concepts.active {
-        background: var(--sr-signal-weak);
-        color: var(--sr-signal-ink);
+    .row:hover .del,
+    .row:focus-within .del {
+        opacity: 1;
     }
-    :global(.night-mode) .concepts:hover,
-    :global(.night-mode) .concepts.active {
-        color: var(--sr-signal);
-    }
-    .count {
-        font-family: var(--sr-mono);
-        font-size: 0.68rem;
-        font-variant-numeric: tabular-nums;
-        color: var(--sr-ink-2);
-        background: var(--sr-panel-2);
-        border-radius: 999px;
-        padding: 0.02rem 0.36rem;
+    .del:hover {
+        color: var(--sr-ink);
+        border-color: var(--sr-ink-3);
     }
 
-    // The pulse: a marigold glow shaped like the incoming connector, re-keyed on
-    // each edit and staggered by ancestor depth so it climbs UP the spine.
-    .climb {
+    // Indent guide: one rail per level, read from the indent alone.
+    .children {
+        list-style: none;
+        margin: 6px 0 0;
+        padding: 0 0 0 14px;
+        margin-left: 14px;
+        border-left: 2px solid var(--sr-line-strong);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    .children.root-children {
+        margin-left: 16px;
+        padding-left: 16px;
+        gap: 6px;
+    }
+    .affordance-item {
+        list-style: none;
+    }
+
+    // Explicit create affordances: dashed, quiet, sized to their label.
+    .affordance {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: fit-content;
+        border: 1.5px dashed var(--sr-line-dashed);
+        border-radius: 10px;
+        background: none;
+        padding: 7px 12px;
+        font-family: var(--sr-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--sr-ink-3);
+        cursor: pointer;
+    }
+    .affordance.topic {
+        border-radius: 11px;
+        padding: 9px 14px;
+        font-size: 12.5px;
+        font-weight: 600;
+    }
+    .affordance:hover {
+        color: var(--sr-ink);
+        border-color: var(--sr-ink-3);
+    }
+    .affordance .plus {
+        font-size: 1em;
+        line-height: 1;
+    }
+
+    // Rollup pulse: a coral tick on each row's left edge, re-keyed on every edit
+    // and staggered by ancestor depth so it climbs from the edited node up to the
+    // deck.
+    .pulse {
         position: absolute;
         left: 0;
-        top: 0;
-        width: 1.1rem;
-        height: 1.05rem;
-        border-left: 1.5px solid var(--sr-signal);
-        border-bottom: 1.5px solid var(--sr-signal);
+        top: 5px;
+        bottom: 5px;
+        width: 2px;
+        border-radius: 2px;
+        background: var(--sr-signal);
         pointer-events: none;
-        animation: sr-climb 600ms ease-out both;
+        animation: sr-pulse 600ms ease-out both;
         animation-delay: var(--pulse-delay, 0ms);
     }
-    @keyframes sr-climb {
+    @keyframes sr-pulse {
         0% {
             opacity: 0;
         }
-        20% {
-            opacity: 1;
+        25% {
+            opacity: 0.9;
         }
         100% {
             opacity: 0;
         }
     }
     @media (prefers-reduced-motion: reduce) {
-        .climb {
+        .pulse {
             display: none;
         }
-    }
-
-    // Blueprint spine: one vertical line per level with right-angle elbows to
-    // each child; the last child's spine stops at its elbow to draw a clean L.
-    .children {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
-    // `.child` (depth > 0) draws its own incoming connector; scoping it to the
-    // node's own class keeps svelte-check happy across the recursive component.
-    .node.child {
-        position: relative;
-        padding-left: 1.5rem;
-    }
-    .node.child::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 1.05rem;
-        width: 1.1rem;
-        border-top: 1.5px solid var(--sr-line-2);
-        pointer-events: none;
-    }
-    .node.child::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        border-left: 1.5px solid var(--sr-line-2);
-        pointer-events: none;
-    }
-    .node.child:last-child::after {
-        bottom: auto;
-        height: 1.05rem;
-    }
-
-    .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
     }
 </style>

@@ -1,6 +1,10 @@
 <!--
 Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+The new-topic intro: a centred tree that lights the path from the deck root
+down to the newly unlocked leaf, then the leaf's title and a Begin CTA. Built
+from the real authored hierarchy, so it generalises to any shape.
 -->
 <script lang="ts">
     import { type Node, pathToNode } from "./lib";
@@ -10,9 +14,25 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let topicNodeId: string;
     export let onStart: () => void;
 
+    // [root, ...ancestors, target]; empty if the id isn't in the tree.
     $: path = pathToNode(root, topicNodeId) ?? [];
-    $: pathOrder = new Map(path.map((node, i) => [node.id, i] as const));
     $: target = path.length ? path[path.length - 1] : null;
+    $: title = target?.title.trim() || "New topic";
+    $: concepts = target ? countConcepts(target) : 0;
+
+    function countConcepts(node: Node): number {
+        return (
+            node.concepts.length +
+            node.children.reduce((n, c) => n + countConcepts(c), 0)
+        );
+    }
+
+    function kindAt(index: number): "root" | "middle" | "target" {
+        if (index === 0) {
+            return "root";
+        }
+        return index === path.length - 1 ? "target" : "middle";
+    }
 
     function onKey(event: KeyboardEvent): void {
         if (event.key === "Enter") {
@@ -24,117 +44,112 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <svelte:window on:keydown={onKey} />
 
-<div class="intro">
-    <div class="lead">
-        <p class="eyebrow">New topic</p>
-        <h1 class="topic">{target?.title.trim() || "New topic"}</h1>
-    </div>
+<section class="card">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="body">
+        <p class="eyebrow">New topic unlocked</p>
 
-    <div class="map">
-        <p class="map-label">In your hierarchy</p>
-        <ul class="tree">
-            <TopicTreeNode node={root} {pathOrder} />
-        </ul>
-    </div>
+        {#if path.length}
+            <div class="tree">
+                {#each path as node, index (node.id)}
+                    <TopicTreeNode
+                        {node}
+                        kind={kindAt(index)}
+                        siblings={index === 0 ? [] : path[index - 1].children}
+                        connector={index > 0}
+                    />
+                {/each}
+            </div>
+        {/if}
 
-    <button class="btn primary" on:click={onStart}>Start learning</button>
-</div>
+        <div class="foot">
+            <h1 class="title">{title}</h1>
+            <p class="sub">
+                {concepts}
+                {concepts === 1 ? "concept" : "concepts"} · begins at the Learn stage
+            </p>
+            <button class="begin" type="button" on:click={onStart}>Begin</button>
+        </div>
+    </div>
+</section>
 
 <style lang="scss">
-    .intro {
+    .card {
+        position: relative;
+        overflow: hidden;
+        box-sizing: border-box;
         width: 100%;
-        max-width: 40rem;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.75rem;
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 24px 28px 28px;
+        background: var(--sr-panel);
+        border-radius: var(--sr-radius-card);
+        box-shadow: var(--sr-shadow-card);
+        font-family: var(--sr-sans);
+    }
+    .glow {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(
+            circle at 50% -10%,
+            color-mix(in srgb, var(--sr-signal) 10%, transparent),
+            transparent 45%
+        );
+    }
+    .body {
+        position: relative;
         text-align: center;
     }
-    .lead {
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
-        animation: sr-rise 400ms ease both;
-    }
-    @keyframes sr-rise {
-        from {
-            opacity: 0;
-            transform: translateY(6px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .lead {
-            animation: none;
-        }
-    }
+
     .eyebrow {
         margin: 0;
         font-family: var(--sr-mono);
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        color: var(--sr-signal-ink);
-    }
-    :global(.night-mode) .eyebrow {
-        color: var(--sr-signal);
-    }
-    .topic {
-        margin: 0;
-        font-size: 2.1rem;
-        font-weight: 720;
-        letter-spacing: -0.02em;
-        line-height: 1.1;
-    }
-
-    .map {
-        width: 100%;
-        background: var(--sr-panel);
-        border: 1px solid var(--sr-line);
-        border-radius: 12px;
-        padding: 1.1rem 1.25rem 1.25rem;
-        text-align: left;
-    }
-    .map-label {
-        margin: 0 0 0.6rem;
-        font-family: var(--sr-mono);
         font-size: 10px;
         font-weight: 600;
-        letter-spacing: 0.14em;
+        letter-spacing: 0.22em;
         text-transform: uppercase;
+        color: var(--sr-signal);
+    }
+
+    .tree {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 22px;
+    }
+
+    .foot {
+        margin-top: 18px;
+    }
+    .title {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--sr-ink);
+    }
+    .sub {
+        margin: 3px 0 0;
+        font-size: 12px;
         color: var(--sr-ink-3);
     }
-    .tree {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
-
-    .btn {
+    .begin {
         appearance: none;
-        border: 1px solid transparent;
-        border-radius: 8px;
-        padding: 0.7rem 1.6rem;
-        font: inherit;
-        font-weight: 600;
         cursor: pointer;
-    }
-    .btn.primary {
+        margin-top: 14px;
+        padding: 12px 36px;
+        border: 0;
+        border-radius: 13px;
         background: var(--sr-signal);
-        color: var(--sr-signal-ink);
-        border-color: var(--sr-signal-line);
+        // On-coral label stays literally white in both themes; --sr-white is a
+        // surface token that flips dark at night.
+        color: #fff;
+        font-family: var(--sr-sans);
+        font-size: 14px;
+        font-weight: 700;
+        box-shadow: var(--sr-shadow-signal-lg);
     }
-    .btn.primary:hover {
+    .begin:hover {
         filter: brightness(1.04);
-    }
-
-    @media (max-width: 34rem) {
-        .topic {
-            font-size: 1.6rem;
-        }
     }
 </style>

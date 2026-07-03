@@ -11,7 +11,7 @@ function main() {
     var runLog = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 
     console.log(
-        '"Android API","Emulator Architecture","Emulator Image","First Boot Warmup Delay","Average AVD Create/Boot Elapsed Seconds","Average AVD Reboot/Test Elapsed Seconds","Average Total Elapsed Seconds","Failure Count"',
+        "\"Android API\",\"Emulator Architecture\",\"Emulator Image\",\"First Boot Warmup Delay\",\"Average AVD Create/Boot Elapsed Seconds\",\"Average AVD Reboot/Test Elapsed Seconds\",\"Average Total Elapsed Seconds\",\"Failure Count\"",
     );
 
     let averageTimings = {};

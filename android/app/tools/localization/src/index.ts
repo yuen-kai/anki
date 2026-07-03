@@ -21,12 +21,12 @@
  *  copy latest file from temp_dir to AnkiDroid/src/main/res/values/ dir
  */
 
-import { uploadI18nFiles } from "./upload";
+import { TEMP_DIR } from "./constants";
 import { buildAndDownload, extractZip } from "./download";
 import { updateI18nFiles } from "./update";
-import { TEMP_DIR } from "./constants";
+import { uploadI18nFiles } from "./upload";
 
-process.argv.forEach(function (value) {
+process.argv.forEach(function(value) {
     switch (value) {
         case "upload":
             console.log("uploading source strings to crowdin...");

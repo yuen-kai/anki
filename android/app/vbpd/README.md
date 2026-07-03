@@ -2,9 +2,9 @@
 
 Simplifies [view bindings](https://developer.android.com/topic/libraries/view-binding):
 
-* Manages ViewBinding lifecycle and clears the reference to it to prevent memory leaks
-* Eliminates the need to keep nullable references to Views or ViewBindings
-* Creates ViewBinding lazily
+- Manages ViewBinding lifecycle and clears the reference to it to prevent memory leaks
+- Eliminates the need to keep nullable references to Views or ViewBindings
+- Creates ViewBinding lazily
 
 ### Implementation notes
 

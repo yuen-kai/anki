@@ -51,6 +51,7 @@ use serde_json::Value;
 use crate::config::BoolKey;
 use crate::notetype::Notetype;
 use crate::prelude::*;
+use crate::scheduler::timespan::answer_button_time_collapsible;
 use crate::search::SearchNode;
 use crate::search::SortMode;
 use crate::speedrun::card_signals::card_retrievability;
@@ -432,7 +433,9 @@ impl Collection {
 
     /// Grade a concept card through real FSRS ([`Collection::grade_now`]) and
     /// move its mastery state. `rating` 1..4 = Again/Hard/Good/Easy. Returns
-    /// `{ state, upgraded, from, to }`.
+    /// `{ state, upgraded, from, to, intervalSecs, intervalText }` — the last
+    /// two are the next interval this rating schedules, so the grading UI can
+    /// show it (omitted if the scheduler couldn't cheaply surface it).
     pub(crate) fn speedrun_answer_card(
         &mut self,
         deck_id: DeckId,
@@ -440,9 +443,42 @@ impl Collection {
         concept_id: &str,
         rating: i32,
     ) -> Result<Value> {
+        // Read the interval this rating will schedule *before* grading: it comes
+        // from the same scheduling states grade_now applies (fuzz is seeded per
+        // card, so the two reads agree), and `.ok()` falls back to rating-only.
+        let interval = self.speedrun_next_interval(card_id, rating).ok();
         // grade_now uses 0..3 (Again..Easy); the screen sends 1..4.
         self.grade_now(&[card_id], rating - 1)?;
-        self.speedrun_record_concept_answer(deck_id, concept_id, rating)
+        let mut result = self.speedrun_record_concept_answer(deck_id, concept_id, rating)?;
+        if let (Some((secs, text)), Some(obj)) = (interval, result.as_object_mut()) {
+            obj.insert("intervalSecs".to_string(), json!(secs));
+            obj.insert("intervalText".to_string(), json!(text));
+        }
+        Ok(result)
+    }
+
+    /// The next interval `rating` (1..4 = Again/Hard/Good/Easy) would schedule
+    /// for a card, as `(seconds, human string)`. Read from the same scheduling
+    /// states [`Collection::grade_now`] applies and formatted with the same
+    /// helper as Anki's answer buttons (e.g. `"10m"`, `"4d"`, `"2mo"`).
+    fn speedrun_next_interval(&mut self, card_id: CardId, rating: i32) -> Result<(u32, String)> {
+        let states = self.get_scheduling_states(card_id)?;
+        let state = match rating {
+            RATING_AGAIN => states.again,
+            2 => states.hard,
+            RATING_GOOD => states.good,
+            4 => states.easy,
+            _ => states.good,
+        };
+        let now = TimestampSecs::now();
+        let timing = self.timing_for_timestamp(now)?;
+        let secs_until_rollover = timing.next_day_at.elapsed_secs_since(now).max(0) as u32;
+        let secs = state
+            .interval_kind()
+            .maybe_as_days(secs_until_rollover)
+            .as_seconds();
+        let text = answer_button_time_collapsible(secs, self.learn_ahead_secs(), &self.tr);
+        Ok((secs, text))
     }
 
     /// Record a difficulty rating against a concept and move its mastery state

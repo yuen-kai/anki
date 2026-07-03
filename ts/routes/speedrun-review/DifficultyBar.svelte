@@ -1,116 +1,219 @@
 <!--
 Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+The grading step that rides at the bottom of graded cards (Practice, Guided,
+Solo — never Learn). "How hard was this card?" then Again / Hard / Good / Easy
+grades the card through FSRS; the picked grade stays outlined and the resulting
+next interval shows inline, with "Next card" to continue. The backend call is
+passed in so the interval it returns is shown here on the same card.
 -->
 <script lang="ts">
-    import { type Rating, RATINGS } from "./lib";
+    import { type AnswerResult, type Rating, RATINGS } from "./lib";
 
-    // Grades the card through FSRS. Placed inline at the bottom-center of the
-    // card, standing in for where a Next button would sit.
-    export let onRate: (rating: Rating) => void;
-    // While inactive the keyboard shortcuts are ignored (e.g. before reveal).
-    export let active = true;
+    // Grades the card through FSRS and resolves with the answer result (which
+    // carries the next interval). A prop so the orchestrator owns the RPC.
+    export let answer: (rating: Rating) => Promise<AnswerResult>;
+    // Advance the session, carrying the result (a level-up may follow).
+    export let onDone: (result: AnswerResult) => void;
+    // Surface a grading failure to the orchestrator's error view.
+    export let onError: (err: unknown) => void = () => {};
 
-    function rate(rating: Rating): void {
-        if (active) {
-            onRate(rating);
+    // Ordered Again/Hard/Good/Easy -> the tint + text token key for each.
+    const TONE = ["again", "hard", "good", "easy"] as const;
+
+    type Phase = "rate" | "grading" | "done";
+    let phase: Phase = "rate";
+    let picked: Rating | null = null;
+    let result: AnswerResult | null = null;
+
+    async function rate(rating: Rating): Promise<void> {
+        if (phase !== "rate") {
+            return;
+        }
+        picked = rating;
+        phase = "grading";
+        try {
+            result = await answer(rating);
+            phase = "done";
+        } catch (err) {
+            phase = "rate";
+            picked = null;
+            onError(err);
         }
     }
 
-    // 1..4 grade the card, matching base Anki's ease shortcuts. Typing in a field
-    // takes precedence so a free-response answer is never eaten.
+    function proceed(): void {
+        if (result) {
+            onDone(result);
+        }
+    }
+
+    // 1..4 grade the card (base Anki's ease shortcuts); Enter continues once the
+    // interval is shown. Typing in a field is never eaten.
     function onKey(event: KeyboardEvent): void {
-        if (!active || event.metaKey || event.ctrlKey || event.altKey) {
+        if (event.metaKey || event.ctrlKey || event.altKey) {
             return;
         }
         const target = event.target as HTMLElement | null;
         if (target && (target.tagName === "TEXTAREA" || target.tagName === "INPUT")) {
             return;
         }
-        const n = Number(event.key);
-        if (n >= 1 && n <= 4) {
+        if (phase === "rate") {
+            const n = Number(event.key);
+            if (n >= 1 && n <= 4) {
+                event.preventDefault();
+                rate(n as Rating);
+            }
+        } else if (phase === "done" && (event.key === "Enter" || event.key === " ")) {
             event.preventDefault();
-            rate(n as Rating);
+            proceed();
         }
     }
 </script>
 
 <svelte:window on:keydown={onKey} />
 
-<div class="bar" role="group" aria-label="Rate difficulty">
+<p class="ask">How hard was this card?</p>
+<div class="row" role="group" aria-label="Rate difficulty">
     {#each RATINGS as choice (choice.rating)}
         <button
-            class="ease"
-            class:good={choice.rating === 3}
+            class="grade grade--{TONE[choice.rating - 1]}"
+            class:selected={picked === choice.rating}
+            type="button"
             on:click={() => rate(choice.rating)}
-            disabled={!active}
+            disabled={phase !== "rate"}
+            aria-pressed={picked === choice.rating}
         >
-            <span class="name">{choice.label}</span>
-            <span class="key" aria-hidden="true">{choice.rating}</span>
+            {choice.label}
         </button>
     {/each}
 </div>
 
+{#if phase === "done" && result && picked}
+    <p class="result">
+        <span class="verdict verdict--{TONE[picked - 1]}">
+            {RATINGS[picked - 1].label.toUpperCase()}
+        </span>
+        {#if result.intervalText}
+            <span class="next">· next review in {result.intervalText}</span>
+        {:else}
+            <span class="next">· recorded</span>
+        {/if}
+        <button class="proceed" type="button" on:click={proceed}>Next card →</button>
+    </p>
+{/if}
+
 <style lang="scss">
-    .bar {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .ease {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        min-width: 5.5rem;
-        justify-content: center;
-        padding: 0.6rem 0.9rem;
-        border: 1px solid var(--sr-line-2);
-        border-radius: 8px;
-        background: var(--sr-panel);
+    @use "$lib/sass/speedrun-synapse" as syn;
+
+    .ask {
+        margin: 0 0 10px;
+        font-size: 12.5px;
+        font-weight: 700;
         color: var(--sr-ink);
-        font: inherit;
-        font-weight: 560;
-        cursor: pointer;
-        transition:
-            border-color 0.12s ease,
-            background 0.12s ease;
     }
-    .ease:hover:not(:disabled) {
-        border-color: var(--sr-ink-3);
-        background: var(--sr-panel-2);
+    .row {
+        display: flex;
+        gap: 6px;
     }
-    // Good is the expected pass, so it carries the single marigold hint; the
-    // others stay quiet ink so the row never turns into a colour swatch.
-    .ease.good {
-        border-color: var(--sr-signal-line);
+    .grade {
+        @include syn.grade;
     }
-    .ease.good:hover:not(:disabled) {
-        background: var(--sr-signal-weak);
-    }
-    .ease:disabled {
-        opacity: 0.45;
+    .grade:disabled {
         cursor: default;
     }
-    .name {
-        font-size: 0.95rem;
+    // Not-picked grades dim once a grade is locked in, so the choice reads.
+    .row:has(.selected) .grade:not(.selected) {
+        opacity: 0.5;
     }
-    .key {
+    .grade--again {
+        background: var(--sr-signal-weak);
+        color: var(--sr-signal-deep);
+    }
+    .grade--hard {
+        @include syn.stage-tint(guided);
+    }
+    .grade--good {
+        @include syn.stage-tint(practice);
+    }
+    .grade--easy {
+        @include syn.stage-tint(solo);
+    }
+    .grade--again.selected {
+        outline: 2px solid var(--sr-signal);
+        outline-offset: -2px;
+    }
+    .grade--hard.selected {
+        outline: 2px solid var(--sr-stage-guided);
+        outline-offset: -2px;
+    }
+    .grade--good.selected {
+        outline: 2px solid var(--sr-stage-practice);
+        outline-offset: -2px;
+    }
+    .grade--easy.selected {
+        outline: 2px solid var(--sr-stage-solo);
+        outline-offset: -2px;
+    }
+
+    .result {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 11px 0 0;
         font-family: var(--sr-mono);
-        font-size: 0.7rem;
-        color: var(--sr-ink-3);
-        border: 1px solid var(--sr-line-2);
-        border-radius: 4px;
-        padding: 0 0.28rem;
-        line-height: 1.3;
+        font-size: 9px;
+        animation: sr-result-in 240ms ease both;
     }
-    @media (max-width: 34rem) {
-        .ease {
-            flex: 1 1 40%;
-            min-width: 0;
+    @keyframes sr-result-in {
+        from {
+            opacity: 0;
+            transform: translateY(3px);
         }
-        .key {
-            display: none;
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .verdict {
+        font-weight: 600;
+        letter-spacing: 0.06em;
+    }
+    .verdict--again {
+        color: var(--sr-signal-deep);
+    }
+    .verdict--hard {
+        color: var(--sr-stage-guided-deep);
+    }
+    .verdict--good {
+        color: var(--sr-stage-practice-deep);
+    }
+    .verdict--easy {
+        color: var(--sr-stage-solo-deep);
+    }
+    .next {
+        font-weight: 500;
+        color: var(--sr-faint);
+    }
+    .proceed {
+        margin-left: auto;
+        padding: 0;
+        border: none;
+        background: none;
+        font-family: var(--sr-mono);
+        font-size: 9px;
+        font-weight: 600;
+        color: var(--sr-ink);
+        cursor: pointer;
+    }
+    .proceed:hover {
+        color: var(--sr-signal-ink);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .result {
+            animation: none;
         }
     }
 </style>

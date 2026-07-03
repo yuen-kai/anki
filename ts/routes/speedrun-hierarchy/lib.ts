@@ -144,6 +144,24 @@ export function findNode(root: Node, id: string | null): Node | null {
     return null;
 }
 
+// The immediate parent of a node, or null for the root / a missing id. Used for
+// the concepts-panel breadcrumb ("Group 2 / Topic 4").
+export function findParent(root: Node, id: string | null): Node | null {
+    if (!id) {
+        return null;
+    }
+    for (const child of root.children) {
+        if (child.id === id) {
+            return root;
+        }
+        const found = findParent(child, id);
+        if (found) {
+            return found;
+        }
+    }
+    return null;
+}
+
 // A save creates the deck when it does not exist yet, so "new" and "" both mean
 // "create". The backend echoes the real id back and we adopt it.
 export function isUnsaved(deckId: string): boolean {

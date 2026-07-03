@@ -7,8 +7,8 @@
  * Licensed under the GPL-3.0 license. See LICENSE file in the project root for details.
  */
 
-import path from "path";
 import { Credentials } from "@crowdin/crowdin-api-client";
+import path from "path";
 import { createDirIfNotExisting } from "./update";
 
 import dotenv from "dotenv";

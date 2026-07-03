@@ -11,15 +11,9 @@
  * It's expected to be called through yarn start upload
  */
 
-import fs from "fs";
 import crowdin, { ResponseList, SourceFilesModel } from "@crowdin/crowdin-api-client";
-import {
-    PROJECT_ID,
-    credentialsConst,
-    I18N_FILES,
-    I18N_FILES_DIR,
-    MARKET_DESC_FILE,
-} from "./constants";
+import fs from "fs";
+import { credentialsConst, I18N_FILES, I18N_FILES_DIR, MARKET_DESC_FILE, PROJECT_ID } from "./constants";
 
 // initialization of crowdin client
 const { uploadStorageApi, sourceFilesApi } = new crowdin(credentialsConst);

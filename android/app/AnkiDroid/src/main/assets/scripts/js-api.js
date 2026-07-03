@@ -120,7 +120,7 @@ class AnkiDroidJS {
 
 Object.keys(jsApiList).forEach(method => {
     if (method === "ankiAddTagToNote") {
-        AnkiDroidJS.prototype[method] = async function (noteId, tag) {
+        AnkiDroidJS.prototype[method] = async function(noteId, tag) {
             console.warn("ankiAddTagToNote is deprecated. Use ankiSetNoteTags instead");
             const endpoint = jsApiList[method];
             const data = JSON.stringify({ noteId, tag });
@@ -129,7 +129,7 @@ Object.keys(jsApiList).forEach(method => {
         return;
     }
     if (method === "ankiSetNoteTags") {
-        AnkiDroidJS.prototype[method] = async function (tags) {
+        AnkiDroidJS.prototype[method] = async function(tags) {
             let hasSpaces = false;
             for (let i = 0; i < tags.length; i++) {
                 tags[i] = tags[i].trim();
@@ -148,7 +148,7 @@ Object.keys(jsApiList).forEach(method => {
         return;
     }
     if (method === "ankiTtsSpeak") {
-        AnkiDroidJS.prototype[method] = async function (text, queueMode = 0) {
+        AnkiDroidJS.prototype[method] = async function(text, queueMode = 0) {
             const endpoint = jsApiList[method];
             const data = JSON.stringify({ text, queueMode });
             return await this.handleRequest(endpoint, data);
@@ -156,14 +156,14 @@ Object.keys(jsApiList).forEach(method => {
         return;
     }
     if (method === "ankiShowToast") {
-        AnkiDroidJS.prototype[method] = async function (text, shortLength = true) {
+        AnkiDroidJS.prototype[method] = async function(text, shortLength = true) {
             const endpoint = jsApiList[method];
             const data = JSON.stringify({ text, shortLength });
             return await this.handleRequest(endpoint, data);
         };
         return;
     }
-    AnkiDroidJS.prototype[method] = async function (data) {
+    AnkiDroidJS.prototype[method] = async function(data) {
         const endpoint = jsApiList[method];
         return await this.handleRequest(endpoint, data);
     };

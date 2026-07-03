@@ -2,58 +2,63 @@
 Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-Developer demo of the bespoke Speedrun screens. It reuses the real
-speedrun-review study components and the speedrun-hierarchy authoring
-components, driving them with the inline mock data in demo-fixtures so every
-screen, state, and animation can be walked without a collection.
+Developer gallery of the bespoke Speedrun screens. It drives the *real* screen
+components — the decks home, the study overview, the deck builder, and every
+study-session sub-state — with the inline mock data in demo-fixtures, so every
+screen and state can be walked without a collection.
 
-Nothing here touches the backend. The study RPCs are never called. The
-authoring components run against a private cloned hierarchy through a demo
-TreeContext whose change() only bumps a local revision, so no autosave is ever
-scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
+Nothing here touches the backend. The reused components are the presentational
+ones the real routes render (DecksView, StudyOverview, HierarchyEditor, and the
+session cards); the builder runs with persist=false against a private cloned
+hierarchy, so no speedrun* RPC ever fires and no deck is created, saved, or
+deleted.
 -->
 <script lang="ts">
-    import { writable } from "svelte/store";
-
-    import ChoiceEditor from "../speedrun-hierarchy/ChoiceEditor.svelte";
-    import ConceptsPanel from "../speedrun-hierarchy/ConceptsPanel.svelte";
-    import HierarchyTree from "../speedrun-hierarchy/HierarchyTree.svelte";
-    import {
-        findNode,
-        type Hierarchy,
-        isLeaf,
-        type Node,
-        type PulseState,
-        setTreeContext,
-        type TreeContext,
-    } from "../speedrun-hierarchy/lib";
+    import DecksView from "../speedrun-decks/DecksView.svelte";
+    import ConceptModal from "../speedrun-hierarchy/ConceptModal.svelte";
+    import HierarchyEditor from "../speedrun-hierarchy/HierarchyEditor.svelte";
     import ConceptLearn from "../speedrun-review/ConceptLearn.svelte";
-    import { findConcept, type Rating, rotateProblem } from "../speedrun-review/lib";
+    import GuidedCard from "../speedrun-review/GuidedCard.svelte";
+    import {
+        type AnswerResult,
+        type Concept,
+        findConcept,
+        type Hierarchy,
+        type Rating,
+        rotateProblem,
+    } from "../speedrun-review/lib";
     import NewTopicIntro from "../speedrun-review/NewTopicIntro.svelte";
     import PracticeRecall from "../speedrun-review/PracticeRecall.svelte";
     import ProblemCard from "../speedrun-review/ProblemCard.svelte";
-    import ScaffoldPicker from "../speedrun-review/ScaffoldPicker.svelte";
+    import TopicLearned from "../speedrun-review/TopicLearned.svelte";
     import UpgradeAnimation from "../speedrun-review/UpgradeAnimation.svelte";
+    import StudyOverview from "../speedrun-study/StudyOverview.svelte";
     import {
         cloneHierarchy,
         DEMO_CONCEPT_ID,
         DEMO_DECKS,
         DEMO_HIERARCHY,
         DEMO_LEARNING_CONCEPTS,
+        DEMO_STUDY,
+        DEMO_STUDY_NOTSTARTED,
         DEMO_TOPIC_NODE_ID,
     } from "./demo-fixtures";
 
     type SceneId =
-        | "create-deck"
-        | "hierarchy"
+        | "decks"
+        | "decks-empty"
+        | "builder"
         | "concept"
+        | "study"
+        | "study-empty"
         | "intro"
-        | "learning"
-        | "upgrade-lp"
-        | "practicing"
-        | "applying"
-        | "upgrade-am"
-        | "mastering"
+        | "learn"
+        | "topic-learned"
+        | "practice"
+        | "levelup-pg"
+        | "guided"
+        | "levelup-gs"
+        | "solo"
         | "done";
 
     interface Scene {
@@ -62,23 +67,38 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
         caption: string;
     }
 
-    // Authoring first, then the study flow, so the numbered rail reads as the
-    // real ordered sequence: build a deck, then study it, top to bottom.
+    // Ordered as the real journey reads top to bottom: browse decks, build one,
+    // then study it screen by screen.
     const scenes: Scene[] = [
         {
-            id: "create-deck",
-            label: "Create deck",
-            caption: "The deck ledger. Create a deck to start a hierarchy.",
+            id: "decks",
+            label: "Decks",
+            caption: "The decks home. Each row shows completion and opens to study or edit.",
         },
         {
-            id: "hierarchy",
-            label: "Hierarchy editor",
-            caption: "Build the topic tree. Select a leaf to add concepts.",
+            id: "decks-empty",
+            label: "Decks — empty",
+            caption: "The home before any deck exists.",
+        },
+        {
+            id: "builder",
+            label: "Builder",
+            caption: "Name the tree, add topics, open a leaf to write its concepts.",
         },
         {
             id: "concept",
             label: "Concept editor",
-            caption: "Write a concept and mark the correct choice on each problem.",
+            caption: "A concept's title, description, and four-choice problems.",
+        },
+        {
+            id: "study",
+            label: "Study overview",
+            caption: "Today's queue, the three scores, and the concept tree.",
+        },
+        {
+            id: "study-empty",
+            label: "Study — not started",
+            caption: "A deck not started yet: nothing due, every score awaiting data.",
         },
         {
             id: "intro",
@@ -86,35 +106,40 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
             caption: "New topic reveal. The path lights down the tree to the leaf.",
         },
         {
-            id: "learning",
-            label: "Learning",
+            id: "learn",
+            label: "Learn",
             caption:
                 "Two contrasting cases, note the shared idea, then reveal the concept.",
         },
         {
-            id: "upgrade-lp",
-            label: "Learning to practicing",
-            caption: "Stage change from learning to practicing.",
+            id: "topic-learned",
+            label: "Topic learned",
+            caption: "Every concept clears Learn together and advances to Practice.",
         },
         {
-            id: "practicing",
-            label: "Practicing",
+            id: "practice",
+            label: "Practice",
             caption: "Free-response recall, reveal, then rate the difficulty.",
         },
         {
-            id: "applying",
-            label: "Applying",
-            caption: "Place the concept in the tree, then work the problem.",
+            id: "levelup-pg",
+            label: "Practice to Guided",
+            caption: "Level up: the concept advances from Practice to Guided.",
         },
         {
-            id: "upgrade-am",
-            label: "Applying to mastering",
-            caption: "Stage change from applying to mastering.",
+            id: "guided",
+            label: "Guided",
+            caption: "Locate the concept in the tree, then answer the question.",
         },
         {
-            id: "mastering",
-            label: "Mastering",
-            caption: "Work the problem with the scaffold gone.",
+            id: "levelup-gs",
+            label: "Guided to Solo",
+            caption: "Level up: the concept advances from Guided to Solo.",
+        },
+        {
+            id: "solo",
+            label: "Solo",
+            caption: "Answer the same question with no locating step.",
         },
         {
             id: "done",
@@ -123,58 +148,53 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
         },
     ];
 
-    // The single concept the Practicing/Applying/Mastering scenes drill, so one
-    // idea is seen climbing the ladder. The fixture guarantees it exists.
+    // The single concept the Practice/Guided/Solo scenes drill, so one idea is
+    // seen climbing the ladder. The fixture guarantees it exists.
     const featured =
         findConcept(DEMO_HIERARCHY.root, DEMO_CONCEPT_ID) ?? DEMO_LEARNING_CONCEPTS[0];
 
-    // Authoring scenes reuse the real deck-editor components. They edit a private
-    // clone of the hierarchy through this demo TreeContext: change() only bumps a
-    // local revision so derived views refresh, and it never schedules an
-    // autosave, so no speedrun* RPC is sent and no real deck is ever written.
-    const selectedId = writable<string | null>(null);
-    const pulseState = writable<PulseState | null>(null);
-    let authoring: Hierarchy = cloneHierarchy();
-    let authoringRev = 0;
-    let pulseSeq = 0;
-
-    const treeContext: TreeContext = {
-        change: () => {
-            authoringRev += 1;
-        },
-        pulse: (ids) => {
-            pulseSeq += 1;
-            pulseState.set({ ids, seq: pulseSeq });
-        },
-        select: (id) => selectedId.set(id),
-        selectedId,
-        pulseState,
-    };
-    setTreeContext(treeContext);
-
-    const animated = new Set<SceneId>(["intro", "upgrade-lp", "upgrade-am"]);
+    // The screens that paint their own full-bleed layout (own header, background,
+    // and centering). The rest are cards that centre in the stage.
+    const fullBleed = new Set<SceneId>([
+        "decks",
+        "decks-empty",
+        "builder",
+        "study",
+        "study-empty",
+    ]);
+    const animated = new Set<SceneId>([
+        "intro",
+        "topic-learned",
+        "levelup-pg",
+        "levelup-gs",
+    ]);
     const interactive = new Set<SceneId>([
-        "hierarchy",
+        "builder",
         "concept",
-        "learning",
-        "practicing",
-        "applying",
-        "mastering",
+        "learn",
+        "practice",
+        "guided",
+        "solo",
     ]);
 
     let sceneIndex = 0;
     // Bumped on every scene entry and every replay/reset; used as the {#key} for
-    // the stage so animated scenes replay and interactive cards reset cleanly.
+    // the stage so animated scenes replay, interactive cards reset, and the
+    // builder/concept editors start from a pristine clone.
     let stageKey = 0;
 
     // Per-scene transient state.
     let learnIndex = 0;
-    let applyPhase: "scaffold" | "problem" = "scaffold";
-    let applyRotation = 0;
-    let masterRotation = 0;
+    // Private clones the builder / concept editors mutate, rebuilt on every entry
+    // so edits never leak into the shared study fixtures.
+    let authoring: Hierarchy = cloneHierarchy();
+    let conceptDraft: Concept | null = findConcept(
+        cloneHierarchy().root,
+        DEMO_CONCEPT_ID,
+    );
 
     // The contextual toolbar action: replay an animation, reset an interactive
-    // card, or nothing on the static scenes.
+    // card/editor, or nothing on the static scenes.
     function actionFor(id: SceneId): string | null {
         if (animated.has(id)) {
             return "Replay";
@@ -185,36 +205,20 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
         return null;
     }
 
-    // The selected node, but only when it is a leaf (branches show no concepts).
-    // Passing authoringRev in makes in-place edits (add/remove child) refresh it,
-    // mirroring the real editor without any of its save plumbing.
-    function pickLeaf(root: Node, id: string | null, _rev: number): Node | null {
-        const node = findNode(root, id);
-        return node && isLeaf(node) ? node : null;
-    }
-
     $: scene = scenes[sceneIndex];
     $: learnConcept = DEMO_LEARNING_CONCEPTS[learnIndex];
-    $: applyProblem = rotateProblem(featured.problems, applyRotation);
-    $: masterProblem = rotateProblem(featured.problems, masterRotation);
+    // Guided and Solo drill the featured concept's first problem.
+    $: featuredProblem = rotateProblem(featured.problems, 0);
     $: sceneAction = actionFor(scene.id);
-    $: authoringLeaf = pickLeaf(authoring.root, $selectedId, authoringRev);
-    $: authoringConcept = findConcept(authoring.root, DEMO_CONCEPT_ID);
+    $: isFull = fullBleed.has(scene.id);
 
     function enter(index: number): void {
         sceneIndex = index;
         learnIndex = 0;
-        applyPhase = "scaffold";
-        applyRotation = 0;
-        masterRotation = 0;
-        // Authoring scenes edit a private clone; rebuild it on every entry so
-        // "Reset" and each visit start from the pristine fixture and never leak
-        // edits into the shared study hierarchy. A leaf is pre-selected so the
-        // concepts panel has content to show.
+        // Rebuild the editor clones so every visit (and every Reset) starts from
+        // the pristine fixture and never leaks edits into the study scenes.
         authoring = cloneHierarchy();
-        authoringRev = 0;
-        selectedId.set(DEMO_TOPIC_NODE_ID);
-        pulseState.set(null);
+        conceptDraft = findConcept(cloneHierarchy().root, DEMO_CONCEPT_ID);
         stageKey += 1;
     }
 
@@ -238,32 +242,37 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
     }
 
     // Continue through the learning block: advance the concept counter, then hand
-    // off to the learning-to-practicing upgrade once the block is taught.
+    // off to the topic-learned screen once the block is taught (the topic-gated
+    // Learn -> Practice flip that upgrades every concept together).
     function onLearnNext(): void {
         if (learnIndex + 1 < DEMO_LEARNING_CONCEPTS.length) {
             learnIndex += 1;
         } else {
-            goTo("upgrade-lp");
+            goTo("topic-learned");
         }
     }
 
-    function onPracticeRate(_rating: Rating): void {
-        stageKey += 1;
-    }
-
-    function onScaffoldComplete(): void {
-        applyPhase = "problem";
-    }
-
-    function onApplyRate(_rating: Rating): void {
-        applyRotation += 1;
-        applyPhase = "scaffold";
-        stageKey += 1;
-    }
-
-    function onMasterRate(_rating: Rating): void {
-        masterRotation += 1;
-        stageKey += 1;
+    // The demo never touches the backend, so a graded card's answer is faked: it
+    // echoes the rating as a plausible next interval for the grading bar to show.
+    // Scene navigation is driven by each card's onDone below, so the result's
+    // stage fields are cosmetic here.
+    const DEMO_INTERVALS: Record<Rating, string> = {
+        1: "10m",
+        2: "2d",
+        3: "4d",
+        4: "9d",
+    };
+    function demoAnswer(
+        state: AnswerResult["state"],
+        rating: Rating,
+    ): Promise<AnswerResult> {
+        return Promise.resolve({
+            state,
+            upgraded: false,
+            from: state,
+            to: state,
+            intervalText: DEMO_INTERVALS[rating],
+        });
     }
 
     // Arrow keys step between scenes, but never while typing in a card's field.
@@ -349,178 +358,113 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
 
             <p class="caption">{scene.caption}</p>
 
-            <div class="stage">
+            <div class="stage" class:stage--center={!isFull}>
                 {#key stageKey}
-                    {#if scene.id === "create-deck"}
-                        <div class="authoring decks-mock">
-                            <header class="decks-head">
-                                <h2 class="decks-title">Decks</h2>
-                                <button
-                                    class="decks-create"
-                                    type="button"
-                                    on:click={() => goTo("hierarchy")}
-                                >
-                                    Create deck
-                                </button>
-                            </header>
-                            <table class="decks-grid">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Name</th>
-                                        <th scope="col" class="col-todo">To do</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {#each DEMO_DECKS as deck (deck.deckId)}
-                                        <tr>
-                                            <td>
-                                                <button
-                                                    class="deck-name"
-                                                    type="button"
-                                                    on:click={() => goTo("hierarchy")}
-                                                >
-                                                    {deck.name}
-                                                </button>
-                                            </td>
-                                            <td class="col-todo">
-                                                <span
-                                                    class="deck-todo"
-                                                    class:zero={deck.todo === 0}
-                                                >
-                                                    {deck.todo}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    {/each}
-                                </tbody>
-                            </table>
-                        </div>
-                    {:else if scene.id === "hierarchy"}
-                        <div class="authoring editor-mock">
-                            <header class="editor-head">
-                                <p class="editor-crumb">
-                                    Decks / {authoring.root.title || "Untitled deck"}
-                                </p>
-                                <h2 class="editor-title">Create hierarchy</h2>
-                            </header>
-                            <div class="editor-workspace">
-                                <section
-                                    class="editor-pane"
-                                    aria-label="Deck structure"
-                                >
-                                    <p class="pane-label">Structure</p>
-                                    <HierarchyTree root={authoring.root} />
-                                </section>
-                                <section class="editor-pane" aria-label="Concepts">
-                                    {#if authoringLeaf}
-                                        <ConceptsPanel node={authoringLeaf} />
-                                    {:else}
-                                        <div class="pane-placeholder">
-                                            <p>Select a leaf topic to add concepts.</p>
-                                        </div>
-                                    {/if}
-                                </section>
-                            </div>
-                        </div>
+                    {#if scene.id === "decks"}
+                        <DecksView
+                            decks={DEMO_DECKS}
+                            onStudy={() => goTo("study")}
+                            onDetails={() => goTo("builder")}
+                            onCreate={() => goTo("builder")}
+                            onDelete={() => Promise.resolve()}
+                        />
+                    {:else if scene.id === "decks-empty"}
+                        <DecksView
+                            decks={[]}
+                            onStudy={() => {}}
+                            onDetails={() => {}}
+                            onCreate={() => goTo("builder")}
+                            onDelete={() => Promise.resolve()}
+                        />
+                    {:else if scene.id === "builder"}
+                        <HierarchyEditor
+                            hierarchy={authoring}
+                            persist={false}
+                            onBack={() => goTo("decks")}
+                        />
                     {:else if scene.id === "concept"}
-                        {#if authoringConcept}
-                            {@const concept = authoringConcept}
-                            <div class="authoring concept-mock">
-                                <p class="concept-eyebrow">Concept</p>
-                                <label class="concept-field">
-                                    <span class="concept-label">Title</span>
-                                    <input
-                                        class="concept-input"
-                                        bind:value={concept.title}
-                                        placeholder="Concept title"
-                                    />
-                                </label>
-                                <label class="concept-field">
-                                    <span class="concept-label">Description</span>
-                                    <textarea
-                                        class="concept-input concept-area"
-                                        rows="3"
-                                        bind:value={concept.content}
-                                        placeholder="What this concept covers"
-                                    ></textarea>
-                                </label>
-                                <div class="concept-problems">
-                                    <h3 class="concept-problems-title">
-                                        Practice problems
-                                    </h3>
-                                    <ol class="concept-problem-list">
-                                        {#each concept.problems as problem, i (problem.id)}
-                                            <li class="concept-problem">
-                                                <div class="concept-problem-head">
-                                                    <span class="concept-no">
-                                                        {i + 1}
-                                                    </span>
-                                                    <input
-                                                        class="concept-input"
-                                                        bind:value={problem.prompt}
-                                                        placeholder="Question prompt"
-                                                        aria-label="Question prompt {i +
-                                                            1}"
-                                                    />
-                                                </div>
-                                                <ChoiceEditor
-                                                    {problem}
-                                                    onChange={() => {}}
-                                                />
-                                            </li>
-                                        {/each}
-                                    </ol>
-                                </div>
-                            </div>
-                        {/if}
+                        <div class="card-frame">
+                            {#if conceptDraft}
+                                <ConceptModal
+                                    concept={conceptDraft}
+                                    onChange={() => {}}
+                                />
+                            {/if}
+                        </div>
+                    {:else if scene.id === "study"}
+                        <StudyOverview
+                            {...DEMO_STUDY}
+                            onStart={() => goTo("intro")}
+                            onBack={() => goTo("decks")}
+                            onAction={() => {}}
+                        />
+                    {:else if scene.id === "study-empty"}
+                        <StudyOverview
+                            {...DEMO_STUDY_NOTSTARTED}
+                            onStart={() => {}}
+                            onBack={() => goTo("decks")}
+                            onAction={() => {}}
+                        />
                     {:else if scene.id === "intro"}
                         <NewTopicIntro
                             root={DEMO_HIERARCHY.root}
                             topicNodeId={DEMO_TOPIC_NODE_ID}
-                            onStart={() => goTo("learning")}
+                            onStart={() => goTo("learn")}
                         />
-                    {:else if scene.id === "learning"}
+                    {:else if scene.id === "learn"}
                         <ConceptLearn
+                            root={DEMO_HIERARCHY.root}
                             concept={learnConcept}
                             current={learnIndex + 1}
                             total={DEMO_LEARNING_CONCEPTS.length}
                             onNext={onLearnNext}
                         />
-                    {:else if scene.id === "upgrade-lp"}
-                        <UpgradeAnimation
+                    {:else if scene.id === "topic-learned"}
+                        <TopicLearned
+                            topic="Cardiovascular"
+                            items={DEMO_LEARNING_CONCEPTS.map((c) => ({
+                                title: c.title,
+                            }))}
                             from="learning"
                             to="practicing"
-                            onDone={() => goTo("practicing")}
+                            onDone={() => goTo("practice")}
                         />
-                    {:else if scene.id === "practicing"}
-                        <PracticeRecall concept={featured} onRate={onPracticeRate} />
-                    {:else if scene.id === "applying"}
-                        {#if applyPhase === "scaffold"}
-                            <ScaffoldPicker
-                                root={DEMO_HIERARCHY.root}
-                                conceptId={DEMO_CONCEPT_ID}
-                                onComplete={onScaffoldComplete}
-                            />
-                        {:else}
-                            <ProblemCard
-                                concept={featured}
-                                problem={applyProblem}
-                                state="hierarchy"
-                                onRate={onApplyRate}
-                            />
-                        {/if}
-                    {:else if scene.id === "upgrade-am"}
+                    {:else if scene.id === "practice"}
+                        <PracticeRecall
+                            concept={featured}
+                            answer={(rating) => demoAnswer("practicing", rating)}
+                            onDone={() => goTo("levelup-pg")}
+                        />
+                    {:else if scene.id === "levelup-pg"}
                         <UpgradeAnimation
+                            concept={featured.title}
+                            from="practicing"
+                            to="hierarchy"
+                            onDone={() => goTo("guided")}
+                        />
+                    {:else if scene.id === "guided"}
+                        <GuidedCard
+                            root={DEMO_HIERARCHY.root}
+                            concept={featured}
+                            conceptId={DEMO_CONCEPT_ID}
+                            problem={featuredProblem}
+                            answer={(rating) => demoAnswer("hierarchy", rating)}
+                            onDone={() => goTo("levelup-gs")}
+                        />
+                    {:else if scene.id === "levelup-gs"}
+                        <UpgradeAnimation
+                            concept={featured.title}
                             from="hierarchy"
                             to="mastering"
-                            onDone={() => goTo("mastering")}
+                            onDone={() => goTo("solo")}
                         />
-                    {:else if scene.id === "mastering"}
+                    {:else if scene.id === "solo"}
                         <ProblemCard
                             concept={featured}
-                            problem={masterProblem}
+                            problem={featuredProblem}
                             state="mastering"
-                            onRate={onMasterRate}
+                            answer={(rating) => demoAnswer("mastering", rating)}
+                            onDone={() => goTo("done")}
                         />
                     {:else if scene.id === "done"}
                         <div class="message">
@@ -533,14 +477,14 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
                                 <button
                                     class="btn primary"
                                     type="button"
-                                    on:click={() => goTo("intro")}
+                                    on:click={() => goTo("study")}
                                 >
                                     Back to overview
                                 </button>
                                 <button
                                     class="btn"
                                     type="button"
-                                    on:click={() => goTo("intro")}
+                                    on:click={() => goTo("decks")}
                                 >
                                     All decks
                                 </button>
@@ -554,12 +498,12 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
 </div>
 
 <style lang="scss">
-    @use "../speedrun-review/sr-tokens" as srt;
     @use "$lib/sass/speedrun-tokens" as sr;
+    @use "$lib/sass/speedrun-synapse" as syn;
 
-    // The "score instrument" palette comes from the study route's shared partial
-    // so the demo and the real study screen stay in lockstep (light + dark). The
-    // reused components inherit --sr-* from .demo via the cascade.
+    // One token host for the whole demo. The reused screens redeclare the same
+    // --sr-* on their own roots; the session cards and the concept editor inherit
+    // them from here.
     .demo {
         box-sizing: border-box;
         min-height: 100vh;
@@ -571,7 +515,7 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
         letter-spacing: -0.003em;
         -webkit-font-smoothing: antialiased;
 
-        @include srt.sr-tokens;
+        @include sr.tokens;
     }
 
     .shell {
@@ -583,6 +527,10 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
     // Left rail: the numbered scene index.
     .rail {
         box-sizing: border-box;
+        // Without this the phone rail's horizontal scene list (a nowrap row) sets
+        // the grid item's min-content, blowing the single 1fr column past the
+        // viewport; min-width:0 lets the column shrink and the list scroll.
+        min-width: 0;
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
@@ -672,6 +620,7 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
         display: flex;
         flex-direction: column;
         min-width: 0;
+        min-height: 100vh;
     }
     .bar {
         display: flex;
@@ -744,264 +693,25 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
 
     .stage {
         flex: 1;
+        min-width: 0;
         display: flex;
         flex-direction: column;
+    }
+    // Session cards and the concept editor centre; full-bleed screens fill it.
+    .stage--center {
         align-items: center;
         justify-content: center;
         gap: 1rem;
         padding: 2rem 1.5rem 3rem;
     }
 
-    // Authoring scenes reuse the deck-editor components, which read the
-    // neumorphic "chassis" palette. Re-declaring those --sr-* on this wrapper
-    // paints the authoring screens on their own palette (same variable names,
-    // scoped to this subtree) while the study scenes keep the score-instrument
-    // palette from .demo. The mixin is placed last per its mixed-declarations
-    // note.
-    .authoring {
+    // Standalone concept editor: framed as its builder column would be.
+    .card-frame {
         box-sizing: border-box;
         width: 100%;
-        margin: 0 auto;
-        text-align: left;
-        color: var(--sr-ink);
-        font-family: var(--sr-sans);
-
-        @include sr.tokens;
-    }
-
-    // Create deck: the decks ledger, ruled rows and mono tabular counts.
-    .decks-mock {
-        max-width: 46rem;
-    }
-    .decks-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        padding-bottom: 1rem;
-        border-bottom: 2px solid var(--sr-ink);
-    }
-    .decks-title {
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 720;
-        letter-spacing: -0.02em;
-    }
-    .decks-create {
-        appearance: none;
-        border: 1px solid var(--sr-signal-line);
-        border-radius: 6px;
-        padding: 0.5rem 0.9rem;
-        background: var(--sr-signal);
-        color: var(--sr-signal-ink);
-        font: inherit;
-        font-weight: 560;
-        cursor: pointer;
-    }
-    .decks-create:hover {
-        filter: brightness(1.04);
-    }
-    .decks-grid {
-        width: 100%;
-        margin-top: 1.25rem;
-        border-collapse: collapse;
-    }
-    .decks-grid th {
-        font-family: var(--sr-mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--sr-ink-3);
-        text-align: left;
-        padding: 0 0.75rem 0.6rem;
-        border-bottom: 1.5px solid var(--sr-ink);
-    }
-    .decks-grid td {
-        padding: 0.3rem 0.75rem;
-        border-bottom: 1px solid var(--sr-line);
-    }
-    .col-todo {
-        width: 7rem;
-        text-align: right;
-    }
-    .deck-name {
-        display: block;
-        width: 100%;
-        padding: 0.5rem 0;
-        border: none;
-        background: none;
-        color: var(--sr-ink);
-        font: inherit;
-        font-weight: 560;
-        text-align: left;
-        cursor: pointer;
-    }
-    .deck-name:hover {
-        text-decoration: underline;
-        text-underline-offset: 3px;
-    }
-    .deck-todo {
-        font-family: var(--sr-mono);
-        font-variant-numeric: tabular-nums;
-        color: var(--sr-ink);
-    }
-    .deck-todo.zero {
-        color: var(--sr-ink-3);
-    }
-
-    // Hierarchy editor: the breadcrumb header and two-pane workspace, matched to
-    // the real editor so the reused tree and concepts panel sit in context.
-    .editor-mock {
-        max-width: 62rem;
-    }
-    .editor-head {
-        padding-bottom: 0.9rem;
-        border-bottom: 2px solid var(--sr-ink);
-    }
-    .editor-crumb {
-        margin: 0 0 0.3rem;
-        font-size: 0.82rem;
-        color: var(--sr-ink-2);
-    }
-    .editor-title {
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 720;
-        letter-spacing: -0.02em;
-    }
-    .editor-workspace {
-        display: grid;
-        grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-        gap: 1.25rem;
-        margin-top: 1.5rem;
-        align-items: start;
-    }
-    .editor-pane {
-        background: var(--sr-panel);
-        border: 1px solid var(--sr-line);
-        border-radius: 8px;
-        padding: 1rem 1.1rem 1.2rem;
-    }
-    .pane-label {
-        margin: 0 0 0.6rem;
-        font-family: var(--sr-mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--sr-ink-3);
-    }
-    .pane-placeholder {
-        color: var(--sr-ink-3);
-        font-size: 0.9rem;
-        padding: 1.5rem 0.25rem;
-    }
-    .pane-placeholder p {
-        margin: 0;
-    }
-
-    // Concept editor: the concept fields plus the real four-choice problem
-    // editor, laid out inline (no modal) so the demo chrome stays reachable.
-    .concept-mock {
         max-width: 40rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        padding: 1.25rem;
-        background: var(--sr-panel);
-        border: 1px solid var(--sr-line);
-        border-radius: 10px;
-    }
-    .concept-eyebrow {
-        margin: 0;
-        font-family: var(--sr-mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--sr-ink-3);
-    }
-    .concept-field {
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-    }
-    .concept-label {
-        font-family: var(--sr-mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
-        color: var(--sr-ink-3);
-    }
-    .concept-input {
-        width: 100%;
-        border: 1px solid var(--sr-line-2);
-        background: var(--sr-panel-2);
-        color: var(--sr-ink);
-        border-radius: 6px;
-        padding: 0.5rem 0.6rem;
-        font: inherit;
-    }
-    .concept-input:focus {
-        outline: none;
-        border-color: var(--sr-signal-line);
-        background: var(--sr-panel);
-    }
-    .concept-input::placeholder {
-        color: var(--sr-ink-3);
-    }
-    .concept-area {
-        resize: vertical;
-        min-height: 3.5rem;
-    }
-    .concept-problems {
-        border-top: 1px solid var(--sr-line);
-        padding-top: 0.9rem;
-    }
-    .concept-problems-title {
-        margin: 0 0 0.7rem;
-        font-size: 0.95rem;
-        font-weight: 640;
-    }
-    .concept-problem-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.9rem;
-    }
-    .concept-problem {
-        border: 1px solid var(--sr-line);
-        border-radius: 8px;
-        padding: 0.7rem;
-        background: var(--sr-panel-2);
-    }
-    .concept-problem-head {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        margin-bottom: 0.6rem;
-    }
-    .concept-no {
-        flex-shrink: 0;
-        width: 1.5rem;
-        height: 1.5rem;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-family: var(--sr-mono);
-        font-size: 0.75rem;
-        color: var(--sr-ink-2);
-        background: var(--sr-panel);
-        border: 1px solid var(--sr-line-2);
-        border-radius: 5px;
-    }
-    .concept-problem-head .concept-input {
-        flex: 1 1 auto;
-        min-width: 0;
+        padding: 24px 26px;
+        @include syn.card;
     }
 
     // Finished state, mirroring the real orchestrator's copy.
@@ -1085,9 +795,6 @@ scheduled and no speedrun* RPC fires: no deck is created, saved, or deleted.
 
     @media (max-width: 48rem) {
         .shell {
-            grid-template-columns: 1fr;
-        }
-        .editor-workspace {
             grid-template-columns: 1fr;
         }
         .rail {

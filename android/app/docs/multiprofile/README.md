@@ -9,7 +9,7 @@
 ## Glossary
 
 | Term                                     | What it is                                                                                                                                                                                                                     | Where it lives                                                                                                                                                                                  |
-|------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **ProfileId**                            | Immutable string identifier. Either the literal `"default"` or `"p_" + 8 hex chars` (e.g. `p_a1b2c3d4`). **Never the user's display name.**                                                                                    | Three places: as a key in the Global Profile Registry, as the folder name for the profile's on-disk private storage, and as the prefix on the profile's namespaced SharedPreferences filenames. |
 | **ProfileMetadata**                      | User-visible data about a profile: `displayName`, `version`, `createdTimestamp`. Serialized as JSON.                                                                                                                           | Value stored under the ProfileId key in the global registry.                                                                                                                                    |
 | **Global Profile Registry**              | A single `SharedPreferences` file shared across the whole app. Contains the registered profiles (ProfileId -> metadata JSON) and the bookkeeping key `last_active_profile_id`.                                                 | `/data/data/<pkg>/shared_prefs/profiles_prefs.xml`                                                                                                                                              |
@@ -57,7 +57,7 @@ global, and it stores bookkeeping about profiles themselves, not user settings.
 > previously-active profile when a new profile is created. Today every new profile starts
 > with AnkiDroid's factory defaults, so a user with carefully-tuned settings has to redo
 > them for each profile. Selective copying gets fiddly fast: some prefs (sync key,
-> deckPath, last-active-deck) clearly should *not* copy. Worth a separate design pass
+> deckPath, last-active-deck) clearly should _not_ copy. Worth a separate design pass
 > before implementing.
 
 ## Internal storage (`/data/data/<pkg>/`)
@@ -116,7 +116,7 @@ The path shown above is the default for the Play Store variant, which is restric
         ├── collection.anki2
         └── ...
 
-The default profile's leaf folder is `AnkiDroid/` for legacy compatibility (that's where existing installs have always kept the collection). Non-default profiles use their `ProfileId` as the leaf the ID *is* the collection folder; there is no nested `AnkiDroid/` subfolder.
+The default profile's leaf folder is `AnkiDroid/` for legacy compatibility (that's where existing installs have always kept the collection). Non-default profiles use their `ProfileId` as the leaf the ID _is_ the collection folder; there is no nested `AnkiDroid/` subfolder.
 
 ### How deckPath is set
 
@@ -135,7 +135,7 @@ Only metadata is created at this stage; no folders exist on disk until the profi
 1. A `ProfileId` is generated via `UUID.randomUUID()`, with a collision check against the registry (up to 10 attempts).
 2. A `ProfileMetadata` object (display name, creation timestamp, version) is built.
 3. The metadata is serialized to JSON and written into `profiles_prefs.xml` under the `ProfileId` key.
-4. The profile is now *registered* but *dormant*.
+4. The profile is now _registered_ but _dormant_.
 
 ### Profile Switch
 

@@ -189,12 +189,12 @@ normalizes by the sum of the weights it used.
   `ScoreEnvelope::abstained` / the Memory equivalent zero the estimate + range and set
   `abstain_reason` (`scores.rs`). Thresholds are named constants, tunable.
 - Per-subject breakdown (`get_speedrun_score_breakdown`): one row per authored leaf
-  (memory + application inputs), for the study screen's stats modal.
+  (memory + application inputs), for the study screen's per-subject table.
 
-Dashboard host: the `speedrun-study` overview (rings, concept tree, StatsModal in
-`ts/routes/speedrun-study/`). The `speedrun-dashboard` route + Qt dialog were removed;
-`ts/routes/speedrun-dashboard/lib.ts` + `ScoreTile.svelte` are kept as the shared
-score/stage library the study screen imports.
+Dashboard host: the `speedrun-study` overview (dials, concept tree, per-subject
+`SubjectTable` in `ts/routes/speedrun-study/`). The `speedrun-dashboard` route + Qt
+dialog were removed; `ts/routes/speedrun-dashboard/lib.ts` + `StageGlyph.svelte` are
+kept as the shared score/stage library the study screen imports.
 
 ### Authoring UI
 
@@ -249,7 +249,7 @@ retired note-engine RPCs (`GetTopicGroupedQueue`, `GetSpeedrunCardMode/Context`,
   `pylib/anki/scheduler/v3.py`.
 - Qt: `qt/aqt/speedrun_demo.py` plus the patches listed above.
 - TS: `ts/routes/speedrun-{decks,hierarchy,study,review,review-demo}/`;
-  `ts/routes/speedrun-dashboard/` is now lib-only (`lib.ts` + `ScoreTile.svelte`,
+  `ts/routes/speedrun-dashboard/` is now lib-only (`lib.ts` + `StageGlyph.svelte`,
   no route). Shared JSON helpers (`enc`/`dec`/`quiet`) live in
   `speedrun-hierarchy/lib.ts`. Tokens in `ts/lib/sass/speedrun-tokens.scss`
   (`speedrun-review/sr-tokens.scss` forwards to it); the accent token is `--sr-signal`.

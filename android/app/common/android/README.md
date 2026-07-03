@@ -16,8 +16,8 @@ Extension methods on Android framework classes (e.g. `Intent`)
 
 ## Resource class references (`CommonR`)
 
-Resources for this module live in `com.ichi2.anki.common.android.R` due to 
- `nonTransitiveRClass=true` (AGP default).
+Resources for this module live in `com.ichi2.anki.common.android.R` due to
+`nonTransitiveRClass=true` (AGP default).
 
 Use `CommonR` as an alias when outside this module. Inside this module, `R` should be used as the alias.
 
@@ -35,18 +35,18 @@ import com.ichi2.anki.common.android.R
 
 See [docs/development/theming-modularization.md](../../docs/development/theming-modularization.md).
 
-This module will define base themes: `Base.Theme.Light.Plain` etc... to be extended in `:AnkiDroid` 
+This module will define base themes: `Base.Theme.Light.Plain` etc... to be extended in `:AnkiDroid`
 with feature-level theme overlays.
 
 `:common:android` should only contain the following for theming:
 
-* well-known common values and attributes (Material Colors/attrs)
-* values and attributes which are used by multiple features
+- well-known common values and attributes (Material Colors/attrs)
+- values and attributes which are used by multiple features
 
 ```xml
 <!-- GOOD: overridable per-feature -->
 <attr name="appBarColor" format="color"/>
 
 <!-- BAD: declare it in a ':study-screen' feature or :AnkiDroid if there is no feature module --> 
-<attr name="showAnswerButtonBackground" format="color"/> 
+<attr name="showAnswerButtonBackground" format="color"/>
 ```

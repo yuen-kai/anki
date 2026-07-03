@@ -21,7 +21,7 @@ var resizeDone = false;
   image resizing and try again after we know the window has fully
   loaded with a method call initiated from Java (onPageFinished).
 */
-var resizeImages = function () {
+var resizeImages = function() {
     if (navigator.userAgent.indexOf("Chrome") > -1) {
         document.body.className = document.body.className + " chrome";
     } else {
@@ -101,7 +101,7 @@ function reloadPage() {
 
 /* Inform the app of the current 'type in the answer' value */
 function taChange(itag) {
-    //#5944 - percent wasn't encoded, but Mandarin was.
+    // #5944 - percent wasn't encoded, but Mandarin was.
     var encodedVal = encodeURI(itag.value);
     window.location.href = "typechangetext:" + encodedVal;
 }
@@ -118,7 +118,7 @@ function taKey(itag, e) {
     }
 
     if (keycode == 13) {
-        //#5944 - percent wasn't encoded, but Mandarin was.
+        // #5944 - percent wasn't encoded, but Mandarin was.
         var encodedVal = encodeURI(itag.value);
         window.location.href = "typeentertext:" + encodedVal;
         return false;
@@ -127,7 +127,7 @@ function taKey(itag, e) {
     }
 }
 
-window.onload = function () {
+window.onload = function() {
     /* If the WebView loads too early on Android <= 4.3 (which happens
        on the first card or regularly with WebView switching enabled),
        the window dimensions returned to us will be default built-in
@@ -153,7 +153,7 @@ function _runHook(arr) {
 var onUpdateHook = [];
 var onShownHook = [];
 
-var onPageFinished = function () {
+var onPageFinished = function() {
     if (!resizeDone) {
         resizeImages();
         /* Re-anchor to answer after image resize since the point changes */

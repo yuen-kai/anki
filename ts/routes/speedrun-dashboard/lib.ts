@@ -141,18 +141,41 @@ export function driverReasons(reasons: string[]): string[] {
     return reasons.filter((reason) => !reason.toLowerCase().startsWith("coverage"));
 }
 
-// The four-stage mastery ladder, in order. The
-// internal "hierarchy" state renders as "Applying": the learner is applying the
-// concept with the scaffold, and "hierarchy" names the mechanism, not a stage a
-// student would recognize. The blurb is what the learner is doing at that stage.
+// The four-stage mastery ladder, in order. `state` is the engine's internal
+// name (unchanged); `label` is what the learner sees. The mapping is
+// learning->Learn, practicing->Practice, hierarchy->Guided, mastering->Solo:
+// "hierarchy"/"mastering" name the mechanism, not a stage a student recognises.
+// The blurb is what the learner does at that stage (see DESIGN_SPEC section 1).
 export const MASTERY_STAGES = [
-    { state: "learning", label: "Learning", blurb: "Meeting the idea through contrasting cases" },
-    { state: "practicing", label: "Practicing", blurb: "Recalling the idea from a single cue" },
-    { state: "hierarchy", label: "Applying", blurb: "Working problems with the principle scaffold" },
-    { state: "mastering", label: "Mastering", blurb: "Working problems with the scaffold gone" },
+    { state: "learning", label: "Learn", blurb: "First acquisition from two worked problems" },
+    { state: "practicing", label: "Practice", blurb: "Free recall of the description, then self-check" },
+    { state: "hierarchy", label: "Guided", blurb: "Locate it in the hierarchy, then the question" },
+    { state: "mastering", label: "Solo", blurb: "The same question, straight, with no locating step" },
 ] as const;
 
 export const STAGE_COUNT = MASTERY_STAGES.length;
+
+// The stage hues, in ladder order, as CSS custom properties (defined in
+// speedrun-tokens.scss). Kept parallel to MASTERY_STAGES rather than folded into
+// it so that ladder's {state,label,blurb} shape stays stable for its consumers.
+const STAGE_COLORS = [
+    "var(--sr-stage-learn)",
+    "var(--sr-stage-practice)",
+    "var(--sr-stage-guided)",
+    "var(--sr-stage-solo)",
+] as const;
+
+// The colour for an inactive/unfilled stage segment.
+export const STAGE_OFF_COLOR = "var(--sr-stage-off)";
+
+// The stage colour for a 0-based ladder index; the inactive colour for null
+// ("not started") or an out-of-range index. Pairs with stageIndex().
+export function stageColor(index: number | null): string {
+    if (index === null || index < 0 || index >= STAGE_COLORS.length) {
+        return STAGE_OFF_COLOR;
+    }
+    return STAGE_COLORS[index];
+}
 
 export function stageIndex(state: string): number {
     const i = MASTERY_STAGES.findIndex((stage) => stage.state === state);

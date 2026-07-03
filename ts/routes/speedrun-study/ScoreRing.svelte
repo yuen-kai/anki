@@ -7,185 +7,278 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         capitalize,
         displayNumber,
         displayRange,
-        gaugeBounds,
+        driverReasons,
+        formatCoverage,
+        gaugePercent,
         type ScoreEnvelope,
     } from "../speedrun-dashboard/lib";
-    import { ringDash, ringFraction } from "./lib";
 
-    export let name: string;
     export let envelope: ScoreEnvelope;
-    // Whether the score is computed live; drives the abstain wording only.
-    export let live: boolean;
+    // The score's full name (Memory/Performance/Readiness): the accessible label
+    // and the desktop eyebrow.
+    export let name: string;
+    // The compact eyebrow for the phone tile (MEMORY/PERFORM/READY).
+    export let shortName: string;
+    // What the coverage figure measures ("deck", "skills", "exam"): "covers X% of
+    // <noun>".
+    export let coverageNoun: string;
+    // Short mono caption shown while the score is locked (e.g. "No reviews yet").
+    export let lockedCaption: string;
+    // The score's own hue + its lighter likely-range band, as CSS values.
+    export let color: string;
+    export let band: string;
     export let error: string | null = null;
 
-    const R = 52;
-    const SIZE = 128;
+    // A 270° gauge that opens at the bottom, matching the canvas geometry: r=46 in
+    // a 120x120 box, so the visible sweep is three quarters of the circumference.
+    const R = 46;
+    const C = 2 * Math.PI * R;
+    const SWEEP = C * 0.75;
 
-    // The ring only fills when there is a real number. An abstaining or errored
-    // score shows a dashed empty ring and its give-up reason, never a fake fill.
+    const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+    // A dial only draws a fill when there is a real number; otherwise it locks to
+    // a track-only ring and shows what it still needs, never a fake reading.
     $: delivered = !error && !envelope.abstained;
-    $: dash = ringDash(ringFraction(envelope), R);
-    $: unit = envelope.format === "points" ? "" : "%";
-    $: bounds = gaugeBounds(envelope.format);
+    $: fmt = envelope.format;
+    $: unit = fmt === "points" ? "" : "%";
+    // The band runs from the start of the sweep up to the low bound; the brighter
+    // marker caps it, spanning the likely range [low, high].
+    $: lowFrac = clamp01(gaugePercent(envelope.rangeLow, fmt) / 100);
+    $: highFrac = clamp01(gaugePercent(envelope.rangeHigh, fmt) / 100);
+    $: bandLen = lowFrac * SWEEP;
+    $: markerLen = Math.max(0, highFrac - lowFrac) * SWEEP;
+    $: rangeText = `${displayNumber(envelope.rangeLow, fmt)}\u2013${displayNumber(envelope.rangeHigh, fmt)}`;
+    $: rangeUnit = displayRange(envelope.rangeLow, envelope.rangeHigh, fmt);
+    $: coverageText = `Covers ${formatCoverage(envelope.coveragePct)} of ${coverageNoun}`;
+    $: coverageShort = `${formatCoverage(envelope.coveragePct)} ${coverageNoun}`;
+    // At most two evidence lines, so the dial stays scannable.
+    $: reasons = delivered ? driverReasons(envelope.reasons).slice(0, 2) : [];
+    $: lockedReason = lockedReasonFor(error, envelope.abstainReason);
+
+    function lockedReasonFor(err: string | null, abstainReason: string): string {
+        if (err) {
+            return "Couldn't load this score.";
+        }
+        return abstainReason
+            ? capitalize(abstainReason)
+            : "Study to unlock this score.";
+    }
     $: label = delivered
-        ? `${name}: ${displayNumber(envelope.estimate, envelope.format)}${unit}, likely ${displayRange(
-              envelope.rangeLow,
-              envelope.rangeHigh,
-              envelope.format,
-          )}`
-        : `${name}: no read`;
+        ? `${name}: likely ${rangeText}${unit}, ${coverageText.toLowerCase()}`
+        : `${name}: no read yet. ${lockedReason}`;
 </script>
 
-<div class="ring" class:off={!delivered}>
-    <div class="dial" role="img" aria-label={label}>
-        <svg viewBox="0 0 {SIZE} {SIZE}" aria-hidden="true">
-            <circle
-                class="track"
-                cx={SIZE / 2}
-                cy={SIZE / 2}
-                r={R}
-                stroke-dasharray={delivered ? "none" : "2 7"}
-            />
-            {#if delivered}
+<section
+    class="card"
+    class:locked={!delivered}
+    style="--ring:{color};--band:{band}"
+    role="img"
+    aria-label={label}
+>
+    <!-- Desktop: the full gauge. -->
+    <div class="dial-view">
+        <div class="eyebrow">{name}</div>
+        <div class="dial">
+            <svg width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
                 <circle
-                    class="value"
-                    cx={SIZE / 2}
-                    cy={SIZE / 2}
+                    class="track"
+                    cx="60"
+                    cy="60"
                     r={R}
-                    stroke-dasharray={dash.circumference}
-                    stroke-dashoffset={dash.offset}
-                    transform="rotate(-90 {SIZE / 2} {SIZE / 2})"
+                    stroke-dasharray="{SWEEP} {C}"
+                    transform="rotate(135 60 60)"
                 />
-            {/if}
-        </svg>
-        <div class="readout">
-            {#if delivered}
-                <span class="num">
-                    {displayNumber(envelope.estimate, envelope.format)}
-                    <span class="unit">{unit}</span>
-                </span>
-                <span class="range">
-                    {displayRange(
-                        envelope.rangeLow,
-                        envelope.rangeHigh,
-                        envelope.format,
-                    )}
-                </span>
-            {:else}
-                <span class="num empty">&mdash;</span>
-                <span class="range">
-                    {envelope.format === "points" ? bounds.join("\u2013") : "no read"}
-                </span>
-            {/if}
+                {#if delivered}
+                    <circle
+                        class="band"
+                        cx="60"
+                        cy="60"
+                        r={R}
+                        stroke-dasharray="{bandLen} {C}"
+                        transform="rotate(135 60 60)"
+                    />
+                    <circle
+                        class="marker"
+                        cx="60"
+                        cy="60"
+                        r={R}
+                        stroke-dasharray="{markerLen} {C}"
+                        stroke-dashoffset={-bandLen}
+                        transform="rotate(135 60 60)"
+                    />
+                {/if}
+            </svg>
+            <div class="center">
+                {#if delivered}
+                    <div class="value">
+                        {rangeText}
+                        <span class="unit">{unit}</span>
+                    </div>
+                    <div class="cap">Likely range</div>
+                {:else}
+                    <div class="value empty">&mdash;</div>
+                    <div class="cap">Awaiting data</div>
+                {/if}
+            </div>
         </div>
+        <div class="cover">{delivered ? coverageText : lockedCaption}</div>
+        {#if !delivered}
+            <div class="notes"><p class="note">{lockedReason}</p></div>
+        {:else if reasons.length}
+            <div class="notes">
+                {#each reasons as reason}
+                    <p class="note">{reason}</p>
+                {/each}
+            </div>
+        {/if}
     </div>
 
-    <p class="name">{name}</p>
-    {#if delivered}
-        <p class="note">likely range</p>
-    {:else if error}
-        <p class="note">Couldn't load this score.</p>
-    {:else}
-        <p class="note">
-            {live ? "Not enough data yet." : "Not available yet."}
-            {#if envelope.abstainReason}{capitalize(envelope.abstainReason)}{/if}
-        </p>
-    {/if}
-</div>
+    <!-- Phone: a compact tile, no ring. -->
+    <div class="tile">
+        <div class="tile-name">{shortName}</div>
+        <div class="tile-val" class:empty={!delivered}>
+            {delivered ? rangeUnit : "\u2014"}
+        </div>
+        <div class="tile-sub">{delivered ? coverageShort : "no data"}</div>
+    </div>
+</section>
 
 <style lang="scss">
-    .ring {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
+    @use "$lib/sass/speedrun-synapse" as syn;
+
+    .card {
         min-width: 0;
-        padding: 0 0.5rem;
+        padding: 20px;
+        @include syn.card;
     }
 
+    .eyebrow {
+        @include syn.eyebrow;
+    }
+
+    // ── Desktop gauge ────────────────────────────────────────────────────────
     .dial {
-        position: relative;
-        width: 128px;
-        height: 128px;
+        @include syn.dial;
     }
     svg {
-        width: 100%;
-        height: 100%;
         display: block;
     }
-    .track {
+    circle {
         fill: none;
-        stroke: var(--sr-line);
-        stroke-width: 9;
-    }
-    .off .track {
-        stroke: var(--sr-line-2);
-        stroke-width: 6;
+        stroke-width: 10;
         stroke-linecap: round;
+    }
+    .track {
+        stroke: var(--sr-track);
+    }
+    .band {
+        stroke: var(--band);
+    }
+    .marker {
+        stroke: var(--ring);
+        transition: stroke-dasharray 0.5s ease;
+    }
+
+    .center {
+        @include syn.dial-center;
     }
     .value {
-        fill: none;
-        stroke: var(--sr-signal);
-        stroke-width: 9;
-        stroke-linecap: round;
-        transition: stroke-dashoffset 0.5s ease;
-    }
-
-    .readout {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 0.15rem;
-    }
-    .num {
-        font-size: 2rem;
-        font-weight: 720;
-        line-height: 0.95;
-        letter-spacing: -0.03em;
+        @include syn.dial-value;
         font-variant-numeric: tabular-nums;
     }
-    .num .unit {
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: var(--sr-ink-2);
-        margin-left: 0.05em;
-    }
-    .num.empty {
-        color: var(--sr-ink-3);
-    }
-    .range {
-        font-family: var(--sr-mono);
-        font-size: 10px;
-        letter-spacing: 0.02em;
-        color: var(--sr-ink-3);
-        font-variant-numeric: tabular-nums;
-    }
-
-    .name {
-        margin: 0.75rem 0 0;
-        font-family: var(--sr-mono);
+    .value .unit {
         font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.16em;
+        font-weight: 700;
+        letter-spacing: 0;
+        color: var(--sr-ink-3);
+    }
+    .value.empty {
+        font-size: 24px;
+        color: var(--sr-faint);
+    }
+    .cap {
+        @include syn.dial-caption;
         text-transform: uppercase;
-        color: var(--sr-ink);
+    }
+    .locked .cap {
+        color: var(--sr-faint);
+    }
+
+    .cover {
+        margin-top: 2px;
+        font-family: var(--sr-mono);
+        font-weight: 500;
+        font-size: 10.5px;
+        text-align: center;
+        text-transform: uppercase;
+        color: var(--sr-ink-slate);
+    }
+
+    .notes {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--sr-line-2);
     }
     .note {
-        margin: 0.3rem 0 0;
-        max-width: 22ch;
-        font-size: 0.78rem;
-        line-height: 1.4;
+        margin: 0;
+        font-size: 11px;
+        line-height: 1.55;
         color: var(--sr-ink-2);
     }
-    .off .note {
+    .note + .note {
+        margin-top: 4px;
+    }
+
+    // ── Phone tile ───────────────────────────────────────────────────────────
+    .tile {
+        display: none;
+        padding: 1px 0;
+        text-align: center;
+    }
+    .tile-name {
+        font-family: var(--sr-mono);
+        font-weight: 600;
+        font-size: 8px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
         color: var(--sr-ink-3);
+    }
+    .tile-val {
+        margin-top: 5px;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--sr-ink);
+        font-variant-numeric: tabular-nums;
+    }
+    .tile-val.empty {
+        font-size: 17px;
+        color: var(--sr-faint);
+    }
+    .tile-sub {
+        margin-top: 3px;
+        font-family: var(--sr-mono);
+        font-size: 8px;
+        color: var(--sr-faint);
+    }
+
+    // Below the phone breakpoint the ring gives way to the compact tile.
+    @media (max-width: 40rem) {
+        .card {
+            padding: 11px 8px;
+            border-radius: var(--sr-radius-node);
+            box-shadow: var(--sr-shadow-phone);
+        }
+        .dial-view {
+            display: none;
+        }
+        .tile {
+            display: block;
+        }
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .value {
+        .marker {
             transition: none;
         }
     }

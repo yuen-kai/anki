@@ -16,14 +16,14 @@ import fs from "fs";
 import path from "path";
 import readline from "readline";
 import {
+    I18N_FILES,
     LANGUAGES,
     LOCALIZED_REGIONS,
-    TEMP_DIR,
-    I18N_FILES,
-    XML_LICENSE_HEADER,
-    RES_VALUES_LANG_DIR,
-    OLD_VER_MARKET_DESC_FILE,
     MARKET_DESC_LANG,
+    OLD_VER_MARKET_DESC_FILE,
+    RES_VALUES_LANG_DIR,
+    TEMP_DIR,
+    XML_LICENSE_HEADER,
 } from "./constants";
 
 let anyError = false;
@@ -64,8 +64,8 @@ async function replacechars(fileName: string): Promise<boolean> {
         fs.appendFileSync(newfilename, line + "\n");
     }
 
-    fs.rename(newfilename, fileName, function (err) {
-        if (err) throw err;
+    fs.rename(newfilename, fileName, function(err) {
+        if (err) { throw err; }
         process.stdout.write(".");
     });
 
@@ -79,8 +79,8 @@ async function replacechars(fileName: string): Promise<boolean> {
  * @returns extension string
  */
 function fileExtFor(f: string): string {
-    if (f == "14-marketdescription") return ".txt";
-    else return ".xml";
+    if (f == "14-marketdescription") { return ".txt"; }
+    else { return ".xml"; }
 }
 
 /**

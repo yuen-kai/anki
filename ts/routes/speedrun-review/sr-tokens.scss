@@ -15,3 +15,18 @@
 @mixin sr-tokens {
     @include shared.tokens;
 }
+
+// The mono step eyebrow the session card uses to head each disclosed step
+// (STEP ① · …). Small, letter-spaced, uppercase. Neutral by default; the amber
+// (Guided locate/pick) and green (concept detail / checked) steps set
+// --step-color to recolour it — matching the canvas which tints the step label
+// by what the step does.
+@mixin step {
+    margin: 0;
+    font-family: var(--sr-mono);
+    font-weight: 600;
+    font-size: 8.5px;
+    letter-spacing: var(--sr-track-label);
+    text-transform: uppercase;
+    color: var(--step-color, var(--sr-faint));
+}

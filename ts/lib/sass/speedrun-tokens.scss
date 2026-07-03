@@ -1,42 +1,265 @@
 /* Copyright: Ankitects Pty Ltd and contributors
  * License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
 
-// Single source of truth for the Speedrun deck screens (decks home + hierarchy
-// editor and its parts). Include on each screen's root element; child components
-// inherit the custom properties through the cascade. The marigold --sr-signal is
-// the ONLY accent; everything else is ink and line grays.
+// Single source of truth for the Speedrun ("Synapse") screens. Include on each
+// screen's root element; child components inherit the custom properties through
+// the cascade. Coral --sr-signal is the one brand accent; the stage/score
+// tokens carry the fixed per-stage (Learn/Practice/Guided/Solo) and per-score
+// (Memory/Performance/Readiness) hues that must stay consistent everywhere.
+//
+// The IBM Plex woff2 below are vendored under ./fonts (OFL, see fonts/LICENSE)
+// and bundled by Vite as hashed immutable assets, so the fonts load offline
+// with no CDN. Only the latin subset is shipped; anything outside it falls back
+// through the system stack in --sr-sans / --sr-mono.
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("$lib/sass/fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("$lib/sass/fonts/ibm-plex-sans-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("$lib/sass/fonts/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("$lib/sass/fonts/ibm-plex-sans-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("$lib/sass/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("$lib/sass/fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("$lib/sass/fonts/ibm-plex-mono-latin-600-normal.woff2") format("woff2");
+}
+
+// Every value below is pulled verbatim from the design canvas
+// (ProjectDocs/MCAT Study App.html; decoded reference out/synapse_extraction.md).
+// The canvas is light; the night-mode block at the end is a hand-approximated
+// dark counterpart. Custom-property KEYS are the stable contract — screens and
+// the shared primitives in speedrun-synapse.scss reference these, never raw hex.
 @mixin tokens {
-    --sr-paper: #e7eaec;
-    --sr-panel: #fcfcfc;
-    --sr-panel-2: #f0f2f3;
-    --sr-ink: #181b20;
-    --sr-ink-2: #565c64;
-    --sr-ink-3: #878d95;
-    --sr-line: #d5d9dc;
-    --sr-line-2: #c1c6cb;
-    --sr-signal: #df8f0a;
-    --sr-signal-ink: #3a2a05;
-    --sr-signal-weak: #f4e6cb;
-    --sr-signal-line: #e6c079;
+    // Surfaces, lightest paper behind cards down to solid ink tiles.
+    --sr-paper: #e9edf2; // app background
+    --sr-paper-2: #eef2f6; // cooler paper behind session cards / phone session
+    --sr-panel: #f5f7fa; // primary card surface
+    --sr-panel-2: #edf0f5; // nested group / subject surface
+    --sr-inset: #eef1f6; // inset chips, caret boxes, pending nodes
+    --sr-grading: #f1f4f8; // grading section fill (rides below graded cards)
+    --sr-seam: #eaeef3; // progressive-disclosure divider fill
+    --sr-reveal: #fbfcfe; // near-white disclosed section
+    --sr-tile: #f9fafc; // near-white builder rows / resting answer tiles
+    --sr-tile-2: #f7f9fc; // near-white phone problem tiles
+    --sr-white: #fff; // inputs, answer tiles, tree nodes
+    --sr-ghost: #e2e7ee; // secondary/ghost + options button fill
+    --sr-track: #dde3eb; // progress-bar track, disabled fill, caret boxes
+    --sr-bezel: #1c2530; // phone frame bezel (phone layouts only)
+
+    // Ink ladder, darkest to faint. --sr-ink-slate sits between ink and ink-2:
+    // the cool slate used on ghost-button text, avatars and dial captions.
+    --sr-ink: #26303c;
+    --sr-ink-slate: #4c5a6b;
+    --sr-ink-2: #5c6879;
+    --sr-ink-3: #7a8698;
+    --sr-faint: #94a0b0;
+
+    // Hairlines: translucent header edge, solid tile edge, stronger control edge,
+    // tree connector, and the two dashed edges (create affordances / seams).
+    --sr-line: #e5eaf1; // tile / answer-option border
+    --sr-line-2: rgba(38, 48, 60, 0.08); // header + section dividers
+    --sr-line-strong: #dde3eb; // input / root-node / indent-guide border
+    --sr-line-connector: #cfd6e0; // concept-tree connectors
+    --sr-line-dashed: #c3ccd8; // dashed "+ New / Add" affordances, radio rings
+    --sr-line-seam: #d3dbe4; // dashed disclosure-seam rule
+
+    // The one accent: coral. Brand, primary actions and the Memory score.
+    // -bright/-line feed the logo + completion gradients; -weak is the tinted
+    // fill (Again grade, selected chip, wrong pick); -ink/-deep are its texts.
+    --sr-signal: #ee5d6c;
+    --sr-signal-line: #f4808c; // completion-bar gradient end / light coral
+    --sr-signal-bright: #ff8a94; // logo radial-gradient highlight
+    --sr-signal-band: #f5b7be; // Memory dial likely-range band
+    --sr-signal-weak: #fbe3e6; // tinted coral fill
+    --sr-signal-ink: #c23d4c; // coral text on tinted fill (selected chip)
+    --sr-signal-deep: #93353c; // deep coral text (Again, wrong pick, bottleneck)
+
+    // Mastery stages (fixed ladder). Each has a base hue, a soft tinted fill
+    // (stage tags, grade buttons) and a deep readable ink for text on that fill.
+    // --sr-stage-off is the inactive glyph segment; --sr-track is the bar track.
+    --sr-stage-learn: #7a8698;
+    --sr-stage-learn-soft: #e8ebf0;
+    --sr-stage-learn-deep: #5c6879;
+    --sr-stage-practice: #4c7fd0;
+    --sr-stage-practice-soft: #e3ebf7;
+    --sr-stage-practice-deep: #3a67ae;
+    --sr-stage-guided: #e4a33d;
+    --sr-stage-guided-soft: #f6ecda;
+    --sr-stage-guided-deep: #a06e1c;
+    --sr-stage-solo: #3fa976;
+    --sr-stage-solo-soft: #ddf0e6;
+    --sr-stage-solo-deep: #2c7d55;
+    --sr-stage-off: #c8d4e4;
+
+    // Correct-answer surface (Solo green tint) + wrong-pick correction surface
+    // (Guided amber tint), used by MCQ result rows and self-check panels.
+    --sr-correct-bg: #f2f8f4;
+    --sr-correct-line: #d4e9dd;
+    --sr-correct-ink: #3a5a49;
+    --sr-warn-bg: #fff5e6;
+    --sr-warn-line: #f0d9a6;
+
+    // The three independent scores + their light likely-range dial bands. Memory
+    // shares coral, Performance shares practice-blue, Readiness shares solo-green.
+    // Readiness never shows a band in the canvas (it starts empty); its band is
+    // approximated to sit at the same lightness as the other two.
+    --sr-score-memory: #ee5d6c;
+    --sr-score-memory-band: #f5b7be;
+    --sr-score-performance: #4c7fd0;
+    --sr-score-performance-band: #b6cbe8;
+    --sr-score-readiness: #3fa976;
+    --sr-score-readiness-band: #a9dcc3; // approximated (never shown in canvas)
+
+    // Gradients: logo dot, completion bar, and the level-up medal.
+    --sr-grad-logo: radial-gradient(circle at 35% 35%, var(--sr-signal-bright), var(--sr-signal));
+    --sr-grad-signal: linear-gradient(90deg, var(--sr-signal), var(--sr-signal-line));
+    --sr-grad-medal: radial-gradient(circle at 50% 35%, #f7d9a0, var(--sr-stage-guided));
+
+    // Form. Radii climb tile -> card; --sr-radius-card/-control/-pill are the
+    // originals, the rest fill in the exact steps the canvas uses.
+    --sr-radius-card: 18px;
+    --sr-radius-card-sm: 16px;
+    --sr-radius-node: 14px;
+    --sr-radius-group: 12px;
+    --sr-radius-tile: 11px;
+    --sr-radius-control: 10px;
+    --sr-radius-sm: 9px;
+    --sr-radius-chip: 8px;
+    --sr-radius-pill: 20px;
+
+    // Shadows: the dual-layer card lift, a smaller card, the light phone-card
+    // lift, the elevated "pop" (level-up / floating card), the tree-root node,
+    // and the three coral-button glows (small / medium / large).
+    --sr-shadow-card: 0 1px 2px rgba(31, 42, 55, 0.05), 0 10px 28px rgba(31, 42, 55, 0.08);
+    --sr-shadow-card-sm: 0 1px 2px rgba(31, 42, 55, 0.05), 0 8px 22px rgba(31, 42, 55, 0.07);
+    --sr-shadow-phone: 0 6px 16px rgba(31, 42, 55, 0.06);
+    --sr-shadow-pop: 0 12px 34px rgba(31, 42, 55, 0.12);
+    --sr-shadow-node: 0 4px 16px rgba(38, 48, 60, 0.1);
+    --sr-shadow-signal-sm: 0 4px 14px rgba(238, 93, 108, 0.35);
+    --sr-shadow-signal: 0 6px 18px rgba(238, 93, 108, 0.4);
+    --sr-shadow-signal-lg: 0 6px 18px rgba(238, 93, 108, 0.45);
+
+    // Type. IBM Plex Sans for all UI/body, IBM Plex Mono for the uppercase,
+    // letter-spaced labels / counts / tags. Both are vendored (see @font-face
+    // above); the stacks fall back through the system if the woff2 fail to load.
     --sr-sans:
-        "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        Roboto, "Helvetica Neue", Arial, sans-serif;
+        "IBM Plex Sans", "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --sr-mono:
-        ui-monospace, "SF Mono", "SFMono-Regular", Menlo, "Cascadia Code",
-        "Roboto Mono", Consolas, monospace;
+        "IBM Plex Mono", ui-monospace, "SF Mono", "SFMono-Regular", Menlo,
+        "Cascadia Code", "Roboto Mono", Consolas, monospace;
+    // Tracking presets for mono labels (small caps rhythm) and tight headings.
+    --sr-track-label: 0.14em; // section eyebrows / dial labels
+    --sr-track-tag: 0.1em; // stage tags / inline meta
+    --sr-track-hero: 0.28em; // celebration eyebrows (STAGE UP)
+    --sr-tighten: -0.02em; // large display headings
 
     :global(.night-mode) & {
-        --sr-paper: #131519;
-        --sr-panel: #1b1e22;
-        --sr-panel-2: #15171b;
-        --sr-ink: #f0eee9;
-        --sr-ink-2: #a6abb2;
-        --sr-ink-3: #767c85;
-        --sr-line: #2a2e34;
-        --sr-line-2: #3a3f46;
-        --sr-signal: #f2a93b;
-        --sr-signal-ink: #1b1405;
-        --sr-signal-weak: #2c2314;
-        --sr-signal-line: #5a4620;
+        --sr-paper: #10151c;
+        --sr-paper-2: #131922;
+        --sr-panel: #1a212b;
+        --sr-panel-2: #141a22;
+        --sr-inset: #171e27;
+        --sr-grading: #151c25;
+        --sr-seam: #131a23;
+        --sr-reveal: #1c242f;
+        --sr-tile: #1c242f;
+        --sr-tile-2: #1a212b;
+        --sr-white: #1f2732;
+        --sr-ghost: #2a333f;
+        --sr-track: #2b3543;
+        --sr-bezel: #05080c;
+
+        --sr-ink: #e9edf3;
+        --sr-ink-slate: #c2ccd8;
+        --sr-ink-2: #aab4c2;
+        --sr-ink-3: #7c8795;
+        --sr-faint: #5c6675;
+
+        --sr-line: #333d49;
+        --sr-line-2: rgba(255, 255, 255, 0.09);
+        --sr-line-strong: #333d49;
+        --sr-line-connector: #3a4551;
+        --sr-line-dashed: #3f4a58;
+        --sr-line-seam: #3a4551;
+
+        --sr-signal: #f26e7b;
+        --sr-signal-line: #f79aa3;
+        --sr-signal-bright: #ff9ba4;
+        --sr-signal-band: #6d3138;
+        --sr-signal-weak: #37222a;
+        --sr-signal-ink: #ffb3ba;
+        --sr-signal-deep: #ffd6da;
+
+        --sr-stage-learn: #8b97a8;
+        --sr-stage-learn-soft: #262f3b;
+        --sr-stage-learn-deep: #aab4c2;
+        --sr-stage-practice: #6a97e0;
+        --sr-stage-practice-soft: #1e2c40;
+        --sr-stage-practice-deep: #9dbcec;
+        --sr-stage-guided: #ecb254;
+        --sr-stage-guided-soft: #322717;
+        --sr-stage-guided-deep: #e9be7c;
+        --sr-stage-solo: #52bd8a;
+        --sr-stage-solo-soft: #16241c;
+        --sr-stage-solo-deep: #7fd3a9;
+        --sr-stage-off: #33404f;
+
+        --sr-correct-bg: #16241c;
+        --sr-correct-line: #274434;
+        --sr-correct-ink: #8fd0ac;
+        --sr-warn-bg: #2b2416;
+        --sr-warn-line: #4a3d1f;
+
+        --sr-score-memory: #f26e7b;
+        --sr-score-memory-band: #6d3138;
+        --sr-score-performance: #6a97e0;
+        --sr-score-performance-band: #2a3d57;
+        --sr-score-readiness: #52bd8a;
+        --sr-score-readiness-band: #274434;
+
+        --sr-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 30px rgba(0, 0, 0, 0.5);
+        --sr-shadow-card-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 22px rgba(0, 0, 0, 0.45);
+        --sr-shadow-phone: 0 6px 16px rgba(0, 0, 0, 0.4);
+        --sr-shadow-pop: 0 12px 34px rgba(0, 0, 0, 0.55);
+        --sr-shadow-node: 0 4px 16px rgba(0, 0, 0, 0.5);
     }
 }

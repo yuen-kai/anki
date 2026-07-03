@@ -113,9 +113,9 @@ with translations set to the language currently configured by the user.
 The API `rslib-bridge` exposes is defined in `rsdroid`'s NativeMethods.kt:
 
 ```kotlin
-    external fun runMethodRaw(backendPointer: Long, service: Int, method: Int, args: ByteArray): Array<ByteArray?>?
-    external fun openBackend(data: ByteArray): Array<ByteArray?>?
-    external fun closeBackend(backendPointer: Long)
+external fun runMethodRaw(backendPointer: Long, service: Int, method: Int, args: ByteArray): Array<ByteArray?>?
+external fun openBackend(data: ByteArray): Array<ByteArray?>?
+external fun closeBackend(backendPointer: Long)
 ```
 
 When the backend returns data, it needs to be able to return either the data,
@@ -137,12 +137,12 @@ such as requesting a list of decks from the backend instead of directly trying
 to query them via SQL, eg:
 
 ```kotlin
-    override fun all_names_and_ids(skip_empty_default: Boolean, include_filtered: Boolean): List<DeckNameId> {
-        return backend.getDeckNames(skip_empty_default, include_filtered).map {
-                entry ->
-            DeckNameId(entry.name, entry.id)
-        }
+override fun all_names_and_ids(skip_empty_default: Boolean, include_filtered: Boolean): List<DeckNameId> {
+    return backend.getDeckNames(skip_empty_default, include_filtered).map {
+            entry ->
+        DeckNameId(entry.name, entry.id)
     }
+}
 ```
 
 ## Usage in unit tests

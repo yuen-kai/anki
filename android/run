@@ -1,0 +1,30 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Build, install and launch AnkiDroid (debug) on a device or emulator.
+# If nothing is connected, boots the first available emulator (AVD).
+
+set -e
+
+sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+adb="$sdk/platform-tools/adb"
+emulator="$sdk/emulator/emulator"
+app_id="com.ichi2.anki.debug"
+
+if ! "$adb" devices | sed 1d | grep -qw device; then
+    avd="$("$emulator" -list-avds | head -n1)"
+    [ -n "$avd" ] || { echo "No device connected and no emulator (AVD) found." >&2; exit 1; }
+    echo "Starting emulator: $avd"
+    "$emulator" -avd "$avd" >/dev/null 2>&1 &
+fi
+
+echo "Waiting for device to finish booting..."
+"$adb" wait-for-device
+while [ "$("$adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; do
+    sleep 1
+done
+
+cd "$(dirname "$0")/app"
+./gradlew installPlayDebug
+"$adb" shell monkey -p "$app_id" -c android.intent.category.LAUNCHER 1 >/dev/null
+echo "Launched $app_id"

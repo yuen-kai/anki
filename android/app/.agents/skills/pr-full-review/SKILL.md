@@ -37,7 +37,7 @@ context.
 
 ## Before reviewing
 
-Read the existing PR comments and review threads first. Don't repeat feedback that's already been 
+Read the existing PR comments and review threads first. Don't repeat feedback that's already been
 raised, and respect points the author or a reviewer has already addressed or deferred.
 
 ```bash
@@ -46,18 +46,18 @@ gh api repos/ankidroid/Anki-Android/pulls/<number>/comments  # inline code-revie
 ```
 
 **Unaddressed maintainer requests are blocking.** Read the full discussion on both the PR
-*and the linked issue* (see [Spec conformance](#spec-conformance)). If a maintainer asked for
+_and the linked issue_ (see [Spec conformance](#spec-conformance)). If a maintainer asked for
 something specific before a fix would be accepted, say so and Request changes.
 
 ## Spec conformance
 
-Report whether the PR does what it set out to do, as **its own section**. 
-Well-written code which implements the wrong thing fails here, and this failure must be 
+Report whether the PR does what it set out to do, as **its own section**.
+Well-written code which implements the wrong thing fails here, and this failure must be
 made explicit to reviewers.
 
 Determine the spec, in order:
 
-1. A linked issue - `Fixes #`, `Closes #`, `Resolves #`, or `Part of #` in the body or commits 
+1. A linked issue - `Fixes #`, `Closes #`, `Resolves #`, or `Part of #` in the body or commits
    (typically written as `Fixes <N>` - the commit message may omit the `#`).
 2. Also include the PR's own **Purpose / Description**.
 
@@ -75,11 +75,11 @@ might. Verify the author's fix:
 
 - **Trace the real code path** that triggers the bug (load the call sites and any resource/theme
   values they read), and confirm the claimed trigger can actually occur. If your trace shows it
-*can't occur the way the PR describes, then the root cause is not understood. Say so explicitly.
-- **A fix applied without an understood, demonstrated trigger is tech debt:**. Treat "unknown 
-  root cause" as a blocking finding and ask for the diagnostics / reproduction needed to establish 
-  it first unless it is explicitly acknowledged as not being understood. 
-    - State that it risks masking the real bug and the fallback behavior can't be validated against
+  *can't occur the way the PR describes, then the root cause is not understood. Say so explicitly.
+- **A fix applied without an understood, demonstrated trigger is tech debt:**. Treat "unknown
+  root cause" as a blocking finding and ask for the diagnostics / reproduction needed to establish
+  it first unless it is explicitly acknowledged as not being understood.
+  - State that it risks masking the real bug and the fallback behavior can't be validated against
     a scenario nobody has captured.
 - Confirm the bug-fix commit actually evidences a reproduction.
 

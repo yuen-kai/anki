@@ -3,126 +3,307 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    import { MASTERY_STAGES } from "../speedrun-dashboard/lib";
+    import { MASTERY_STAGES, stageColor } from "../speedrun-dashboard/lib";
     import ConceptTreeNode from "./ConceptTreeNode.svelte";
-    import type { ConceptTreeNode as TreeNode } from "./lib";
+    import {
+        type ConceptTreeNode as TreeNode,
+        flattenLeaves,
+        rollupColor,
+    } from "./lib";
 
     export let tree: TreeNode | null;
     export let error: string | null = null;
+
+    $: groups = tree ? tree.children : [];
+    const pct = (fraction: number): number => Math.round(fraction * 100);
 </script>
 
-{#if error}
-    <div class="state">
-        <p class="headline">Couldn't load the concept tree</p>
-        <p class="detail">{error}</p>
-    </div>
-{:else if !tree}
-    <div class="state">
-        <p class="headline">No topics yet</p>
-        <p class="detail">
-            Add a hierarchy to this deck, or study it to start tracking its topics.
-        </p>
-    </div>
-{:else}
-    <div class="tree-scroll">
-        <ul class="sr-tree" aria-label="Concept tree">
-            <ConceptTreeNode node={tree} />
+<div class="head">
+    <h2 class="eyebrow">Concept tree</h2>
+    {#if tree && !error}
+        <ul class="legend" aria-hidden="true">
+            {#each MASTERY_STAGES as stage, i (stage.state)}
+                <li>
+                    <span class="sw" style="background:{stageColor(i)}"></span>
+                    {stage.label}
+                </li>
+            {/each}
         </ul>
+    {/if}
+</div>
+
+{#if error}
+    <p class="state">Couldn't load the concept tree. {error}</p>
+{:else if tree}
+    <!-- Desktop: deck → group columns → topic rows. -->
+    <div class="desktop">
+        <div class="root">
+            <span class="root-name">{tree.title}</span>
+            <span class="root-bar">
+                <span class="root-fill" style="width:{pct(tree.fraction)}%"></span>
+            </span>
+            <span class="root-pct">{pct(tree.fraction)}%</span>
+        </div>
+
+        {#if groups.length}
+            <div class="drop-main"></div>
+            <div class="groups">
+                {#each groups as group (group.id)}
+                    <div class="group">
+                        <div class="group-head">
+                            <div class="group-top">
+                                <span class="group-name">{group.title}</span>
+                                <span class="group-pct">{pct(group.fraction)}%</span>
+                            </div>
+                            <span class="group-bar">
+                                <span
+                                    class="group-fill"
+                                    style="width:{pct(
+                                        group.fraction,
+                                    )}%;background:{rollupColor(group.fraction)}"
+                                ></span>
+                            </span>
+                        </div>
+                        {#each flattenLeaves(group) as leaf, i (leaf.id)}
+                            <div class="conn" class:first={i === 0}></div>
+                            <ConceptTreeNode node={leaf} />
+                        {/each}
+                    </div>
+                {/each}
+            </div>
+        {/if}
     </div>
 
-    <ul class="legend">
-        {#each MASTERY_STAGES as stage, i}
-            <li>
-                <span class="dot s{i}"></span>
-                {stage.label}
-            </li>
+    <!-- Phone: one row per group, no leaves. -->
+    <div class="phone">
+        {#each groups as group (group.id)}
+            <div class="grow">
+                <span class="grow-name">{group.title}</span>
+                <span class="grow-bar">
+                    <span
+                        class="grow-fill"
+                        style="width:{pct(group.fraction)}%;background:{rollupColor(
+                            group.fraction,
+                        )}"
+                    ></span>
+                </span>
+                <span class="grow-pct">{pct(group.fraction)}%</span>
+            </div>
         {/each}
-        <li>
-            <span class="dot cold"></span>
-            Not started
-        </li>
-    </ul>
+    </div>
 {/if}
 
 <style lang="scss">
-    // Centre the whole tree in the page column; it scrolls horizontally only if a
-    // wide tree overflows on a small window (it unwraps to a list under 40rem).
-    .tree-scroll {
-        overflow-x: auto;
-        padding: 0.5rem 0 0.25rem;
-    }
-    .sr-tree {
-        display: flex;
-        justify-content: center;
-        min-width: min-content;
-        margin: 0 auto;
-        padding: 0;
-        list-style: none;
-    }
+    @use "$lib/sass/speedrun-synapse" as syn;
 
+    // Column geometry the connector bus is drawn against: the bus spans from the
+    // first column's centre to the last's, so it insets half a column each side.
+    $col: 320px;
+    $col-half: 160px;
+
+    .head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 20px;
+    }
+    .eyebrow {
+        margin: 0;
+        @include syn.eyebrow;
+    }
     .legend {
         display: flex;
         flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.4rem 1.1rem;
-        margin: 1.4rem 0 0;
+        gap: 14px;
+        margin: 0;
         padding: 0;
         list-style: none;
-    }
-    .legend li {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
         font-family: var(--sr-mono);
-        font-size: 10px;
-        letter-spacing: 0.08em;
+        font-weight: 500;
+        font-size: 9.5px;
         text-transform: uppercase;
         color: var(--sr-ink-3);
     }
-    .dot {
-        width: 9px;
-        height: 6px;
-        border-radius: 1px;
-        background: var(--sr-line-2);
+    .legend li {
+        display: inline-flex;
+        align-items: center;
     }
-    .dot.s1 {
-        background: var(--sr-ink-3);
-    }
-    .dot.s2 {
-        background: var(--sr-ink-2);
-    }
-    .dot.s3 {
-        background: var(--sr-signal);
-    }
-    .dot.cold {
-        background: transparent;
-        border: 1px dashed var(--sr-line-2);
+    .sw {
+        width: 8px;
+        height: 8px;
+        margin-right: 4px;
+        border-radius: 3px;
     }
 
     .state {
-        text-align: center;
-        padding: 1.5rem 0;
-    }
-    .state .headline {
-        margin: 0 0 0.4rem;
-        font-size: 1rem;
-        font-weight: 600;
-    }
-    .state .detail {
-        margin: 0 auto;
-        max-width: 42ch;
+        margin: 0;
         font-size: 0.9rem;
         line-height: 1.5;
         color: var(--sr-ink-2);
     }
 
-    @media (max-width: 48rem) {
-        .sr-tree {
-            justify-content: flex-start;
-            min-width: 0;
+    // ── Desktop tree ─────────────────────────────────────────────────────────
+    .desktop {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        overflow-x: auto;
+    }
+
+    .root {
+        @include syn.tree-root;
+    }
+    .root-name {
+        font-weight: 700;
+        font-size: 15px;
+    }
+    .root-bar {
+        display: inline-block;
+        width: 130px;
+        height: 7px;
+        border-radius: 5px;
+        background: var(--sr-track);
+        overflow: hidden;
+    }
+    .root-fill {
+        display: block;
+        height: 100%;
+        background: var(--sr-signal);
+    }
+    .root-pct {
+        font-family: var(--sr-mono);
+        font-weight: 600;
+        font-size: 12px;
+        color: var(--sr-signal);
+    }
+
+    // Two 22px runs sit between the deck node and the group headers: the drop from
+    // the deck, then the horizontal bus with a drop into each column.
+    .drop-main {
+        width: 2px;
+        height: 22px;
+        background: var(--sr-line-connector);
+    }
+    .groups {
+        position: relative;
+        display: flex;
+        gap: 40px;
+    }
+    .groups::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: $col-half;
+        right: $col-half;
+        height: 2px;
+        background: var(--sr-line-connector);
+    }
+
+    .group {
+        position: relative;
+        width: $col;
+        padding-top: 22px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .group::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: calc(50% - 1px);
+        width: 2px;
+        height: 22px;
+        background: var(--sr-line-connector);
+    }
+
+    .group-head {
+        width: 100%;
+        box-sizing: border-box;
+        @include syn.tree-group;
+    }
+    .group-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+    }
+    .group-name {
+        font-weight: 700;
+        font-size: 13.5px;
+    }
+    .group-pct {
+        font-family: var(--sr-mono);
+        font-weight: 600;
+        font-size: 11px;
+        color: var(--sr-ink-3);
+    }
+    .group-bar {
+        display: block;
+        height: 5px;
+        margin-top: 8px;
+        border-radius: 3px;
+        background: var(--sr-track);
+        overflow: hidden;
+    }
+    .group-fill {
+        display: block;
+        height: 100%;
+        border-radius: 3px;
+    }
+
+    .conn {
+        width: 2px;
+        height: 12px;
+        background: var(--sr-line-connector);
+    }
+    .conn.first {
+        height: 16px;
+    }
+
+    // ── Phone tree ───────────────────────────────────────────────────────────
+    .phone {
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .grow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+    }
+    .grow-name {
+        flex: 1;
+        min-width: 0;
+        font-size: 12.5px;
+        font-weight: 600;
+    }
+    .grow-bar {
+        display: inline-block;
+        width: 70px;
+        height: 5px;
+        border-radius: 3px;
+        background: var(--sr-track);
+        overflow: hidden;
+    }
+    .grow-fill {
+        display: block;
+        height: 100%;
+    }
+    .grow-pct {
+        font-family: var(--sr-mono);
+        font-weight: 600;
+        font-size: 10px;
+        color: var(--sr-ink-3);
+        font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 40rem) {
+        .desktop {
+            display: none;
         }
-        .legend {
-            justify-content: flex-start;
+        .phone {
+            display: flex;
         }
     }
 </style>

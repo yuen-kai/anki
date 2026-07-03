@@ -68,13 +68,13 @@ test("buildConceptTree overlays authored per-concept stages on the hierarchy", (
     const enzymes = child(tree, "Enzymes");
     const kinetics = child(enzymes, "Kinetics");
     expect(kinetics.stage).toBe(3);
-    expect(kinetics.stageLabel).toBe("Mastering");
+    expect(kinetics.stageLabel).toBe("Solo");
     expect(kinetics.fraction).toBeCloseTo(1);
 
     expect(child(enzymes, "Inhibition").stage).toBe(0);
     expect(child(enzymes, "Inhibition").fraction).toBeCloseTo(0.25);
-    // The internal "hierarchy" state reads as "Applying".
-    expect(child(enzymes, "Regulation").stageLabel).toBe("Applying");
+    // The internal "hierarchy" state reads as "Guided".
+    expect(child(enzymes, "Regulation").stageLabel).toBe("Guided");
     expect(child(enzymes, "Regulation").fraction).toBeCloseTo(0.75);
 
     const folding = child(child(tree, "Proteins"), "Folding");
@@ -92,14 +92,14 @@ test("a leaf's stage is the rounded mean over its concepts", () => {
         deckId: "1",
         root: { id: "root", title: "Root", concepts: [], children: [leaf("l", "Mix", ["a", "b"])] },
     };
-    // One mastered, one just started: the leaf reads as the mean (Applying).
+    // One mastered, one just started: the leaf reads as the mean (Guided).
     const progress: StudyProgress = {
         a: { state: "mastering", seen: true },
         b: { state: "learning", seen: true },
     };
     const mix = child(buildConceptTree(hierarchy, progress)!, "Mix");
     expect(mix.stage).toBe(2);
-    expect(mix.stageLabel).toBe("Applying");
+    expect(mix.stageLabel).toBe("Guided");
 });
 
 test("buildConceptTree is null when there is no authored structure", () => {

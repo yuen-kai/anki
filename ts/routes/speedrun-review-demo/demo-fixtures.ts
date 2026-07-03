@@ -6,7 +6,11 @@
 // components with these fixed shapes so a developer can walk every screen,
 // state, and animation without studying real cards. Shapes match the authored
 // wire format in speedrun-hierarchy/lib.
-import type { Concept, DeckSummary, Hierarchy, Node, Problem } from "../speedrun-hierarchy/lib";
+import { deferredEnvelope, type ScoreEnvelope } from "../speedrun-dashboard/lib";
+import type { DeckRow } from "../speedrun-decks/lib";
+import type { Concept, Hierarchy, Node, Problem } from "../speedrun-hierarchy/lib";
+import type { StudyProgress } from "../speedrun-review/lib";
+import { buildConceptTree, type ConceptTreeNode, type StudySummary, type SubjectBreakdown } from "../speedrun-study/lib";
 
 // Stable ids so the demo page can name specific nodes/concepts (the intro
 // target, the scaffolded concept) without walking the tree by title.
@@ -302,12 +306,28 @@ export const DEMO_LEARNING_CONCEPTS: Concept[] = [actionPotential, refractory, c
 // scaffoldSteps() returns two real picks.
 export const DEMO_CONCEPT_ID = DEMO_IDS.actionPotential;
 
-// A short, display-only ledger for the authoring "Create deck" scene. The demo
-// never lists or writes real decks, so these rows are static fixtures.
-export const DEMO_DECKS: DeckSummary[] = [
-    { deckId: "demo-mcat-physiology", name: "MCAT physiology", todo: 12 },
-    { deckId: "demo-biochemistry", name: "Biochemistry", todo: 0 },
-    { deckId: "demo-organic-chemistry", name: "Organic chemistry", todo: 5 },
+// Display-only rows for the Decks home scene. The demo never lists or writes
+// real decks, so these carry fixed derived counts; the first row mirrors the
+// authored DEMO_HIERARCHY (4 topics · 6 concepts).
+export const DEMO_DECKS: DeckRow[] = [
+    {
+        deckId: "demo-mcat-physiology",
+        name: "MCAT physiology",
+        todo: 9,
+        metrics: { topics: 4, concepts: 6, completion: 0.62 },
+    },
+    {
+        deckId: "demo-biochemistry",
+        name: "Biochemistry",
+        todo: 0,
+        metrics: { topics: 8, concepts: 12, completion: 0.3 },
+    },
+    {
+        deckId: "demo-organic-chemistry",
+        name: "Organic chemistry",
+        todo: 5,
+        metrics: { topics: 5, concepts: 9, completion: 0 },
+    },
 ];
 
 // A private deep copy of the hierarchy for the authoring scenes. Those scenes
@@ -316,3 +336,132 @@ export const DEMO_DECKS: DeckSummary[] = [
 export function cloneHierarchy(): Hierarchy {
     return JSON.parse(JSON.stringify(DEMO_HIERARCHY)) as Hierarchy;
 }
+
+// ---------------------------------------------------------------------------
+// Study overview (canvas 2b delivered / 2i not-started)
+// ---------------------------------------------------------------------------
+
+// Per-concept study progress powering the delivered overview's tree + rollups:
+// a spread of stages so the leaves show the mastery ladder's full colour range.
+const DEMO_PROGRESS: StudyProgress = {
+    [DEMO_IDS.actionPotential]: { state: "hierarchy", seen: true },
+    [DEMO_IDS.refractory]: { state: "practicing", seen: true },
+    [DEMO_IDS.cardiacOutput]: { state: "practicing", seen: true },
+    [DEMO_IDS.filtrationBarrier]: { state: "mastering", seen: true },
+    [DEMO_IDS.netPressure]: { state: "hierarchy", seen: true },
+    [DEMO_IDS.sodium]: { state: "practicing", seen: true },
+};
+
+// The props the real StudyOverview reads (minus its handlers), so the demo can
+// spread one fixture straight onto the component.
+export interface DemoStudyData {
+    summary: StudySummary;
+    memory: ScoreEnvelope | null;
+    performance: ScoreEnvelope | null;
+    readiness: ScoreEnvelope | null;
+    tree: ConceptTreeNode | null;
+    subjects: SubjectBreakdown;
+    filtered: boolean;
+}
+
+// Delivered overview: Memory has graded evidence (a likely range + coverage +
+// driver lines); Performance and Readiness still await scored application work,
+// mirroring a deck studied to Practice but not yet drilled — the same mix the
+// real seeded-deck screenshot shows.
+export const DEMO_STUDY: DemoStudyData = {
+    summary: { deckName: "MCAT physiology", new: 9, learn: 0, review: 0, studiedToday: 6 },
+    memory: {
+        estimate: 0.87,
+        rangeLow: 0.84,
+        rangeHigh: 0.91,
+        coveragePct: 1,
+        confidence: "",
+        updatedAtSecs: 0,
+        reasons: ["Strong: Cardiac electrophysiology", "Weak: Hemodynamics"],
+        abstained: false,
+        abstainReason: "",
+        gradedReviews: 24,
+        format: "ratio",
+    },
+    performance: deferredEnvelope("needs 5 application attempts, have 0; coverage 0% below the 25% minimum"),
+    readiness: deferredEnvelope(
+        "needs the Performance score first: needs 5 application attempts, have 0; coverage 0% below the 25% minimum",
+    ),
+    tree: buildConceptTree(DEMO_HIERARCHY, DEMO_PROGRESS),
+    subjects: {
+        subjects: [
+            {
+                id: "cardiovascular",
+                name: "Cardiovascular",
+                coverage: 1,
+                meanRetrievability: 0.9,
+                applicationAccuracy: 0,
+                topicCount: 2,
+                memoryReviews: 16,
+                applicationAttempts: 0,
+                examWeight: 0.45,
+                hasMemoryData: true,
+                hasApplicationData: false,
+            },
+            {
+                id: "renal",
+                name: "Renal",
+                coverage: 0.5,
+                meanRetrievability: 0.82,
+                applicationAccuracy: 0,
+                topicCount: 2,
+                memoryReviews: 8,
+                applicationAttempts: 0,
+                examWeight: 0.55,
+                hasMemoryData: true,
+                hasApplicationData: false,
+            },
+        ],
+        hasData: true,
+    },
+    filtered: false,
+};
+
+// Not-started edge: nothing due, every score locked at "—" with its missing-data
+// reason, and a tree with no graded progress yet.
+export const DEMO_STUDY_NOTSTARTED: DemoStudyData = {
+    summary: { deckName: "MCAT physiology", new: 0, learn: 0, review: 0, studiedToday: 0 },
+    memory: deferredEnvelope("needs 5 graded reviews, have 0; coverage 0% below the 25% minimum"),
+    performance: deferredEnvelope("needs 5 application attempts, have 0; coverage 0% below the 25% minimum"),
+    readiness: deferredEnvelope(
+        "needs the Performance score first: needs 5 application attempts, have 0; coverage 0% below the 25% minimum",
+    ),
+    tree: buildConceptTree(DEMO_HIERARCHY, {}),
+    subjects: {
+        subjects: [
+            {
+                id: "cardiovascular",
+                name: "Cardiovascular",
+                coverage: 0,
+                meanRetrievability: 0,
+                applicationAccuracy: 0,
+                topicCount: 2,
+                memoryReviews: 0,
+                applicationAttempts: 0,
+                examWeight: 0.45,
+                hasMemoryData: false,
+                hasApplicationData: false,
+            },
+            {
+                id: "renal",
+                name: "Renal",
+                coverage: 0,
+                meanRetrievability: 0,
+                applicationAccuracy: 0,
+                topicCount: 2,
+                memoryReviews: 0,
+                applicationAttempts: 0,
+                examWeight: 0.55,
+                hasMemoryData: false,
+                hasApplicationData: false,
+            },
+        ],
+        hasData: false,
+    },
+    filtered: false,
+};

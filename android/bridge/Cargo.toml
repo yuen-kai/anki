@@ -1,14 +1,14 @@
 [workspace.package]
 version = "0.0.0"
 authors = ["Ankitects Pty Ltd and contributors"]
+edition = "2021"
 license = "AGPL-3.0-or-later"
 rust-version = "1.64"
-edition = "2021"
 
 [workspace]
 members = [
+  "build_rust",
   "rslib-bridge",
-  "build_rust"
 ]
 resolver = "2"
 

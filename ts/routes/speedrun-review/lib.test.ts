@@ -66,13 +66,13 @@ test("rotateProblem cycles one problem per review and handles empties", () => {
     expect(rotateProblem([], 0)).toBeNull();
 });
 
-test("stageLabel maps engine states to display labels, hierarchy reads Applying", () => {
-    expect(stageLabel("learning")).toBe("Learning");
-    expect(stageLabel("practicing")).toBe("Practicing");
-    expect(stageLabel("hierarchy")).toBe("Applying");
-    expect(stageLabel("mastering")).toBe("Mastering");
+test("stageLabel maps engine states to display labels (Learn/Practice/Guided/Solo)", () => {
+    expect(stageLabel("learning")).toBe("Learn");
+    expect(stageLabel("practicing")).toBe("Practice");
+    expect(stageLabel("hierarchy")).toBe("Guided");
+    expect(stageLabel("mastering")).toBe("Solo");
     // An unknown state fails safe to the first rung.
-    expect(stageLabel("bogus")).toBe("Learning");
+    expect(stageLabel("bogus")).toBe("Learn");
 });
 
 test("stageRank orders the ladder and STAGE_TOTAL counts the rungs", () => {
@@ -88,12 +88,12 @@ test("stageRank orders the ladder and STAGE_TOTAL counts the rungs", () => {
 
 test("upgradeLabels renders the from/to of a stage change", () => {
     expect(upgradeLabels("learning", "practicing")).toEqual({
-        from: "Learning",
-        to: "Practicing",
+        from: "Learn",
+        to: "Practice",
     });
     expect(upgradeLabels("hierarchy", "mastering")).toEqual({
-        from: "Applying",
-        to: "Mastering",
+        from: "Guided",
+        to: "Solo",
     });
 });
 

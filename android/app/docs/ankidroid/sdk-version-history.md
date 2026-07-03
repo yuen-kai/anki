@@ -5,7 +5,7 @@ Use https://apilevels.com/ to lookup Android version numbers/codenames.
 See https://docs.ankidroid.org/changelog.html for user-facing changelogs.
 
 | Version                                                                                      | minSdk | targetSdk   |
-|----------------------------------------------------------------------------------------------|--------|-------------|
+| -------------------------------------------------------------------------------------------- | ------ | ----------- |
 | [v2.23](https://github.com/ankidroid/Anki-Android/blob/v2.23.0/gradle/libs.versions.toml#L9) | 24     | 35          |
 | [v2.22](https://github.com/ankidroid/Anki-Android/blob/v2.22.1/gradle/libs.versions.toml#L9) | 24     | 35          |
 | [v2.21](https://github.com/ankidroid/Anki-Android/blob/v2.21.0/gradle/libs.versions.toml#L9) | 24     | 35          |
@@ -40,7 +40,7 @@ See https://docs.ankidroid.org/changelog.html for user-facing changelogs.
 
 ## Notes
 
-* v0.3-v0.6 had no `targetSdkVersion` set (defaults to `minSdkVersion` at runtime)
-* v1.0 raised minSdk to 5 ([c44c089b74](https://github.com/ankidroid/Anki-Android/commit/c44c089b7438b0e4ea4cbbdb0d82074e55886b5d)); v1.1 was tagged from a branch that kept minSdk at 3
-* The build system migrated from `AndroidManifest.xml` to `build.gradle` at v2.4 ([1fbf16e693](https://github.com/ankidroid/Anki-Android/commit/1fbf16e693e6c8787cb00f6a8b00e88f1f76be46))
-* The build system migrated from `build.gradle` to `libs.versions.toml` at v2.19 ([dcb10769b1](https://github.com/ankidroid/Anki-Android/commit/dcb10769b16c72f52c4191d35f36a494be46fc3a))
+- v0.3-v0.6 had no `targetSdkVersion` set (defaults to `minSdkVersion` at runtime)
+- v1.0 raised minSdk to 5 ([c44c089b74](https://github.com/ankidroid/Anki-Android/commit/c44c089b7438b0e4ea4cbbdb0d82074e55886b5d)); v1.1 was tagged from a branch that kept minSdk at 3
+- The build system migrated from `AndroidManifest.xml` to `build.gradle` at v2.4 ([1fbf16e693](https://github.com/ankidroid/Anki-Android/commit/1fbf16e693e6c8787cb00f6a8b00e88f1f76be46))
+- The build system migrated from `build.gradle` to `libs.versions.toml` at v2.19 ([dcb10769b1](https://github.com/ankidroid/Anki-Android/commit/dcb10769b16c72f52c4191d35f36a494be46fc3a))

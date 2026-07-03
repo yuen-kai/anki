@@ -14,11 +14,11 @@
  * It's expected to be called through 'yarn start extract'.
  */
 
-import fs from "fs";
-import axios from "axios";
 import crowdin from "@crowdin/crowdin-api-client";
-import { PROJECT_ID, credentialsConst } from "./constants";
+import axios from "axios";
 import extract from "extract-zip";
+import fs from "fs";
+import { credentialsConst, PROJECT_ID } from "./constants";
 
 // initialization of crowdin client
 const { translationsApi } = new crowdin(credentialsConst);
@@ -58,7 +58,7 @@ export async function buildAndDownload() {
                     method: "get",
                     url: downloadLink.data.url,
                     responseType: "stream",
-                }).then(function (response) {
+                }).then(function(response) {
                     response.data.pipe(fs.createWriteStream("ankidroid.zip"));
                 });
             }

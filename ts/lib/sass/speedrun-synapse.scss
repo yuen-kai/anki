@@ -1,0 +1,662 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+ * License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+// Shared visual primitives for the Speedrun ("Synapse") screens, extracted
+// verbatim from the design canvas (ProjectDocs/MCAT Study App.html; see the
+// frame-by-frame map in out/synapse_extraction.md). Every primitive here is a
+// literal reproduction of a shape the canvas uses across frames — buttons,
+// cards, pills, the score dial, tree nodes, the disclosure seam, and so on — so
+// the four screen components stay consistent instead of each re-deriving them.
+//
+// All values reference the --sr-* custom properties from speedrun-tokens.scss;
+// they resolve wherever that partial's `tokens` mixin has been included on an
+// ancestor. The 4-segment stage glyph is a component, not a class: use
+// `<StageGlyph>` (../routes/speedrun-dashboard/StageGlyph.svelte).
+//
+// ── How a screen consumes this ──────────────────────────────────────────────
+// Two ways, mix as you like:
+//
+//   1) Global classes (matches how the canvas reuses shapes). Include the token
+//      host + the primitive classes once on the screen root, then use plain
+//      class names in markup. Because Svelte scopes the enclosing rule, the
+//      emitted `:global(.sr-*)` selectors only apply inside this screen.
+//
+//        <style lang="scss">
+//          @use "$lib/sass/speedrun-synapse" as syn;
+//          .screen {
+//            // ...your own layout declarations first...
+//            @include syn.host;   // sets --sr-* tokens AND emits .sr-* classes
+//          }
+//        </style>
+//
+//        <div class="screen">
+//          <button class="sr-btn sr-btn--primary sr-btn--hero">Start studying</button>
+//          <section class="sr-card">…</section>
+//        </div>
+//
+//      Already including `sr.tokens` yourself? Use `@include syn.globals;`
+//      instead of `syn.host` to add just the classes.
+//
+//   2) Scoped mixins (when you'd rather name your own element). Include the
+//      matching mixin on your selector:
+//
+//        @use "$lib/sass/speedrun-synapse" as syn;
+//        .today-cta { @include syn.btn; @include syn.btn-primary; @include syn.btn-hero; }
+//
+// Keep `@include syn.host` / `syn.globals` / `syn.tokens` LAST in the host rule
+// (after plain declarations) so the nested night-mode + :global blocks don't
+// trip Sass's mixed-declarations rule.
+
+@use "$lib/sass/speedrun-tokens" as tokens;
+
+// Re-export the token host so a screen can pull tokens through this one import.
+@mixin sr-tokens {
+    @include tokens.tokens;
+}
+
+$stages: learn, practice, guided, solo;
+
+// ── Type helpers ────────────────────────────────────────────────────────────
+// Mono, uppercase, letter-spaced section eyebrow (DECKS / TODAY / CONCEPT TREE).
+@mixin eyebrow {
+    font-family: var(--sr-mono);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: var(--sr-track-label);
+    text-transform: uppercase;
+    color: var(--sr-ink-3);
+}
+// Mono meta line (counts, timestamps, "≈ 26 MIN").
+@mixin meta {
+    font-family: var(--sr-mono);
+    font-weight: 400;
+    font-size: 11px;
+    color: var(--sr-ink-3);
+}
+
+// ── Buttons ─────────────────────────────────────────────────────────────────
+// Base is the deck-row action size (Study / Details). Layer one colour modifier
+// (primary / dark / ghost / disabled) and, if needed, one size modifier.
+@mixin btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--sr-sans);
+    font-weight: 600;
+    font-size: 12.5px;
+    line-height: 1;
+    padding: 10px 22px;
+    border: none;
+    border-radius: var(--sr-radius-tile);
+    color: var(--sr-ink);
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+}
+@mixin btn-primary {
+    background: var(--sr-signal);
+    color: #fff;
+    box-shadow: var(--sr-shadow-signal-sm);
+}
+@mixin btn-dark {
+    background: var(--sr-ink);
+    color: #fff;
+}
+@mixin btn-ghost {
+    background: var(--sr-ghost);
+    color: var(--sr-ink-slate);
+}
+@mixin btn-disabled {
+    background: var(--sr-track);
+    color: var(--sr-faint);
+    box-shadow: none;
+    cursor: not-allowed;
+}
+// Hero size: Start studying / Begin.
+@mixin btn-hero {
+    padding: 13px 28px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 13px;
+}
+// Pill-ish header CTA: + New deck.
+@mixin btn-new {
+    padding: 10px 18px;
+    font-size: 13px;
+    border-radius: var(--sr-radius-group);
+}
+// Full-width in-card CTA (Reveal concept details / Next concept); no shadow.
+@mixin btn-block {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    font-weight: 700;
+    font-size: 12px;
+    border-radius: var(--sr-radius-control);
+    text-align: center;
+    box-shadow: none;
+}
+
+// ── Cards & surfaces ────────────────────────────────────────────────────────
+// Structural only (fill + radius + shadow); set padding per context.
+@mixin card {
+    background: var(--sr-panel);
+    border-radius: var(--sr-radius-card);
+    box-shadow: var(--sr-shadow-card);
+}
+@mixin card-sm {
+    border-radius: var(--sr-radius-card-sm);
+    box-shadow: var(--sr-shadow-card-sm);
+}
+@mixin card-pop {
+    box-shadow: var(--sr-shadow-pop);
+}
+// Nested surface (tree groups, subject cells, disclosure regions on the paper).
+@mixin inset {
+    background: var(--sr-panel-2);
+    border-radius: var(--sr-radius-group);
+}
+// The brand logo dot.
+@mixin logo {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--sr-grad-logo);
+    box-shadow: 0 2px 6px rgba(238, 93, 108, 0.4);
+}
+
+// ── Pills, chips, tags ──────────────────────────────────────────────────────
+// Mono status pill (indicator / STRONG MATCH). Neutral by default; tint it with
+// a stage modifier.
+@mixin pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--sr-mono);
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    padding: 3px 9px;
+    border-radius: var(--sr-radius-pill);
+    text-transform: uppercase;
+    background: var(--sr-inset);
+    color: var(--sr-ink-3);
+}
+// Sans locate chip (Group / Topic picker).
+@mixin chip {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--sr-sans);
+    font-weight: 600;
+    font-size: 10.5px;
+    padding: 5px 9px;
+    border: 1.5px solid transparent;
+    border-radius: var(--sr-radius-chip);
+    background: var(--sr-inset);
+    color: var(--sr-faint);
+}
+@mixin chip-selected {
+    background: var(--sr-signal-weak);
+    border-color: var(--sr-signal);
+    color: var(--sr-signal-ink);
+}
+// Stage tag: mono caps label + inline glyph (drop a <StageGlyph size="sm"> in).
+@mixin stage-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--sr-mono);
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: var(--sr-track-tag);
+    padding: 5px 9px;
+    border-radius: var(--sr-radius-chip);
+    text-transform: uppercase;
+}
+// Soft tinted fill + deep readable ink for a given stage name.
+@mixin stage-tint($name) {
+    background: var(--sr-stage-#{$name}-soft);
+    color: var(--sr-stage-#{$name}-deep);
+}
+
+// ── Inputs ──────────────────────────────────────────────────────────────────
+@mixin input {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--sr-sans);
+    font-size: 14px;
+    color: var(--sr-ink);
+    background: var(--sr-white);
+    border: 1px solid var(--sr-line-strong);
+    border-radius: var(--sr-radius-control);
+    padding: 11px 13px;
+}
+@mixin input-title {
+    font-size: 18px;
+    font-weight: 700;
+}
+@mixin textarea {
+    @include input;
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+// Inline editable title (builder): coral underline, no box.
+@mixin input-underline {
+    font-family: var(--sr-sans);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--sr-ink);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--sr-signal);
+    border-radius: 0;
+    padding: 2px 2px 4px;
+}
+
+// ── Score dial (SVG geometry lives in ScoreRing.svelte; see extraction.md) ───
+@mixin dial {
+    position: relative;
+    width: 120px;
+    height: 104px;
+    margin: 10px auto 0;
+}
+@mixin dial-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+@mixin dial-value {
+    font-family: var(--sr-sans);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: var(--sr-tighten);
+    color: var(--sr-ink);
+}
+@mixin dial-caption {
+    font-family: var(--sr-mono);
+    font-weight: 400;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    color: var(--sr-ink-3);
+}
+
+// ── Progress / completion bar ───────────────────────────────────────────────
+// Height via --sr-bar-h (default 8px). Fill defaults to the coral gradient;
+// override with --sr-fill (e.g. a solid stage/score colour).
+@mixin bar {
+    height: var(--sr-bar-h, 8px);
+    border-radius: 5px;
+    background: var(--sr-track);
+    overflow: hidden;
+}
+@mixin bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: var(--sr-fill, var(--sr-grad-signal));
+}
+
+// ── Concept tree ────────────────────────────────────────────────────────────
+@mixin tree-root {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--sr-white);
+    color: var(--sr-ink);
+    border: 1px solid var(--sr-line-strong);
+    border-radius: var(--sr-radius-node);
+    padding: 13px 22px;
+    box-shadow: var(--sr-shadow-node);
+}
+@mixin tree-group {
+    background: var(--sr-panel-2);
+    border-radius: var(--sr-radius-group);
+    padding: 12px 15px;
+}
+@mixin tree-leaf {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--sr-white);
+    border: 1px solid var(--sr-line);
+    border-radius: var(--sr-radius-tile);
+    padding: 9px 13px;
+}
+// 2px connector rail (vertical by default). Add `--h` for horizontal.
+@mixin connector {
+    width: 2px;
+    background: var(--sr-line-connector);
+}
+
+// ── Progressive-disclosure seam ─────────────────────────────────────────────
+@mixin seam {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 18px;
+    background: var(--sr-seam);
+    border-top: 1px dashed var(--sr-line-seam);
+    border-bottom: 1px dashed var(--sr-line-seam);
+}
+@mixin seam-label {
+    font-family: var(--sr-mono);
+    font-weight: 600;
+    font-size: 8px;
+    letter-spacing: var(--sr-track-label);
+    text-transform: uppercase;
+    color: var(--sr-faint);
+}
+
+// ── Round status badge (✓ correct, ✕ wrong, ↑ upgraded) ─────────────────────
+@mixin badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-family: var(--sr-mono);
+    font-weight: 700;
+    font-size: 8px;
+    color: #fff;
+}
+
+// ── MCQ answer options + radios ─────────────────────────────────────────────
+@mixin answer {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    background: var(--sr-white);
+    border: 1px solid var(--sr-line);
+    border-radius: var(--sr-radius-control);
+    padding: 10px 13px;
+    font-size: 12px;
+    color: var(--sr-ink-2);
+}
+@mixin answer-correct {
+    background: var(--sr-stage-solo-soft);
+    border: 1.5px solid var(--sr-stage-solo);
+    color: var(--sr-stage-solo-deep);
+    font-weight: 600;
+}
+@mixin answer-wrong {
+    background: var(--sr-signal-weak);
+    border: 1.5px solid var(--sr-signal);
+    color: var(--sr-signal-deep);
+    font-weight: 600;
+}
+@mixin radio {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--sr-line-dashed);
+}
+
+// ── Difficulty grade buttons (Again / Hard / Good / Easy) ────────────────────
+@mixin grade {
+    flex: 1;
+    text-align: center;
+    padding: 10px 5px;
+    font-family: var(--sr-sans);
+    font-weight: 600;
+    font-size: 11px;
+    border: none;
+    border-radius: var(--sr-radius-sm);
+    cursor: pointer;
+}
+
+// ── Result surfaces: correct/self-check (green) & wrong-pick note (amber) ─────
+@mixin explain {
+    background: var(--sr-correct-bg);
+    border: 1px solid var(--sr-correct-line);
+    border-radius: var(--sr-radius-control);
+    padding: 11px 13px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--sr-correct-ink);
+}
+@mixin correction {
+    background: var(--sr-warn-bg);
+    border: 1px solid var(--sr-warn-line);
+    border-radius: var(--sr-radius-control);
+    padding: 9px 12px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--sr-stage-guided-deep);
+}
+
+// ── Global class surface ────────────────────────────────────────────────────
+// Emits every primitive above as a `:global(.sr-*)` class. Include once on the
+// screen root (directly, or via `host`).
+@mixin globals {
+    :global(.sr-eyebrow) {
+        @include eyebrow;
+    }
+    :global(.sr-eyebrow--hero) {
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: var(--sr-track-hero);
+        color: var(--sr-signal);
+    }
+    :global(.sr-meta) {
+        @include meta;
+    }
+    :global(.sr-meta--faint) {
+        color: var(--sr-faint);
+    }
+
+    :global(.sr-btn) {
+        @include btn;
+    }
+    :global(.sr-btn--primary) {
+        @include btn-primary;
+    }
+    :global(.sr-btn--dark) {
+        @include btn-dark;
+    }
+    :global(.sr-btn--ghost) {
+        @include btn-ghost;
+    }
+    :global(.sr-btn--disabled) {
+        @include btn-disabled;
+    }
+    :global(.sr-btn--hero) {
+        @include btn-hero;
+    }
+    :global(.sr-btn--hero.sr-btn--primary) {
+        box-shadow: var(--sr-shadow-signal);
+    }
+    :global(.sr-btn--new) {
+        @include btn-new;
+    }
+    :global(.sr-btn--block) {
+        @include btn-block;
+    }
+
+    :global(.sr-card) {
+        @include card;
+    }
+    :global(.sr-card--sm) {
+        @include card-sm;
+    }
+    :global(.sr-card--pop) {
+        @include card-pop;
+    }
+    :global(.sr-inset) {
+        @include inset;
+    }
+    :global(.sr-logo) {
+        @include logo;
+    }
+
+    :global(.sr-pill) {
+        @include pill;
+    }
+    :global(.sr-chip) {
+        @include chip;
+    }
+    :global(.sr-chip--selected) {
+        @include chip-selected;
+    }
+    :global(.sr-stage-tag) {
+        @include stage-tag;
+    }
+
+    // Stage-tinted tags + pills (soft fill + deep ink) for every stage.
+    @each $s in $stages {
+        :global(.sr-stage-tag--#{$s}),
+        :global(.sr-pill--#{$s}) {
+            @include stage-tint($s);
+        }
+    }
+    // Coral-tinted pill (Again / danger).
+    :global(.sr-pill--signal) {
+        background: var(--sr-signal-weak);
+        color: var(--sr-signal-deep);
+    }
+
+    :global(.sr-input) {
+        @include input;
+    }
+    :global(.sr-input--title) {
+        @include input-title;
+    }
+    :global(.sr-input--underline) {
+        @include input-underline;
+    }
+    :global(.sr-textarea) {
+        @include textarea;
+    }
+
+    :global(.sr-dial) {
+        @include dial;
+    }
+    :global(.sr-dial__center) {
+        @include dial-center;
+    }
+    :global(.sr-dial__value) {
+        @include dial-value;
+    }
+    :global(.sr-dial__caption) {
+        @include dial-caption;
+    }
+    :global(.sr-dial--empty .sr-dial__value),
+    :global(.sr-dial--empty .sr-dial__caption) {
+        color: var(--sr-faint);
+    }
+
+    :global(.sr-bar) {
+        @include bar;
+    }
+    :global(.sr-bar__fill) {
+        @include bar-fill;
+    }
+
+    :global(.sr-tree-root) {
+        @include tree-root;
+    }
+    :global(.sr-tree-group) {
+        @include tree-group;
+    }
+    :global(.sr-tree-leaf) {
+        @include tree-leaf;
+    }
+    :global(.sr-connector) {
+        @include connector;
+    }
+    :global(.sr-connector--h) {
+        width: auto;
+        height: 2px;
+    }
+
+    :global(.sr-seam) {
+        @include seam;
+    }
+    :global(.sr-seam__arrow) {
+        color: var(--sr-signal);
+        font-size: 10px;
+    }
+    :global(.sr-seam__label) {
+        @include seam-label;
+    }
+
+    :global(.sr-badge) {
+        @include badge;
+    }
+    :global(.sr-badge--correct) {
+        background: var(--sr-stage-solo);
+    }
+    :global(.sr-badge--wrong) {
+        background: var(--sr-signal);
+    }
+    :global(.sr-badge--up) {
+        background: var(--sr-stage-practice-soft);
+        color: var(--sr-stage-practice-deep);
+    }
+
+    :global(.sr-answer) {
+        @include answer;
+    }
+    :global(.sr-answer--correct) {
+        @include answer-correct;
+    }
+    :global(.sr-answer--wrong) {
+        @include answer-wrong;
+    }
+    :global(.sr-radio) {
+        @include radio;
+    }
+
+    :global(.sr-grade) {
+        @include grade;
+    }
+    :global(.sr-grade--again) {
+        background: var(--sr-signal-weak);
+        color: var(--sr-signal-deep);
+    }
+    :global(.sr-grade--hard) {
+        @include stage-tint(guided);
+    }
+    :global(.sr-grade--good) {
+        @include stage-tint(practice);
+    }
+    :global(.sr-grade--easy) {
+        @include stage-tint(solo);
+    }
+    :global(.sr-grade--again.sr-grade--selected) {
+        outline: 2px solid var(--sr-signal);
+        outline-offset: -2px;
+    }
+    :global(.sr-grade--hard.sr-grade--selected) {
+        outline: 2px solid var(--sr-stage-guided);
+        outline-offset: -2px;
+    }
+    :global(.sr-grade--good.sr-grade--selected) {
+        outline: 2px solid var(--sr-stage-practice);
+        outline-offset: -2px;
+    }
+    :global(.sr-grade--easy.sr-grade--selected) {
+        outline: 2px solid var(--sr-stage-solo);
+        outline-offset: -2px;
+    }
+
+    :global(.sr-explain) {
+        @include explain;
+    }
+    :global(.sr-correction) {
+        @include correction;
+    }
+}
+
+// Convenience: tokens + primitive classes in one include. Keep it LAST in the
+// host rule (after plain declarations).
+@mixin host {
+    @include tokens.tokens;
+    @include globals;
+}

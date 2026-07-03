@@ -1,7 +1,7 @@
 "use strict";
 globalThis.ankidroid = globalThis.ankidroid || {};
 
-globalThis.ankidroid.userAction = function (number) {
+globalThis.ankidroid.userAction = function(number) {
     try {
         let userJs = globalThis[`userJs${number}`];
         if (userJs != null) {
@@ -14,18 +14,18 @@ globalThis.ankidroid.userAction = function (number) {
     }
 };
 
-globalThis.ankidroid.showHint = function () {
+globalThis.ankidroid.showHint = function() {
     document.querySelector("a.hint:not([style*='display: none'])")?.click();
 };
 
-globalThis.ankidroid.showAllHints = function () {
+globalThis.ankidroid.showAllHints = function() {
     document.querySelectorAll("a.hint").forEach(el => el.click());
 };
 
 /**
  * @param {KeyboardEvent} event - the onkeydown event of the type answer <input>
  */
-globalThis.ankidroid.onTypeAnswerKeyDown = function (event) {
+globalThis.ankidroid.onTypeAnswerKeyDown = function(event) {
     if (event.key === "Enter") {
         window.location.href = `ankidroid://show-answer`;
     }
@@ -102,12 +102,13 @@ globalThis.ankidroid.onTypeAnswerKeyDown = function (event) {
         event => {
             // Only process after the final finger is lifted
             if (
-                event.touches.length > 0 ||
-                touchCount > 4 ||
-                isTextSelected() ||
-                isInteractable(event)
-            )
+                event.touches.length > 0
+                || touchCount > 4
+                || isTextSelected()
+                || isInteractable(event)
+            ) {
                 return;
+            }
 
             // Multi-finger detection
             if (touchCount > 1) {
@@ -151,14 +152,14 @@ globalThis.ankidroid.onTypeAnswerKeyDown = function (event) {
         let node = event.target;
         while (node && node !== document) {
             if (
-                node.nodeName === "A" ||
-                node.onclick ||
-                node.nodeName === "BUTTON" ||
-                node.nodeName === "VIDEO" ||
-                node.nodeName === "SUMMARY" ||
-                node.nodeName === "INPUT" ||
-                node.getAttribute("contentEditable") ||
-                (node.classList && node.classList.contains("tappable"))
+                node.nodeName === "A"
+                || node.onclick
+                || node.nodeName === "BUTTON"
+                || node.nodeName === "VIDEO"
+                || node.nodeName === "SUMMARY"
+                || node.nodeName === "INPUT"
+                || node.getAttribute("contentEditable")
+                || (node.classList && node.classList.contains("tappable"))
             ) {
                 return true;
             }
@@ -186,13 +187,11 @@ globalThis.ankidroid.onTypeAnswerKeyDown = function (event) {
         while (node && node.nodeType === Node.ELEMENT_NODE) {
             const style = window.getComputedStyle(node);
 
-            const isHorizontallyScrollable =
-                (style.overflowX === "auto" || style.overflowX === "scroll") &&
-                node.scrollWidth > node.clientWidth;
+            const isHorizontallyScrollable = (style.overflowX === "auto" || style.overflowX === "scroll")
+                && node.scrollWidth > node.clientWidth;
 
-            const isVerticallyScrollable =
-                (style.overflowY === "auto" || style.overflowY === "scroll") &&
-                node.scrollHeight > node.clientHeight;
+            const isVerticallyScrollable = (style.overflowY === "auto" || style.overflowY === "scroll")
+                && node.scrollHeight > node.clientHeight;
 
             if (isHorizontallyScrollable && isVerticallyScrollable) {
                 return "hv";
@@ -318,7 +317,7 @@ class AnkiDroidJS {
 }
 
 Object.keys(jsApiList).forEach(method => {
-    AnkiDroidJS.prototype[method] = async function (data) {
+    AnkiDroidJS.prototype[method] = async function(data) {
         const endpoint = jsApiList[method];
         return this.handleRequest(endpoint, data);
     };

@@ -11,7 +11,7 @@ import {
     speedrunStudyState,
 } from "@generated/backend";
 
-import { MASTERY_STAGES, stageIndex } from "../speedrun-dashboard/lib";
+import { MASTERY_STAGES, STAGE_COUNT, stageColor, stageIndex } from "../speedrun-dashboard/lib";
 import {
     type Concept,
     dec,
@@ -33,7 +33,7 @@ export { openDeck };
 export type { Concept, Hierarchy, Node, Problem };
 
 // The internal mastery states, low to high. `hierarchy` is the engine's name;
-// it DISPLAYS as "Applying" (see stageLabel).
+// it DISPLAYS as "Guided" (see stageLabel).
 export type StudyStateName = "learning" | "practicing" | "hierarchy" | "mastering";
 
 export interface ConceptProgress {
@@ -72,12 +72,17 @@ export interface DoneCard {
 export type NextCard = LearningBlock | ReviewCard | DoneCard;
 
 // What a grade returns: the concept's new state plus the from/to of any stage
-// change so the screen can play the upgrade animation.
+// change so the screen can play the upgrade animation. `intervalSecs`/
+// `intervalText` are the next FSRS interval this rating scheduled (seconds and
+// a preformatted human string like "4d"); both are optional because the Rust
+// answer path falls back to rating-only if it can't cheaply surface them.
 export interface AnswerResult {
     state: StudyStateName;
     upgraded: boolean;
     from: StudyStateName;
     to: StudyStateName;
+    intervalSecs?: number;
+    intervalText?: string;
 }
 
 // What marking a concept learned returns: `conceptIds` are the ones flipped
@@ -170,7 +175,7 @@ export function pickTwoProblems(concept: Concept): ShownProblem[] {
     return concept.problems.slice(0, 2).map(shownProblem);
 }
 
-// Applying/Mastering rotate through the concept's problems one per review, next
+// Guided/Solo rotate through the concept's problems one per review, next
 // unseen then cycling; `rotation` is the count of reviews already shown, so the
 // first review is index 0. Null when the concept authored no problems.
 export function rotateProblem(problems: Problem[], rotation: number): Problem | null {
@@ -189,14 +194,19 @@ const STAGE_BLURB = new Map<string, string>(
     MASTERY_STAGES.map((stage) => [stage.state, stage.blurb] as const),
 );
 
-// learning->Learning, practicing->Practicing, hierarchy->Applying,
-// mastering->Mastering. An unknown state falls back to the first rung.
+// learning->Learn, practicing->Practice, hierarchy->Guided, mastering->Solo.
+// An unknown state falls back to the first rung.
 export function stageLabel(state: string): string {
     return STAGE_LABEL.get(state) ?? MASTERY_STAGES[0].label;
 }
 
 // The number of rungs on the mastery ladder (learning..mastering).
 export const STAGE_TOTAL = MASTERY_STAGES.length;
+
+// Re-exported from the dashboard foundation so the review components (level-up
+// stepper, topic-learned list) pull the ladder, per-stage colour and count from
+// one place instead of reaching across routes.
+export { MASTERY_STAGES, STAGE_COUNT, stageColor };
 
 // The 0-based rung of a state, for drawing the mastery meter. Same mapping as
 // the dashboard's stageIndex (unknown = 0), re-exported here so the review
@@ -212,7 +222,7 @@ export interface UpgradeLabels {
     to: string;
 }
 
-// The display labels for an upgrade animation, e.g. Learning -> Practicing.
+// The display labels for an upgrade animation, e.g. Learn -> Practice.
 export function upgradeLabels(from: string, to: string): UpgradeLabels {
     return { from: stageLabel(from), to: stageLabel(to) };
 }
@@ -269,7 +279,7 @@ export interface ScaffoldStep {
     correctId: string;
 }
 
-// The Applying-stage scaffold: pick down the authored tree from root's children
+// The Guided-stage scaffold: pick down the authored tree from root's children
 // to the concept's leaf, options = siblings at each level. Empty when the
 // concept sits on the root (nothing to place) or is not found.
 export function scaffoldSteps(root: Node, conceptId: string): ScaffoldStep[] {

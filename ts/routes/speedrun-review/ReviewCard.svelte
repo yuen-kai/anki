@@ -2,57 +2,62 @@
 Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-Shared card chrome for the study interactions. The footer slot sits at the
-bottom center, where the difficulty rating (or a continue action) lives.
+The session card shell shared by Learn / Practice / Guided / Solo. A stage-tag
+header sits above the card; the card itself is a single Synapse surface with
+`overflow:hidden` whose children are full-bleed steps (`.sc-sec`) divided by
+seams, disclosed downward as the learner progresses. Steps set their own tone:
+`--reveal` for a disclosed near-white section, `--grade` for the grading band.
 -->
-<div class="card">
-    <div class="top">
-        <slot name="header" />
-    </div>
-    <div class="content">
+<div class="session">
+    {#if $$slots.header}
+        <div class="head">
+            <slot name="header" />
+        </div>
+    {/if}
+    <div class="card">
         <slot />
-    </div>
-    <div class="foot">
-        <slot name="footer" />
     </div>
 </div>
 
 <style lang="scss">
-    .card {
+    @use "$lib/sass/speedrun-synapse" as syn;
+
+    .session {
         width: 100%;
-        max-width: 46rem;
+        max-width: 47.5rem; // 760px, the canvas session-card measure
         display: flex;
         flex-direction: column;
-        gap: 1.25rem;
-        background: var(--sr-panel);
-        border: 1px solid var(--sr-line);
-        border-radius: 12px;
-        padding: 1.5rem 1.6rem 1.5rem;
+        gap: 12px;
     }
-    .top {
+    // Stage tag (+ optional count), aligned to the card's left edge.
+    .head {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        min-height: 1.2rem;
+        gap: 10px;
+        padding: 0 2px;
     }
-    .content {
-        display: flex;
-        flex-direction: column;
-        gap: 1.1rem;
+    .card {
+        @include syn.card;
+        overflow: hidden;
+
+        // Full-bleed step, own padding so seams meet the card edges. Slotted by
+        // the state components; styled here so every session card stays in step.
+        :global(.sc-sec) {
+            padding: 16px 18px;
+        }
+        // A disclosed step reads on the near-white reveal surface.
+        :global(.sc-sec--reveal) {
+            background: var(--sr-reveal);
+        }
+        // The grading step rides on its own cool fill at the card bottom.
+        :global(.sc-sec--grade) {
+            background: var(--sr-grading);
+        }
     }
-    // Bottom center: the ease buttons or a continue action stand here, in the
-    // spot base Anki reserves for its detached bottom bar.
-    .foot {
-        display: flex;
-        justify-content: center;
-        min-height: 2.6rem;
-        align-items: center;
-    }
+
     @media (max-width: 34rem) {
-        .card {
-            padding: 1.1rem 1rem 1.2rem;
-            border-radius: 10px;
+        .card :global(.sc-sec) {
+            padding: 14px 15px;
         }
     }
 </style>

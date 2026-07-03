@@ -1,59 +1,52 @@
 <!--
 Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+The session stage tag: a mono, letter-spaced stage name (LEARN / PRACTICE /
+GUIDED / SOLO) tinted in that stage's soft fill, with the 4-segment mastery
+glyph inline. Sits in the header above each session card so the learner always
+sees which rung of the ladder this card is on.
 -->
 <script lang="ts">
-    import { stageLabel, STAGE_TOTAL, stageRank } from "./lib";
+    import StageGlyph from "../speedrun-dashboard/StageGlyph.svelte";
+    import { stageLabel, stageRank } from "./lib";
 
+    // The engine state name (learning / practicing / hierarchy / mastering).
     export let state: string;
 
+    // learning->learn, practicing->practice, hierarchy->guided, mastering->solo:
+    // the ladder-position names that key the stage tint tokens.
+    const NAMES = ["learn", "practice", "guided", "solo"] as const;
+
     $: rank = stageRank(state);
+    $: name = NAMES[rank] ?? NAMES[0];
     $: label = stageLabel(state);
-    // One bar per rung; bars up to and including the current rung are lit, so the
-    // meter reads as a rising ladder rather than a generic progress bar.
-    $: rungs = Array.from({ length: STAGE_TOTAL }, (_, i) => i <= rank);
 </script>
 
-<span class="badge" title={`Mastery: ${label}`}>
-    <span class="meter" aria-hidden="true">
-        {#each rungs as lit, i (i)}
-            <span class="rung" class:lit style={`--h: ${40 + i * 20}%`}></span>
-        {/each}
-    </span>
-    <span class="label">{label}</span>
+<span class="tag tag--{name}">
+    <span class="name">{label.toUpperCase()}</span>
+    <StageGlyph stage={rank} size="sm" label={`${label}, stage ${rank + 1} of 4`} />
 </span>
 
 <style lang="scss">
-    .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.24rem 0.6rem 0.24rem 0.45rem;
-        border: 1px solid var(--sr-line-2);
-        border-radius: 999px;
-        background: var(--sr-panel-2);
+    @use "$lib/sass/speedrun-synapse" as syn;
+
+    .tag {
+        @include syn.stage-tag;
     }
-    .meter {
-        display: inline-flex;
-        align-items: flex-end;
-        gap: 2px;
-        height: 0.95rem;
+    .tag--learn {
+        @include syn.stage-tint(learn);
     }
-    .rung {
-        width: 3px;
-        height: var(--h);
-        border-radius: 1px;
-        background: var(--sr-line-2);
+    .tag--practice {
+        @include syn.stage-tint(practice);
     }
-    .rung.lit {
-        background: var(--sr-signal);
+    .tag--guided {
+        @include syn.stage-tint(guided);
     }
-    .label {
-        font-family: var(--sr-mono);
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--sr-ink-2);
+    .tag--solo {
+        @include syn.stage-tint(solo);
+    }
+    .name {
+        line-height: 1;
     }
 </style>
