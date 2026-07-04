@@ -85,6 +85,26 @@ service SchedulerService {
   // SpeedrunStudySummary: { deckId } -> { deckName, new, learn, review,
   // studiedToday } for the study screen's Today's Progress.
   rpc SpeedrunStudySummary(generic.Json) returns (generic.Json);
+  // SpeedrunEnsureSeeded: {} -> { seeded: [deckName] }. Idempotently preloads
+  // the bundled demo + MCAT decks through the authoring engine so both hosts
+  // have content out of the box; a deck already present by name is skipped.
+  rpc SpeedrunEnsureSeeded(generic.Json) returns (generic.Json);
+  // Speedrun AI deck-import (the speedrun-import screen). The OpenAI call lives
+  // in the shared Rust engine (rslib/src/speedrun/ai_import.rs) so desktop and
+  // AnkiDroid both get it and the API key stays server-side. Each exchanges
+  // JSON; source text is treated as untrusted data and the returned hierarchy
+  // is validated/repaired against the authoring schema.
+  //
+  // SpeedrunAiConfig: {} -> { available }. Reports whether AI import has a
+  // key. The key is developer-supplied in code/env, not user-configurable.
+  rpc SpeedrunAiConfig(generic.Json) returns (generic.Json);
+  // SpeedrunAiImport: { sources: [{ name, text }], messages: [{ role,
+  // content }], phase: "clarify" | "generate", model?, deckTitle? } ->
+  // { kind: "message", content, ready } | { kind: "deck", hierarchy,
+  // summary } | { kind: "error", message, retryable }. Clarify asks the
+  // next question or reports ready; generate returns a validated authored
+  // hierarchy. Returns a plain error when no key is configured.
+  rpc SpeedrunAiImport(generic.Json) returns (generic.Json);
   rpc AnswerCard(CardAnswer) returns (collection.OpChanges);
   rpc SchedTimingToday(generic.Empty) returns (SchedTimingTodayResponse);
   rpc StudiedToday(generic.Empty) returns (generic.String);

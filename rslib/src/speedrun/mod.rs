@@ -29,7 +29,14 @@
 //! - [`authoring`]: the authoring store CRUD (list decks, get/save/delete the
 //!   hierarchy blob) shared by the desktop and AnkiDroid deck/authoring
 //!   screens.
+//! - [`ai_import`]: the AI deck-import engine (OpenAI Chat Completions over
+//!   reqwest) that turns uploaded source text into a validated authored
+//!   hierarchy for the builder, with prompt-injection hardening and graceful
+//!   degradation when the key/service is missing.
+//! - [`seed`]: preloaded demo + MCAT decks (bundled JSON), seeded through the
+//!   shared authoring engine so both hosts get content out of the box.
 
+pub mod ai_import;
 pub mod authoring;
 pub mod card_signals;
 pub mod memory_score;
@@ -37,6 +44,7 @@ pub mod performance_score;
 pub mod readiness_score;
 pub mod score_breakdown;
 pub mod scores;
+pub mod seed;
 pub mod study;
 pub mod taxonomy;
 

@@ -73,11 +73,12 @@ deleted.
         {
             id: "decks",
             label: "Decks",
-            caption: "The decks home. Each row shows completion and opens to study or edit.",
+            caption:
+                "The decks home. Each row shows completion and opens to study or edit.",
         },
         {
             id: "decks-empty",
-            label: "Decks — empty",
+            label: "Decks, empty",
             caption: "The home before any deck exists.",
         },
         {
@@ -97,7 +98,7 @@ deleted.
         },
         {
             id: "study-empty",
-            label: "Study — not started",
+            label: "Study, not started",
             caption: "A deck not started yet: nothing due, every score awaiting data.",
         },
         {

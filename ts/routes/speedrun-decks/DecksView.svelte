@@ -9,6 +9,8 @@ study/create/details/delete handlers, so both the real route (backed by RPCs)
 and the backend-free demo render the same screen.
 -->
 <script lang="ts">
+    import { tick } from "svelte";
+
     import type { DeckRow } from "./lib";
 
     export let decks: DeckRow[];
@@ -17,11 +19,20 @@ and the backend-free demo render the same screen.
     export let onDetails: (deck: DeckRow) => void;
     export let onCreate: () => void;
     export let onDelete: (deck: DeckRow) => Promise<void> | void;
+    // onAccount powers the profile avatar (account + sync): the header avatar on
+    // desktop, and a phone-appropriate avatar in the mobile app-nav where that
+    // header is hidden. The mobile shell also surfaces Demo there. Undefined
+    // handlers (the demo route) render those as inert.
+    export let mobile = false;
+    export let onAccount: (() => void) | undefined = undefined;
+    export let onDemo: (() => void) | undefined = undefined;
 
     let rows: DeckRow[] = decks;
     let busy = false;
-    // The deck whose delete popover is open, if any.
-    let menuId: string | null = null;
+    // The deck whose row is showing its inline delete confirm, if any.
+    let confirmingId: string | null = null;
+    // Per-row trash buttons, so focus returns to one after its confirm closes.
+    const trashButtons: Record<string, HTMLButtonElement | null> = {};
 
     $: isEmpty = rows.length === 0 && !loadError;
 
@@ -58,11 +69,36 @@ and the backend-free demo render the same screen.
         try {
             await onDelete(deck);
             rows = rows.filter((row) => row.deckId !== deck.deckId);
-            menuId = null;
+            confirmingId = null;
         } catch (err) {
             loadError = message(err);
         } finally {
             busy = false;
+        }
+    }
+
+    function askDelete(deck: DeckRow): void {
+        confirmingId = deck.deckId;
+    }
+
+    // Close the inline confirm and hand focus back to the row's trash control.
+    async function cancelDelete(): Promise<void> {
+        const id = confirmingId;
+        confirmingId = null;
+        await tick();
+        if (id) {
+            trashButtons[id]?.focus();
+        }
+    }
+
+    // Land focus on the confirm's safe (Cancel) control when it opens.
+    function focusOnShow(node: HTMLElement): void {
+        node.focus();
+    }
+
+    function onWindowKeydown(event: KeyboardEvent): void {
+        if (event.key === "Escape" && confirmingId) {
+            void cancelDelete();
         }
     }
 
@@ -71,16 +107,37 @@ and the backend-free demo render the same screen.
     const percent = (fraction: number): number => Math.round(fraction * 100);
 </script>
 
-<svelte:window
-    on:keydown={(event) => {
-        if (event.key === "Escape") {
-            menuId = null;
-        }
-    }}
-/>
+<svelte:window on:keydown={onWindowKeydown} />
 
 <div class="screen">
     <div class="wrap">
+        {#if mobile && (onAccount || onDemo)}
+            <nav class="app-nav" aria-label="Speedrun">
+                {#if onDemo}
+                    <button type="button" class="app-nav-link" on:click={onDemo}>
+                        Demo
+                    </button>
+                {/if}
+                {#if onAccount}
+                    <button
+                        type="button"
+                        class="app-nav-avatar"
+                        aria-label="Account"
+                        on:click={onAccount}
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            width="20"
+                            height="20"
+                            fill="currentColor"
+                        >
+                            <circle cx="12" cy="9" r="3.4" />
+                            <path d="M5.5 19.5c.5-3.5 3.2-5.4 6.5-5.4s6 1.9 6.5 5.4z" />
+                        </svg>
+                    </button>
+                {/if}
+            </nav>
+        {/if}
         <header class="hdr" class:hdr--slim={isEmpty}>
             <div class="brand">
                 <span class="sr-logo" aria-hidden="true"></span>
@@ -89,12 +146,36 @@ and the backend-free demo render the same screen.
             </div>
             <div class="hdr-right">
                 <span class="hdr-date">{today}</span>
-                <span class="avatar" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                        <circle cx="12" cy="9" r="3.4" />
-                        <path d="M5.5 19.5c.5-3.5 3.2-5.4 6.5-5.4s6 1.9 6.5 5.4z" />
-                    </svg>
-                </span>
+                {#if onAccount}
+                    <button
+                        type="button"
+                        class="avatar"
+                        aria-label="Account"
+                        on:click={onAccount}
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            width="18"
+                            height="18"
+                            fill="currentColor"
+                        >
+                            <circle cx="12" cy="9" r="3.4" />
+                            <path d="M5.5 19.5c.5-3.5 3.2-5.4 6.5-5.4s6 1.9 6.5 5.4z" />
+                        </svg>
+                    </button>
+                {:else}
+                    <span class="avatar" aria-hidden="true">
+                        <svg
+                            viewBox="0 0 24 24"
+                            width="18"
+                            height="18"
+                            fill="currentColor"
+                        >
+                            <circle cx="12" cy="9" r="3.4" />
+                            <path d="M5.5 19.5c.5-3.5 3.2-5.4 6.5-5.4s6 1.9 6.5 5.4z" />
+                        </svg>
+                    </span>
+                {/if}
             </div>
         </header>
 
@@ -118,22 +199,23 @@ and the backend-free demo render the same screen.
                 </button>
             </section>
         {:else if rows.length > 0}
-            <div class="title-row">
-                <div class="title-block">
-                    <div class="sr-eyebrow">Decks</div>
-                    <h1 class="title">Your decks</h1>
+            <div class="list">
+                <div class="title-row">
+                    <div class="title-block">
+                        <div class="sr-eyebrow">Decks</div>
+                        <h1 class="title">Your decks</h1>
+                    </div>
+                    <button
+                        type="button"
+                        class="sr-btn sr-btn--primary sr-btn--new"
+                        on:click={onCreate}
+                    >
+                        + New deck
+                    </button>
                 </div>
-                <button
-                    type="button"
-                    class="sr-btn sr-btn--primary sr-btn--new"
-                    on:click={onCreate}
-                >
-                    + New deck
-                </button>
-            </div>
 
-            <div class="rows">
-                {#each rows as deck (deck.deckId)}
+                <div class="rows">
+                    {#each rows as deck (deck.deckId)}
                     {@const m = deck.metrics}
                     <article class="sr-card row">
                         <div class="row-info">
@@ -166,91 +248,91 @@ and the backend-free demo render the same screen.
                         </div>
 
                         <div class="row-actions">
-                            <button
-                                type="button"
-                                class="sr-btn sr-btn--dark"
-                                on:click={() => study(deck)}
-                                disabled={busy}
-                            >
-                                Study
-                            </button>
-                            <button
-                                type="button"
-                                class="sr-btn sr-btn--ghost"
-                                on:click={() => onDetails(deck)}
-                                disabled={busy}
-                            >
-                                Details
-                            </button>
-                            <div class="menu-wrap">
+                            {#if confirmingId === deck.deckId}
+                                <div
+                                    class="confirm"
+                                    role="group"
+                                    aria-label="Delete deck"
+                                >
+                                    <span class="confirm-q">Delete deck?</span>
+                                    <button
+                                        type="button"
+                                        class="sr-btn sr-btn--dark"
+                                        on:click={() => remove(deck)}
+                                        disabled={busy}
+                                    >
+                                        Delete
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="sr-btn sr-btn--ghost"
+                                        on:click={cancelDelete}
+                                        disabled={busy}
+                                        use:focusOnShow
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            {:else}
                                 <button
                                     type="button"
-                                    class="more"
-                                    aria-label="Deck options"
-                                    aria-haspopup="true"
-                                    aria-expanded={menuId === deck.deckId}
-                                    on:click={() =>
-                                        (menuId =
-                                            menuId === deck.deckId
-                                                ? null
-                                                : deck.deckId)}
+                                    class="sr-btn sr-btn--dark"
+                                    on:click={() => study(deck)}
+                                    disabled={busy}
+                                >
+                                    Study
+                                </button>
+                                <button
+                                    type="button"
+                                    class="sr-btn sr-btn--ghost"
+                                    on:click={() => onDetails(deck)}
+                                    disabled={busy}
+                                >
+                                    Details
+                                </button>
+                                <button
+                                    type="button"
+                                    class="trash"
+                                    aria-label="Delete deck"
+                                    on:click={() => askDelete(deck)}
+                                    bind:this={trashButtons[deck.deckId]}
+                                    disabled={busy}
                                 >
                                     <svg
                                         viewBox="0 0 24 24"
                                         width="18"
                                         height="18"
-                                        fill="currentColor"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="1.7"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        aria-hidden="true"
                                     >
-                                        <circle cx="5" cy="12" r="1.6" />
-                                        <circle cx="12" cy="12" r="1.6" />
-                                        <circle cx="19" cy="12" r="1.6" />
+                                        <path d="M4 7h16" />
+                                        <path
+                                            d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"
+                                        />
+                                        <path
+                                            d="M6.5 7l.8 12.1A2 2 0 0 0 9.3 21h5.4a2 2 0 0 0 2-1.9L17.5 7"
+                                        />
+                                        <path d="M10 11v6M14 11v6" />
                                     </svg>
                                 </button>
-                                {#if menuId === deck.deckId}
-                                    <div class="menu">
-                                        <p class="menu-q">Delete this deck?</p>
-                                        <div class="menu-actions">
-                                            <button
-                                                type="button"
-                                                class="sr-btn sr-btn--dark"
-                                                on:click={() => remove(deck)}
-                                                disabled={busy}
-                                            >
-                                                Delete
-                                            </button>
-                                            <button
-                                                type="button"
-                                                class="sr-btn sr-btn--ghost"
-                                                on:click={() => (menuId = null)}
-                                                disabled={busy}
-                                            >
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    </div>
-                                {/if}
-                            </div>
+                            {/if}
                         </div>
                     </article>
                 {/each}
 
-                <button type="button" class="new-deck" on:click={onCreate}>
-                    <span class="new-deck-plus" aria-hidden="true">+</span>
-                    <span class="new-deck-text">New deck</span>
-                </button>
+                    <button type="button" class="new-deck" on:click={onCreate}>
+                        <span class="new-deck-plus" aria-hidden="true">+</span>
+                        <span class="new-deck-text">New deck</span>
+                    </button>
+                </div>
             </div>
         {/if}
     </div>
 </div>
-
-{#if menuId !== null}
-    <button
-        type="button"
-        class="backdrop"
-        aria-label="Close menu"
-        on:click={() => (menuId = null)}
-    ></button>
-{/if}
 
 <style lang="scss">
     @use "$lib/sass/speedrun-synapse" as syn;
@@ -259,7 +341,7 @@ and the backend-free demo render the same screen.
 
     .screen {
         box-sizing: border-box;
-        min-height: 100%;
+        min-height: 100vh;
         background: var(--sr-paper);
         color: var(--sr-ink);
         font-family: var(--sr-sans);
@@ -269,10 +351,66 @@ and the backend-free demo render the same screen.
         @include syn.host; // tokens + .sr-* classes; keep LAST
     }
 
+    // Fill the viewport so the empty state can center in the space below the
+    // header. The populated list flows from the top: a short list leaves natural
+    // room beneath it rather than floating in the middle of the page.
     .wrap {
+        box-sizing: border-box;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
         max-width: 1240px;
         margin: 0 auto;
         padding-bottom: 40px;
+    }
+
+    // Mobile-shell top nav: the account avatar and the Demo entry (the desktop
+    // keeps these in the header and Tools menu). A slim, quiet bar above the
+    // decks, out of the way.
+    .app-nav {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--sr-line-2);
+    }
+    .app-nav-link {
+        padding: 8px 12px;
+        min-height: 40px;
+        border: none;
+        border-radius: var(--sr-radius-control);
+        background: none;
+        color: var(--sr-ink-2);
+        font-family: var(--sr-sans);
+        font-size: 13px;
+        font-weight: 540;
+        cursor: pointer;
+    }
+    .app-nav-link:hover {
+        background: var(--sr-ghost);
+        color: var(--sr-ink);
+    }
+    // Phone profile entry: shown only at phone width, where the desktop header
+    // (and its avatar) is hidden, so account stays reachable. >=44px touch.
+    .app-nav-avatar {
+        display: none;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: var(--sr-track);
+        color: var(--sr-ink-slate);
+        cursor: pointer;
+    }
+    .app-nav-avatar:hover {
+        color: var(--sr-ink);
+    }
+    // Keep the circle on focus (the shared :focus-visible rule squares corners).
+    .app-nav-avatar:focus-visible {
+        border-radius: 50%;
     }
 
     // ── Header: brand mark + wordmark, date, avatar ──────────────────────────
@@ -314,16 +452,30 @@ and the backend-free demo render the same screen.
         letter-spacing: 0.12em;
         color: var(--sr-ink-3);
     }
-    // No user identity to key an avatar off, so a neutral person glyph stands in
-    // for the canvas's initials.
+    // Profile entry point to account + sync: a button when onAccount is set,
+    // else a decorative span on the demo route. Neutral person glyph since
+    // there's no user identity to key initials off.
     .avatar {
         display: grid;
         place-items: center;
         width: 32px;
         height: 32px;
+        padding: 0;
+        border: none;
         border-radius: 50%;
         background: var(--sr-track);
         color: var(--sr-ink-slate);
+    }
+    button.avatar {
+        cursor: pointer;
+        transition: color 0.12s ease;
+    }
+    button.avatar:hover {
+        color: var(--sr-ink);
+    }
+    // Keep the circle on focus (the shared :focus-visible rule squares corners).
+    button.avatar:focus-visible {
+        border-radius: 50%;
     }
 
     // Slim header for the empty state (2h): brand only.
@@ -430,11 +582,9 @@ and the backend-free demo render the same screen.
         gap: 10px;
     }
 
-    .menu-wrap {
-        position: relative;
-    }
-    // Delete lives here: a quiet overflow control, loud only on hover/focus.
-    .more {
+    // A single, direct delete control per row: quiet by default, coral on
+    // hover/focus so its intent reads before it is pressed.
+    .trash {
         display: grid;
         place-items: center;
         width: 34px;
@@ -449,42 +599,29 @@ and the backend-free demo render the same screen.
             background 0.12s ease,
             color 0.12s ease;
     }
-    .more:hover,
-    .more[aria-expanded="true"] {
-        background: var(--sr-ghost);
-        color: var(--sr-ink-slate);
+    .trash:hover,
+    .trash:focus-visible {
+        background: var(--sr-signal-weak);
+        color: var(--sr-signal);
+    }
+    .trash:disabled {
+        background: none;
+        color: var(--sr-faint);
+        cursor: not-allowed;
     }
 
-    .menu {
-        position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
-        z-index: 50;
-        width: max-content;
-        padding: 14px;
-        background: var(--sr-panel);
-        border: 1px solid var(--sr-line);
-        border-radius: var(--sr-radius-card-sm);
-        box-shadow: var(--sr-shadow-card);
-    }
-    .menu-q {
-        margin: 0 0 10px;
-        font-size: 13px;
-        color: var(--sr-ink);
-    }
-    .menu-actions {
+    // The inline confirm that swaps into the row action area in place, with no
+    // overlay or popover (so opening it never shifts the layout or flashes).
+    .confirm {
         display: flex;
-        gap: 8px;
+        align-items: center;
+        gap: 10px;
     }
-
-    .backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 40;
-        border: 0;
-        padding: 0;
-        background: transparent;
-        cursor: default;
+    .confirm-q {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--sr-ink);
+        white-space: nowrap;
     }
 
     // ── New-deck affordance (dashed) ─────────────────────────────────────────
@@ -525,6 +662,7 @@ and the backend-free demo render the same screen.
 
     // ── Empty state (2h) ─────────────────────────────────────────────────────
     .empty {
+        margin-block: auto;
         padding: 64px 40px;
         text-align: center;
     }
@@ -569,6 +707,10 @@ and the backend-free demo render the same screen.
         .hdr {
             display: none;
         }
+        // Header (with its avatar) is gone on phone, so surface the avatar here.
+        .app-nav-avatar {
+            display: grid;
+        }
         .notice {
             margin: 16px 16px 0;
         }
@@ -596,10 +738,18 @@ and the backend-free demo render the same screen.
             flex: 1;
             min-height: 44px;
         }
-        .more {
+        .trash {
             width: 44px;
             height: 44px;
             flex: 0 0 auto;
+        }
+        // Let the confirm fill the row: question on its own line, buttons below.
+        .confirm {
+            flex: 1;
+            flex-wrap: wrap;
+        }
+        .confirm-q {
+            flex-basis: 100%;
         }
         .empty {
             padding: 56px 24px;
@@ -612,7 +762,8 @@ and the backend-free demo render the same screen.
 
     @media (prefers-reduced-motion: reduce) {
         .new-deck,
-        .more {
+        .trash,
+        button.avatar {
             transition: none;
         }
     }

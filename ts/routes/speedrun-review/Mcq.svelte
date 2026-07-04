@@ -12,6 +12,7 @@ degrades to a recall.
 -->
 <script lang="ts">
     import { type Concept, type Problem } from "./lib";
+    import MediaImage from "./MediaImage.svelte";
     import Seam from "./Seam.svelte";
 
     // Null when the concept authored no problems; we fall back to a recall.
@@ -64,11 +65,13 @@ degrades to a recall.
 {#if problem}
     <div class="sc-sec">
         <p class="step" class:amber={pickAmber}>STEP {pickStep} · {pickTitle}</p>
+        <MediaImage filename={problem.image} alt="Question figure" />
         {#if showPrompt}
             <p class="prompt">{problem.prompt || "Untitled problem"}</p>
         {/if}
         <ul class="answers">
             {#each problem.choices as choice, i (i)}
+                {@const choiceImage = problem.choiceImages?.[i] ?? undefined}
                 <li>
                     <button
                         class="answer"
@@ -87,7 +90,18 @@ degrades to a recall.
                         {:else}
                             <span class="radio" aria-hidden="true"></span>
                         {/if}
-                        <span class="text">{choice || "(blank)"}</span>
+                        <span class="choice-body">
+                            <MediaImage
+                                filename={choiceImage}
+                                alt={choice || "Answer choice"}
+                                compact
+                            />
+                            {#if choice}
+                                <span class="text">{choice}</span>
+                            {:else if !choiceImage}
+                                <span class="text">(blank)</span>
+                            {/if}
+                        </span>
                     </button>
                     {#if picked === i && hasKey && i !== correctIndex}
                         <p class="correction" role="status">
@@ -104,10 +118,20 @@ degrades to a recall.
         <div class="sc-sec sc-sec--reveal">
             <p class="step green">STEP {checkedStep} · Checked</p>
             {#if hasKey && problem}
+                {@const correctImage = problem.choiceImages?.[correctIndex] ?? undefined}
                 <div class="answer correct static">
                     <span class="badge badge--correct" aria-hidden="true">✓</span>
-                    <span class="text">
-                        {problem.choices[correctIndex] || "(blank)"}
+                    <span class="choice-body">
+                        <MediaImage
+                            filename={correctImage}
+                            alt={problem.choices[correctIndex] || "Correct answer"}
+                            compact
+                        />
+                        {#if problem.choices[correctIndex]}
+                            <span class="text">{problem.choices[correctIndex]}</span>
+                        {:else if !correctImage}
+                            <span class="text">(blank)</span>
+                        {/if}
                     </span>
                 </div>
             {/if}
@@ -221,6 +245,14 @@ degrades to a recall.
         background: var(--sr-signal);
     }
     .text {
+        min-width: 0;
+    }
+    // Stacks an optional choice figure above its label inside the answer button.
+    .choice-body {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
         min-width: 0;
     }
 

@@ -139,10 +139,11 @@ impl SimpleServerInner {
                 Err(_) => break,
             }
         }
-        if users.is_empty() {
+        let server = Self { users };
+        if server.users.is_empty() {
             whatever!("No users defined; SYNC_USER1 env var should be set.");
         }
-        Ok(Self { users })
+        Ok(server)
     }
 }
 
@@ -177,16 +178,17 @@ impl SimpleServer {
     ) -> HttpResult<SyncResponse<HostKeyResponse>> {
         let state = self.state.lock().unwrap();
 
-        // This control structure might seem a bit crude,
-        // its goal is to prevent a timing attack from gaining
-        // information about whether a specific user exists.
+        // The constant-time comparison below needs at least one user to verify
+        // against; new_from_env guarantees this, but guard defensively.
+        let Some(reference) = state.users.values().next() else {
+            return None.or_forbidden("no accounts configured");
+        };
         let user = {
             // This inner block returns Ok(hkey,user) if a user with corresponding
-            // name is found and Err(user) with a random user if it isn't found.
-            // The user is needed to verify against a random hash,
-            // before returning an Error.
-            let mut result: Result<(String, &User), &User> =
-                Err(state.users.iter().next().unwrap().1);
+            // name is found and Err(user) with a reference user if it isn't found.
+            // The user is needed to verify against a hash, before returning an
+            // Error, to keep the response constant-time.
+            let mut result: Result<(String, &User), &User> = Err(reference);
             for (hkey, user) in state.users.iter() {
                 if user.name == request.username {
                     result = Ok((hkey.to_string(), user));

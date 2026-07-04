@@ -18,6 +18,7 @@ package com.ichi2.anki.pages
 import android.os.Bundle
 import android.view.View
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.annotation.CallSuper
@@ -63,6 +64,12 @@ abstract class PageFragment(
      * from a previous saved state as given here.
      */
     protected open fun onCreateWebViewClient(savedInstanceState: Bundle?) = PageWebViewClient()
+
+    /**
+     * Override this to set a custom [android.webkit.WebChromeClient] on the page,
+     * e.g. to handle `<input type="file">` uploads. Called in [onViewCreated].
+     */
+    protected open fun onCreateWebChromeClient(savedInstanceState: Bundle?): WebChromeClient = PageChromeClient()
 
     protected open fun onWebViewCreated() { }
 
@@ -136,7 +143,7 @@ abstract class PageFragment(
                 setSupportZoom(true)
             }
             setWebViewClient(pageWebViewClient)
-            setWebChromeClient(PageChromeClient())
+            setWebChromeClient(onCreateWebChromeClient(savedInstanceState))
             setupBridgeCommand(pageWebViewClient)
             onWebViewCreated()
         }

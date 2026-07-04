@@ -22,6 +22,10 @@ run-optimized *args:
 android-run:
     ./android/run
 
+# Install and launch AnkiDroid (debug) without rebuilding — fast redeploy of the last build
+android-launch:
+    SKIP_BUILD=1 ./android/run
+
 # Watch web sources and rebuild/reload Anki's web stack on change (macOS/Linux)
 web-watch:
     ./tools/web-watch

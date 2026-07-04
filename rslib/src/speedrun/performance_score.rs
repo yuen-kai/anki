@@ -75,7 +75,7 @@ impl Collection {
     /// application attempts.
     pub(crate) fn get_performance_score(&mut self, deck_id: DeckId) -> Result<ScoreEnvelope> {
         let leaves = self.speedrun_authored_leaves(deck_id);
-        let progress = self.speedrun_deck_progress(deck_id);
+        let progress = self.speedrun_deck_progress(deck_id)?;
         let weights_by_label = leaf_weight_by_label();
         let neutral_weight = mean_leaf_weight();
 

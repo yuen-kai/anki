@@ -18,9 +18,16 @@
 //! ```text
 //! Hierarchy { deckId, root: Node }
 //! Node      { id, title, children: Node[], concepts: Concept[] }
-//! Concept   { id, title, content, problems: Problem[] }
-//! Problem   { id, prompt, choices: [c0, c1, c2, c3], correctIndex }  // -1 = unset
+//! Concept   { id, title, content, problems: Problem[], image?, sourceText? }
+//! Problem   { id, prompt, choices: [c0, c1, c2, c3], correctIndex, image?, choiceImages? }  // correctIndex -1 = unset
 //! ```
+//!
+//! The optional `image`/`sourceText`/`choiceImages` fields carry Speedrun media
+//! (see [`crate::speedrun::seed`]): `image` is a filename in collection media
+//! rendered as `<img src="/<filename>">`; `choiceImages` is parallel to
+//! `choices` (length 4, filename or null). The store round-trips the blob as an
+//! opaque `serde_json::Value`, so these extra fields are preserved untouched and
+//! ignored by everything that only reads id/title (e.g. [`crate::speedrun::study`]).
 //!
 //! The store owns only structure. Materialization into FSRS-scheduled cards and
 //! the per-concept mastery state live in [`crate::speedrun::study`], which

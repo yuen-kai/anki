@@ -195,3 +195,18 @@ pub(super) fn study_summary(col: &mut Collection, input: generic::Json) -> Resul
     let deck_id = DeckId(parse_id(&req.deck_id, "deckId")?);
     json_reply(&col.speedrun_study_summary(deck_id)?)
 }
+
+pub(super) fn ensure_seeded(col: &mut Collection, _input: generic::Json) -> Result<generic::Json> {
+    json_reply(&col.speedrun_ensure_seeded()?)
+}
+
+// --- AI deck-import RPCs ----------------------------------------------------
+
+pub(super) fn ai_config(col: &mut Collection, _input: generic::Json) -> Result<generic::Json> {
+    json_reply(&col.speedrun_ai_config()?)
+}
+
+pub(super) fn ai_import(col: &mut Collection, input: generic::Json) -> Result<generic::Json> {
+    let request: Value = serde_json::from_slice(&input.json)?;
+    json_reply(&col.speedrun_ai_import(request)?)
+}

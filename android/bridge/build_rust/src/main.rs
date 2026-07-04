@@ -25,10 +25,18 @@ fn main() -> Result<()> {
         panic!("error: ANDROID_NDK_HOME must point to your NDK installation.");
     }
 
+    // The robolectric JNI + `rsdroid-testing:build` artifacts are only needed
+    // for host-side unit tests, not for installing on a device/emulator. The
+    // `android/run` dev loop opts out of them (ANDROID_SKIP_ROBOLECTRIC=1) for a
+    // faster edit-run cycle; the default (env unset) still builds everything.
+    let skip_robolectric = env::var("ANDROID_SKIP_ROBOLECTRIC").is_ok();
+
     build_web_artifacts()?;
     build_android_jni()?;
-    build_robolectric_jni()?;
-    run_gradle()?;
+    if !skip_robolectric {
+        build_robolectric_jni()?;
+    }
+    run_gradle(skip_robolectric)?;
 
     println!();
     println!("*** Build complete.");
@@ -36,7 +44,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn run_gradle() -> Result<()> {
+fn run_gradle(skip_robolectric: bool) -> Result<()> {
     if env::var("RUNNING_FROM_GRADLE").is_err() {
         println!("*** Running gradle");
         let mut cmd = if cfg!(windows) {
@@ -46,9 +54,13 @@ fn run_gradle() -> Result<()> {
         } else {
             Command::new("./gradlew")
         };
-        cmd.env("RUNNING_FROM_BUILD_SCRIPT", "1")
-            .args(["assembleRelease", "rsdroid-testing:build"])
-            .ensure_success()?;
+        cmd.env("RUNNING_FROM_BUILD_SCRIPT", "1").arg("assembleRelease");
+        // Building the .aar (assembleRelease) is enough to run the app; the
+        // testing jar is only needed when robolectric artifacts were built.
+        if !skip_robolectric {
+            cmd.arg("rsdroid-testing:build");
+        }
+        cmd.ensure_success()?;
     }
     Ok(())
 }

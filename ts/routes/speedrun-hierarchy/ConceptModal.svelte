@@ -225,4 +225,10 @@ the concepts list when the panel runs self-contained (the demo).
         font-size: 1em;
         line-height: 1;
     }
+
+    @media (prefers-reduced-motion: reduce) {
+        .del {
+            transition: none;
+        }
+    }
 </style>

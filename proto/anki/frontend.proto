@@ -47,6 +47,23 @@ service FrontendService {
   // Request: {} -> moves the window back to the decks home (deckBrowser).
   rpc SpeedrunShowDecks(generic.Json) returns (generic.Json);
 
+  // Speedrun accounts + sync: the account screen posts these to the mediasrv
+  // Python handlers (speedrun_sync_login / _sync_now / _sign_out /
+  // _sync_status), which drive Anki's own native sync login against the
+  // self-hosted server (SimpleServer) with a username + password. They touch Qt
+  // profile/sync state, so they stay Python handlers rather than moving to the
+  // shared engine.
+  //
+  // Request: { username, password, endpoint } -> { ok, account?, endpoint?,
+  // message? }; logs in and stores the returned sync key.
+  rpc SpeedrunSyncLogin(generic.Json) returns (generic.Json);
+  // Request: {} -> { ok, message }; starts a normal collection sync.
+  rpc SpeedrunSyncNow(generic.Json) returns (generic.Json);
+  // Request: {} -> { ok }; drops the stored sync credentials.
+  rpc SpeedrunSignOut(generic.Json) returns (generic.Json);
+  // Request: {} -> { loggedIn, account?, endpoint?, hostAvailable }.
+  rpc SpeedrunSyncStatus(generic.Json) returns (generic.Json);
+
   // The data RPCs the deck/authoring/study screens call (list decks, get/save/
   // delete hierarchy, study summary) and the card-study screen's RPCs
   // (SpeedrunStudyState / NextCard / AnswerCard / RecordLearned /

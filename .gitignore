@@ -25,6 +25,9 @@ docs/_build/
 docs/autoapi/
 .complexipy_cache
 
+# Local secrets (copy .env.example -> .env); never commit real keys
+.env
+
 # Android app + bridge (rsdroid) build outputs
 android/**/build/
 android/**/.gradle/

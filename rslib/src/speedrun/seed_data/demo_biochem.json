@@ -1,0 +1,365 @@
+{
+    "deckId": "new",
+    "root": {
+        "id": "sr-demo-root",
+        "title": "MCAT Biochemistry (demo)",
+        "children": [
+            {
+                "id": "sr-demo-aa",
+                "title": "Amino acids",
+                "children": [
+                    {
+                        "id": "sr-demo-aa-structure",
+                        "title": "Structure & classification",
+                        "children": [],
+                        "concepts": [
+                            {
+                                "id": "sr-demo-c-aa-structure",
+                                "title": "Side chains set behavior",
+                                "content": "An amino acid's behavior is set by its side chain (R group), not the backbone every residue shares. Classifying the R group as nonpolar, polar uncharged, acidic, or basic predicts where a residue sits and what it can bond: hydrophobic side chains bury in the nonpolar core, polar and charged ones face the water.",
+                                "problems": [
+                                    {
+                                        "id": "sr-demo-p-aa-structure-1",
+                                        "prompt": "A residue is buried in the water-excluding core of a folded protein. What does that location predict about its side chain?",
+                                        "choices": [
+                                            "It is a nonpolar hydrocarbon (e.g. leucine, valine)",
+                                            "It is acidic and negatively charged",
+                                            "It is basic and positively charged",
+                                            "It carries a polar hydroxyl that hydrogen-bonds water"
+                                        ],
+                                        "correctIndex": 0
+                                    },
+                                    {
+                                        "id": "sr-demo-p-aa-structure-2",
+                                        "prompt": "You must place a residue on a solvent-exposed loop that hydrogen-bonds with water. Which side chain fits?",
+                                        "choices": [
+                                            "Isoleucine",
+                                            "Phenylalanine",
+                                            "Serine or glutamine (polar)",
+                                            "Leucine"
+                                        ],
+                                        "correctIndex": 2
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "sr-demo-aa-pka",
+                        "title": "pKa & titration",
+                        "children": [],
+                        "concepts": [
+                            {
+                                "id": "sr-demo-c-aa-pka",
+                                "title": "Buffering peaks near pKa",
+                                "content": "A weak acid or base resists pH change most strongly when the ambient pH is near its pKa, where it is about half protonated and the Henderson-Hasselbalch ratio [A-]/[HA] is about 1. Distance from pKa is exactly what makes a group a poor buffer and leaves it nearly fully protonated or deprotonated.",
+                                "problems": [
+                                    {
+                                        "id": "sr-demo-p-aa-pka-1",
+                                        "prompt": "Titrating aspartic acid with NaOH, the curve flattens three times, each flat zone sitting at a pKa (about 2.0, 3.9, 9.9). Why does the pH barely move there?",
+                                        "choices": [
+                                            "The buffer has been exhausted",
+                                            "Buffering capacity peaks when pH is near pKa",
+                                            "Water autoionization takes over",
+                                            "The amino acid has precipitated"
+                                        ],
+                                        "correctIndex": 1
+                                    },
+                                    {
+                                        "id": "sr-demo-p-aa-pka-2",
+                                        "prompt": "You need a side chain that shuttles protons at pH 7.4. Given aspartate (pKa 3.9), histidine (6.0), and lysine (10.5), which is best?",
+                                        "choices": [
+                                            "Aspartate, because it is acidic",
+                                            "Lysine, because it is basic",
+                                            "Histidine, because its pKa is nearest 7.4",
+                                            "Any of them, since all are ionizable"
+                                        ],
+                                        "correctIndex": 2
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "sr-demo-c-aa-pi",
+                                "title": "Net charge and the isoelectric point",
+                                "content": "Net charge is fixed by where the ambient pH sits relative to a molecule's pKa values, summarized by the isoelectric point (pI): the pH at which positive and negative charges balance to zero net charge. Below pI a species is net positive, above pI net negative, and at pI it is neutral and least soluble.",
+                                "problems": [
+                                    {
+                                        "id": "sr-demo-p-aa-pi-1",
+                                        "prompt": "At pH 7.6, lysine (pI 9.7), aspartate (pI 2.8), and histidine (pI 7.6) are placed in an electric field. Which barely moves?",
+                                        "choices": [
+                                            "Lysine, it runs to the cathode",
+                                            "Aspartate, it runs to the anode",
+                                            "Histidine, the running pH sits at its pI",
+                                            "They all migrate at the same speed"
+                                        ],
+                                        "correctIndex": 2
+                                    },
+                                    {
+                                        "id": "sr-demo-p-aa-pi-2",
+                                        "prompt": "To precipitate a protein out of solution you tune the buffer to its pI. Why does it aggregate there?",
+                                        "choices": [
+                                            "It is most soluble at its pI",
+                                            "With zero net charge it stops repelling its neighbors",
+                                            "The pI denatures the protein",
+                                            "The pI maximizes the protein's charge"
+                                        ],
+                                        "correctIndex": 1
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "sr-demo-aa-metabolism",
+                        "title": "Metabolism",
+                        "children": [],
+                        "concepts": [
+                            {
+                                "id": "sr-demo-c-aa-metabolism",
+                                "title": "Amino-acid catabolism is nitrogen disposal",
+                                "content": "Amino-acid catabolism is fundamentally nitrogen handling: the alpha-amino group is first collected onto glutamate by transamination, then released as ammonium by oxidative deamination so it can be disposed of as urea, while the leftover carbon skeleton feeds central metabolism.",
+                                "problems": [
+                                    {
+                                        "id": "sr-demo-p-aa-metabolism-1",
+                                        "prompt": "Alanine aminotransferase moves alanine's amino group onto alpha-ketoglutarate, leaving pyruvate and glutamate. What has happened to the nitrogen?",
+                                        "choices": [
+                                            "It has already been excreted as urea",
+                                            "It has only changed carriers (onto glutamate), not left",
+                                            "It has been oxidized to nitrate",
+                                            "It has been stored as a new amino acid"
+                                        ],
+                                        "correctIndex": 1
+                                    },
+                                    {
+                                        "id": "sr-demo-p-aa-metabolism-2",
+                                        "prompt": "Glutamate dehydrogenase then removes glutamate's amino group as free ammonium. What does this deamination accomplish?",
+                                        "choices": [
+                                            "It stores nitrogen for later",
+                                            "It liberates nitrogen for packaging into urea",
+                                            "It makes ATP directly from the amino group",
+                                            "It builds a nonpolar side chain"
+                                        ],
+                                        "correctIndex": 1
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "concepts": []
+            },
+            {
+                "id": "sr-demo-prot",
+                "title": "Proteins",
+                "children": [
+                    {
+                        "id": "sr-demo-prot-levels",
+                        "title": "Levels of structure",
+                        "children": [],
+                        "concepts": [
+                            {
+                                "id": "sr-demo-c-prot-levels",
+                                "title": "Each level is defined by its interaction",
+                                "content": "The levels of protein structure are defined by the kind of interaction at each tier, not by size: primary is the covalent sequence; secondary is local backbone hydrogen bonding (alpha-helices, beta-sheets); tertiary is one chain's three-dimensional fold from side-chain interactions; quaternary is the assembly of multiple chains.",
+                                "problems": [
+                                    {
+                                        "id": "sr-demo-p-prot-levels-1",
+                                        "prompt": "A mutation disrupts the regularly spaced backbone hydrogen bonds of an alpha-helix; the sequence and every side chain are unchanged. Which level is affected?",
+                                        "choices": [
+                                            "Primary",
+                                            "Secondary",
+                                            "Tertiary",
+                                            "Quaternary"
+                                        ],
+                                        "correctIndex": 1
+                                    },
+                                    {
+                                        "id": "sr-demo-p-prot-levels-2",
+                                        "prompt": "Each subunit of a four-subunit protein folds normally, but weakened contacts where the subunits meet let it fall apart into monomers. Which level?",
+                                        "choices": [
+                                            "Secondary",
+                                            "Tertiary",
+                                            "Quaternary",
+                                            "Primary"
+                                        ],
+                                        "correctIndex": 2
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "sr-demo-prot-folding",
+                        "title": "Folding & denaturation",
+                        "children": [],
+                        "concepts": [
+                            {
+                                "id": "sr-demo-c-prot-folding",
+                                "title": "Denaturation breaks the weak forces",
+                                "content": "Folding and denaturation turn on the weak, non-covalent forces (the hydrophobic effect, hydrogen bonds, van der Waals and ionic contacts) that hold a chain in its native fold. A denaturant disrupts those forces and unfolds the protein while leaving the primary sequence intact; whether function returns is just whether the chain re-finds the native state or gets trapped and aggregates.",
+                                "problems": [
+                                    {
+                                        "id": "sr-demo-p-prot-folding-1",
+                                        "prompt": "Adding 8 M urea abolishes a ribonuclease's activity; dialyzing the urea away restores it, and the peptide bonds were never touched. What happened?",
+                                        "choices": [
+                                            "The primary sequence was cut",
+                                            "Non-covalent forces were disrupted, then re-formed",
+                                            "The active-site residues were chemically modified",
+                                            "The enzyme was competitively inhibited"
+                                        ],
+                                        "correctIndex": 1
+                                    },
+                                    {
+                                        "id": "sr-demo-p-prot-folding-2",
+                                        "prompt": "Heating the same enzyme past its melting point abolishes activity and the chains aggregate irreversibly. Why can heat denaturation fail to reverse when urea's did?",
+                                        "choices": [
+                                            "Heat breaks the peptide bonds",
+                                            "Unfolded chains collide and aggregate instead of refolding",
+                                            "Heat rewrites the amino-acid sequence",
+                                            "Heat attaches phosphate groups to the chain"
+                                        ],
+                                        "correctIndex": 1
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "concepts": []
+            },
+            {
+                "id": "sr-demo-enz",
+                "title": "Enzymes",
+                "children": [
+                    {
+                        "id": "sr-demo-enz-kinetics",
+                        "title": "Kinetics",
+                        "children": [],
+                        "concepts": [
+                            {
+                                "id": "sr-demo-c-enz-kinetics",
+                                "title": "Michaelis-Menten: Vmax and Km",
+                                "content": "Michaelis-Menten kinetics describes enzyme rate as a saturable, hyperbolic function of substrate concentration with two constants. Vmax is the ceiling reached when every active site is occupied, and Km, the substrate concentration giving half of Vmax, is an inverse measure of affinity (a lower Km means tighter binding).",
+                                "problems": [
+                                    {
+                                        "id": "sr-demo-p-enz-kinetics-1",
+                                        "prompt": "An enzyme's initial velocity climbs with substrate, then bends over to a plateau. What does the plateau represent?",
+                                        "choices": [
+                                            "Km",
+                                            "Vmax, with every active site occupied",
+                                            "The inhibitor constant Ki",
+                                            "The isoelectric point"
+                                        ],
+                                        "correctIndex": 1
+                                    },
+                                    {
+                                        "id": "sr-demo-p-enz-kinetics-2",
+                                        "prompt": "Enzyme X reaches half its maximum rate at 0.1 mM substrate; enzyme Y needs 2 mM. Which binds substrate more tightly?",
+                                        "choices": [
+                                            "Enzyme Y, it needs more substrate",
+                                            "Enzyme X, it has the lower Km",
+                                            "They bind equally tightly",
+                                            "You cannot tell without Vmax"
+                                        ],
+                                        "correctIndex": 1
+                                    },
+                                    {
+                                        "id": "sr-demo-p-enz-kinetics-3",
+                                        "prompt": "Two enzymes share a substrate. Reading only Km, what does a lower Km tell you?",
+                                        "choices": [
+                                            "Weaker substrate binding",
+                                            "A higher Vmax",
+                                            "Tighter substrate binding (higher affinity)",
+                                            "More inhibitor is present"
+                                        ],
+                                        "correctIndex": 2
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "sr-demo-enz-inhibition",
+                        "title": "Inhibition",
+                        "children": [],
+                        "concepts": [
+                            {
+                                "id": "sr-demo-c-enz-inhibition",
+                                "title": "Read the inhibitor type off Km and Vmax",
+                                "content": "A reversible inhibitor is identified by the pattern it leaves in Km and Vmax. Apparent Km up with Vmax preserved, and rescue by excess substrate, means the inhibitor competes at the active site (competitive). Vmax down with Km preserved, and no rescue, means it binds elsewhere (noncompetitive).",
+                                "problems": [
+                                    {
+                                        "id": "sr-demo-p-enz-inhibition-1",
+                                        "prompt": "With a drug present, Vmax is unchanged but apparent Km doubles, and flooding with substrate fully restores the rate. What kind of inhibition is this?",
+                                        "choices": [
+                                            "Noncompetitive",
+                                            "Competitive",
+                                            "Irreversible",
+                                            "No inhibition at all"
+                                        ],
+                                        "correctIndex": 1
+                                    },
+                                    {
+                                        "id": "sr-demo-p-enz-inhibition-2",
+                                        "prompt": "With a compound present, Vmax falls while apparent Km is unchanged, and excess substrate does not restore the rate. What kind of inhibition?",
+                                        "choices": [
+                                            "Competitive",
+                                            "Noncompetitive",
+                                            "The compound is just extra substrate",
+                                            "Allosteric activation"
+                                        ],
+                                        "correctIndex": 1
+                                    },
+                                    {
+                                        "id": "sr-demo-p-enz-inhibition-3",
+                                        "prompt": "For a competitive inhibitor, apparent Km = Km * (1 + [I]/Ki). If the apparent Km doubles, what is [I]?",
+                                        "choices": ["2 * Ki", "Ki", "Ki / 2", "Zero"],
+                                        "correctIndex": 1
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "sr-demo-enz-regulation",
+                        "title": "Regulation",
+                        "children": [],
+                        "concepts": [
+                            {
+                                "id": "sr-demo-c-enz-regulation",
+                                "title": "The cell tunes its own enzymes",
+                                "content": "Enzyme regulation is the cell deliberately tuning an enzyme's activity to match its needs, distinct from an outside molecule merely competing for the active site: allosteric effectors at regulatory sites (often feedback inhibition of a committed step), cooperativity, and covalent modification such as phosphorylation.",
+                                "problems": [
+                                    {
+                                        "id": "sr-demo-p-enz-regulation-1",
+                                        "prompt": "A pathway's end product binds the first committed enzyme at a site away from the active site, slowing it; as the product is used up, the enzyme speeds back up. This is:",
+                                        "choices": [
+                                            "Competitive inhibition",
+                                            "Feedback (allosteric) regulation",
+                                            "Denaturation",
+                                            "Plain kinetics with no effector"
+                                        ],
+                                        "correctIndex": 1
+                                    },
+                                    {
+                                        "id": "sr-demo-p-enz-regulation-2",
+                                        "prompt": "A kinase attaches a phosphate to switch an enzyme between active and inactive forms, and a phosphatase removes it. This control is:",
+                                        "choices": [
+                                            "Covalent modification (regulation)",
+                                            "Competitive inhibition",
+                                            "A change in the primary sequence",
+                                            "Simple substrate saturation"
+                                        ],
+                                        "correctIndex": 0
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "concepts": []
+            }
+        ],
+        "concepts": []
+    }
+}

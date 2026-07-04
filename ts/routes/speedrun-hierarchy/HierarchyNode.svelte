@@ -25,8 +25,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: hasChildren = node.children.length > 0;
     $: leaf = !isRoot && !hasChildren;
     $: selected = $selectedId === node.id;
-    // A branch tints coral while it is the direct parent of the open leaf, echoing
-    // the builder frame's active group.
+    // The one coral trigger for a branch: it is the direct parent of the open
+    // leaf. Selection only ever targets a leaf, so exactly one branch (the open
+    // leaf's parent) can be active at a time.
     $: isSelectedParent = !isRoot && node.children.some((c) => c.id === $selectedId);
     $: childAncestors = [...ancestors, node.id];
     $: pulseIndex = $pulseState ? $pulseState.ids.indexOf(node.id) : -1;
@@ -61,10 +62,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     function onTitleInput(): void {
         ctx.change();
-    }
-    function commitTitle(): void {
-        ctx.change();
-        ctx.pulse(selfChain());
     }
     function onKeydown(event: KeyboardEvent): void {
         if (event.key === "Enter") {
@@ -128,7 +125,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 class="name name-input"
                 bind:value={node.title}
                 on:input={onTitleInput}
-                on:change={commitTitle}
                 on:keydown={onKeydown}
                 on:focus={onNameFocus}
                 placeholder="Name"
@@ -204,16 +200,17 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: 12px;
         padding: 12px 16px;
     }
-    // Group branch: a nested surface, tinting coral while it holds the open leaf
-    // or while its own name is being edited.
+    // Group branch: a nested surface, tinting coral only while it is the direct
+    // parent of the open leaf, so at most one branch ever reads as active.
+    // Editing a branch name shows its own coral underline, not a row highlight,
+    // so focus never leaves a second branch stuck coral.
     .row.branch {
         background: var(--sr-panel-2);
         border: 1.5px solid transparent;
         border-radius: 11px;
         padding: 11px 14px;
     }
-    .row.branch.active,
-    .row.branch:focus-within {
+    .row.branch.active {
         background: var(--sr-white);
         border-color: var(--sr-signal);
     }
@@ -250,13 +247,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: var(--sr-track);
         font-size: 10px;
     }
-    .row.branch.active .caret,
-    .row.branch:focus-within .caret {
+    .row.branch.active .caret {
         background: var(--sr-signal-weak);
         color: var(--sr-signal);
     }
-    :global(.night-mode) .row.branch.active .caret,
-    :global(.night-mode) .row.branch:focus-within .caret {
+    :global(.night-mode) .row.branch.active .caret {
         color: var(--sr-signal-ink);
     }
 
@@ -463,6 +458,32 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     @media (prefers-reduced-motion: reduce) {
         .pulse {
             display: none;
+        }
+        .controls,
+        .del {
+            transition: none;
+        }
+    }
+
+    // Phone: reclaim the horizontal room the deep indent + row padding take, so
+    // topic/group names get enough width to read instead of clipping.
+    @media (max-width: 34rem) {
+        .row {
+            gap: 8px;
+        }
+        .row.root {
+            padding: 11px 12px;
+        }
+        .row.branch {
+            padding: 10px 10px;
+        }
+        .row.leaf {
+            padding: 9px 10px;
+        }
+        .children,
+        .children.root-children {
+            margin-left: 8px;
+            padding-left: 10px;
         }
     }
 </style>

@@ -130,6 +130,8 @@ fun isSvelteKitPage(path: String): Boolean {
         "speedrun-hierarchy",
         "speedrun-review",
         "speedrun-review-demo",
+        "speedrun-account",
+        "speedrun-import",
         -> true
         else -> false
     }

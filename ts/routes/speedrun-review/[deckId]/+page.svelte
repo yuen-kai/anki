@@ -433,7 +433,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .stage {
         box-sizing: border-box;
         position: relative;
-        min-height: 100%;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
         align-items: center;

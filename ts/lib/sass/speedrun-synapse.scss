@@ -453,6 +453,31 @@ $stages: learn, practice, guided, solo;
 
     :global(.sr-btn) {
         @include btn;
+        transition:
+            transform 130ms ease,
+            box-shadow 130ms ease,
+            filter 130ms ease;
+    }
+    // The one shared button motion, mirrored on keyboard focus: a 1px lift with
+    // a hair more warmth; the primary's coral glow deepens with it. Disabled
+    // buttons stay put.
+    :global(.sr-btn:not(:disabled):not(.sr-btn--disabled):hover),
+    :global(.sr-btn:not(:disabled):not(.sr-btn--disabled):focus-visible) {
+        transform: translateY(-1px);
+        filter: brightness(1.03);
+    }
+    :global(.sr-btn--primary:not(:disabled):not(.sr-btn--disabled):hover),
+    :global(.sr-btn--primary:not(:disabled):not(.sr-btn--disabled):focus-visible) {
+        box-shadow: var(--sr-shadow-signal-lg);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        :global(.sr-btn) {
+            transition: none;
+        }
+        :global(.sr-btn:hover),
+        :global(.sr-btn:focus-visible) {
+            transform: none;
+        }
     }
     :global(.sr-btn--primary) {
         @include btn-primary;

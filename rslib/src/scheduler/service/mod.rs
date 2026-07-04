@@ -318,6 +318,18 @@ impl crate::services::SchedulerService for Collection {
         speedrun::study_summary(self, input)
     }
 
+    fn speedrun_ensure_seeded(&mut self, input: generic::Json) -> Result<generic::Json> {
+        speedrun::ensure_seeded(self, input)
+    }
+
+    fn speedrun_ai_config(&mut self, input: generic::Json) -> Result<generic::Json> {
+        speedrun::ai_config(self, input)
+    }
+
+    fn speedrun_ai_import(&mut self, input: generic::Json) -> Result<generic::Json> {
+        speedrun::ai_import(self, input)
+    }
+
     fn custom_study(
         &mut self,
         input: scheduler::CustomStudyRequest,

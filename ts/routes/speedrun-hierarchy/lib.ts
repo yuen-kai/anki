@@ -4,6 +4,7 @@
 import { goto } from "$app/navigation";
 import {
     speedrunDeleteDeck,
+    speedrunEnsureSeeded,
     speedrunGetHierarchy,
     speedrunListDecks,
     speedrunOpenDeck,
@@ -34,6 +35,12 @@ export interface Problem {
     choices: [string, string, string, string];
     // Index into `choices`; -1 while the author has not marked an answer yet.
     correctIndex: number;
+    // Optional stem figure/crop, a filename in collection media, served
+    // root-relative as `/<filename>`. Convention: `<problemId>-stem.png`.
+    image?: string;
+    // Optional per-choice figures, parallel to `choices` (length 4): a filename
+    // or null. Convention: `<problemId>-c<0..3>.png`.
+    choiceImages?: (string | null)[];
 }
 
 export interface Concept {
@@ -41,6 +48,11 @@ export interface Concept {
     title: string;
     content: string;
     problems: Problem[];
+    // Optional source figure/crop, a filename in collection media, served
+    // root-relative as `/<filename>`. Convention: `<conceptId>-src.png`.
+    image?: string;
+    // Optional short traceability snippet for where the concept came from.
+    sourceText?: string;
 }
 
 export interface Node {
@@ -81,6 +93,17 @@ export const quiet = { alertOnError: false } as const;
 
 export async function listDecks(): Promise<DeckSummary[]> {
     return dec<DeckSummary[]>(await speedrunListDecks({ json: enc({}) }, quiet));
+}
+
+// Idempotently preload (or backfill from an updated bundle) the demo + MCAT
+// decks through the shared engine. Desktop also seeds eagerly on collection open
+// (qt main.py), so this is the mobile shell's trigger; returns the names of any
+// decks it created or refreshed.
+export async function ensureSeeded(): Promise<string[]> {
+    const reply = dec<{ seeded?: string[]; updated?: string[] }>(
+        await speedrunEnsureSeeded({ json: enc({}) }, quiet),
+    );
+    return [...(reply.seeded ?? []), ...(reply.updated ?? [])];
 }
 
 export async function getHierarchy(deckId: string): Promise<Hierarchy> {
@@ -168,80 +191,34 @@ export function isUnsaved(deckId: string): boolean {
     return deckId === "" || deckId === "new";
 }
 
-export const AUTOSAVE_MS = 500;
+// The save lifecycle for the builder header. A freshly loaded deck already lives
+// on the backend, so it reads as "saved"; edits mark it "dirty"; an explicit
+// save moves through "saving" to "saved", and a failed save lands on "error".
+// "clean" is the silent start for a brand-new (unsaved) deck, which has nothing
+// to report until it is touched.
+export type SaveStatus = "clean" | "dirty" | "saving" | "saved" | "error";
 
-export interface Autosave {
-    schedule(hierarchy: Hierarchy): void;
-    // Save any pending edit right now (e.g. on unmount) instead of waiting out
-    // the debounce.
-    flush(): void;
-    cancel(): void;
+// The mono readout shown beside the Save button. "clean" is intentionally silent.
+export function saveStatusLabel(status: SaveStatus): string {
+    switch (status) {
+        case "saving":
+            return "Saving";
+        case "saved":
+            return "Saved";
+        case "dirty":
+            return "Unsaved";
+        case "error":
+            return "Save failed";
+        default:
+            return "";
+    }
 }
 
-// Debounced, self-coalescing autosave: edits queue behind an in-flight save
-// instead of racing it, so the last write always wins and we never overlap
-// requests.
-export function createAutosave(
-    onResult: (result: SaveResult) => void,
-    onError: (error: unknown) => void,
-    delayMs = AUTOSAVE_MS,
-): Autosave {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let saving = false;
-    let dirty = false;
-    let latest: Hierarchy | null = null;
-
-    async function run(): Promise<void> {
-        if (!latest) {
-            return;
-        }
-        saving = true;
-        dirty = false;
-        try {
-            onResult(await saveHierarchy(latest));
-        } catch (error) {
-            onError(error);
-        } finally {
-            saving = false;
-            if (dirty) {
-                run();
-            }
-        }
-    }
-
-    return {
-        schedule(hierarchy: Hierarchy): void {
-            latest = hierarchy;
-            if (saving) {
-                dirty = true;
-                return;
-            }
-            if (timer) {
-                clearTimeout(timer);
-            }
-            timer = setTimeout(() => {
-                timer = undefined;
-                run();
-            }, delayMs);
-        },
-        flush(): void {
-            if (timer) {
-                clearTimeout(timer);
-                timer = undefined;
-            }
-            if (saving) {
-                dirty = true;
-                return;
-            }
-            run();
-        },
-        cancel(): void {
-            if (timer) {
-                clearTimeout(timer);
-                timer = undefined;
-            }
-        },
-    };
+// Whether the draft holds edits that are not on the backend yet, so leaving the
+// screen should warn first. A save in flight already covers the current edits;
+// only an unsaved ("dirty") or failed ("error") draft needs the guard.
+export function hasUnsavedChanges(status: SaveStatus): boolean {
+    return status === "dirty" || status === "error";
 }
 
 // A pulse names the ancestor chain (edited node first, root last) plus a
@@ -252,8 +229,8 @@ export interface PulseState {
 }
 
 // Shared editor plumbing handed to the recursive tree and the concepts panel,
-// so a change anywhere can trigger autosave, selection, and the pulse without
-// threading callbacks through every level.
+// so a change anywhere can mark the draft dirty, drive selection, and the pulse
+// without threading callbacks through every level.
 export interface TreeContext {
     change(): void;
     pulse(chain: string[]): void;

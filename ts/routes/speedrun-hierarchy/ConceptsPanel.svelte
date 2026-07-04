@@ -62,7 +62,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     // The editor edits the same concept object in place; re-reading the list (new
-    // array reference) reflects title / problem-count changes, then autosave runs.
+    // array reference) reflects title / problem-count changes and marks the draft
+    // dirty for the next explicit save.
     function onEditorChange(): void {
         node.concepts = [...node.concepts];
         ctx.change();
@@ -280,5 +281,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin-top: 18px;
         padding-top: 18px;
         border-top: 1px solid var(--sr-line);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .del {
+            transition: none;
+        }
     }
 </style>

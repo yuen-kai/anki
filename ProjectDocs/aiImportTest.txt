@@ -1,0 +1,386 @@
+========================================================================
+INTRODUCTORY SCIENCE STUDY GUIDE (BEGINNER)
+Biology | Chemistry | Physics
+Topic hierarchy, concept descriptions, and multiple-choice practice
+========================================================================
+
+HOW TO USE THIS FILE
+- Read each concept description, then attempt the MCQs below it.
+- Answers with brief explanations are in the ANSWER KEY at the very bottom.
+- Question codes (e.g., B1.1-a) map directly to the key.
+
+
+========================================================================
+1. BIOLOGY  — the study of living things
+========================================================================
+
+1.1 CELL BIOLOGY
+------------------------------------------------------------------------
+
+  1.1.1 Cell Theory
+  Description: The cell is the basic unit of life. Cell theory states
+  that all living things are made of cells, cells are the smallest unit
+  of life, and all cells come from pre-existing cells.
+
+    Q B1.1-a) Which statement is part of cell theory?
+       A) All cells contain chlorophyll
+       B) All living things are made of cells
+       C) Cells can appear from non-living matter
+       D) Only animals are made of cells
+
+    Q B1.1-b) The smallest unit that can be considered "alive" is the:
+       A) atom      B) molecule      C) cell      D) organ
+
+  1.1.2 Prokaryotes vs. Eukaryotes
+  Description: Prokaryotic cells (e.g., bacteria) have no membrane-bound
+  nucleus; their DNA floats freely. Eukaryotic cells (plants, animals,
+  fungi) keep their DNA inside a nucleus and have membrane-bound
+  organelles.
+
+    Q B1.2-a) A key feature of a eukaryotic cell is:
+       A) no DNA
+       B) a membrane-bound nucleus
+       C) it is always single-celled
+       D) it has no organelles
+
+    Q B1.2-b) Bacteria are best described as:
+       A) eukaryotes      B) prokaryotes      C) viruses      D) fungi
+
+    Q B1.2-c) Which organism is made of eukaryotic cells?
+       A) A bacterium      B) A human      C) A virus      D) None
+
+  1.1.3 Organelles
+  Description: Organelles are specialized structures inside a cell. The
+  mitochondria release energy from food, the nucleus stores DNA, and
+  chloroplasts (in plants) carry out photosynthesis.
+
+    Q B1.3-a) The organelle known as the cell's "powerhouse" is the:
+       A) nucleus      B) ribosome      C) mitochondrion      D) vacuole
+
+    Q B1.3-b) Chloroplasts are found mainly in:
+       A) animal cells      B) plant cells      C) bacteria      D) viruses
+
+
+1.2 GENETICS
+------------------------------------------------------------------------
+
+  1.2.1 DNA and Genes
+  Description: DNA is the molecule that carries genetic instructions. A
+  gene is a segment of DNA that codes for a trait. DNA is shaped like a
+  double helix (a twisted ladder).
+
+    Q B2.1-a) DNA is shaped like a:
+       A) single line      B) double helix      C) sphere      D) triangle
+
+    Q B2.1-b) A segment of DNA that codes for a trait is called a:
+       A) cell      B) gene      C) protein      D) tissue
+
+  1.2.2 Mendelian Inheritance
+  Description: Traits pass from parents to offspring through alleles.
+  Dominant alleles mask recessive ones. An organism with two different
+  alleles is heterozygous; two identical alleles make it homozygous.
+
+    Q B2.2-a) A dominant allele:
+       A) is always harmful
+       B) masks a recessive allele
+       C) only appears in plants
+       D) cannot be inherited
+
+    Q B2.2-b) An organism with two identical alleles for a trait is:
+       A) heterozygous      B) homozygous      C) recessive      D) mutated
+
+
+1.3 EVOLUTION
+------------------------------------------------------------------------
+
+  1.3.1 Natural Selection
+  Description: Individuals with traits better suited to their environment
+  tend to survive and reproduce more. Over many generations, helpful
+  traits become more common in a population.
+
+    Q B3.1-a) Natural selection favors individuals that are:
+       A) the largest
+       B) best suited to their environment
+       C) born first
+       D) fully identical to each other
+
+    Q B3.1-b) Natural selection acts over:
+       A) a single day
+       B) many generations
+       C) one lifetime only
+       D) it does not involve time
+
+
+1.4 ECOLOGY
+------------------------------------------------------------------------
+
+  1.4.1 Food Chains and Energy Flow
+  Description: Energy flows from producers (plants) to consumers.
+  Herbivores eat plants; carnivores eat animals. Energy is lost as heat
+  at each step, so food chains are usually short.
+
+    Q B4.1-a) In a food chain, plants are usually the:
+       A) top predators      B) producers      C) decomposers      D) consumers
+
+    Q B4.1-b) An animal that eats only plants is a:
+       A) carnivore      B) herbivore      C) producer      D) decomposer
+
+
+========================================================================
+2. CHEMISTRY  — the study of matter and its changes
+========================================================================
+
+2.1 MATTER
+------------------------------------------------------------------------
+
+  2.1.1 States of Matter
+  Description: Matter commonly exists as solid, liquid, or gas. Solids
+  hold their shape, liquids take the shape of their container, and gases
+  spread to fill any space. Adding or removing heat changes the state.
+
+    Q C1.1-a) Which state of matter has a fixed shape and fixed volume?
+       A) gas      B) liquid      C) solid      D) plasma
+
+    Q C1.1-b) Heating a liquid enough turns it into a:
+       A) solid      B) gas      C) mixture      D) metal
+
+  2.1.2 Elements, Compounds, and Mixtures
+  Description: An element is a pure substance made of one type of atom.
+  A compound is two or more elements chemically bonded (e.g., water).
+  A mixture is substances physically combined and separable (e.g., salad).
+
+    Q C1.2-a) Water (H2O) is an example of a:
+       A) element      B) compound      C) mixture      D) metal
+
+    Q C1.2-b) Which is a pure substance made of only one kind of atom?
+       A) compound      B) mixture      C) element      D) solution
+
+
+2.2 ATOMIC STRUCTURE
+------------------------------------------------------------------------
+
+  2.2.1 Parts of the Atom
+  Description: Atoms contain protons (positive), neutrons (neutral) in
+  the nucleus, and electrons (negative) orbiting outside. The number of
+  protons defines the element.
+
+    Q C2.1-a) The particle with a positive charge is the:
+       A) electron      B) neutron      C) proton      D) photon
+
+    Q C2.1-b) Electrons carry a charge that is:
+       A) positive      B) negative      C) neutral      D) variable
+
+    Q C2.1-c) What determines which element an atom is?
+       A) number of neutrons
+       B) number of protons
+       C) number of electrons only
+       D) its temperature
+
+  2.2.2 The Periodic Table
+  Description: The periodic table organizes elements by atomic number
+  (number of protons). Rows are periods; columns are groups. Elements in
+  the same group often behave similarly.
+
+    Q C2.2-a) Elements in the periodic table are ordered by:
+       A) weight in grams
+       B) atomic number
+       C) color
+       D) alphabetical name
+
+    Q C2.2-b) A vertical column in the periodic table is called a:
+       A) period      B) group      C) row      D) bond
+
+
+2.3 CHEMICAL BONDING
+------------------------------------------------------------------------
+
+  2.3.1 Ionic and Covalent Bonds
+  Description: In an ionic bond, one atom transfers electrons to another
+  (common between metals and non-metals). In a covalent bond, atoms share
+  electrons (common between non-metals).
+
+    Q C3.1-a) In a covalent bond, atoms:
+       A) transfer electrons      B) share electrons
+       C) lose their nucleus      D) never interact
+
+    Q C3.1-b) An ionic bond usually forms between a:
+       A) metal and a non-metal
+       B) two identical gases
+       C) two liquids only
+       D) two mixtures
+
+
+2.4 REACTIONS
+------------------------------------------------------------------------
+
+  2.4.1 Acids and Bases
+  Description: Acids have a pH below 7 and taste sour (e.g., lemon juice);
+  bases have a pH above 7 and feel slippery (e.g., soap). A pH of 7 is
+  neutral, like pure water.
+
+    Q C4.1-a) A substance with a pH of 3 is:
+       A) a base      B) neutral      C) an acid      D) a metal
+
+    Q C4.1-b) Pure water has a pH of about:
+       A) 0      B) 7      C) 14      D) 4
+
+    Q C4.1-c) A pH above 7 indicates a:
+       A) strong acid      B) base      C) neutral solution      D) gas
+
+
+========================================================================
+3. PHYSICS  — the study of matter, energy, and motion
+========================================================================
+
+3.1 MOTION
+------------------------------------------------------------------------
+
+  3.1.1 Speed, Velocity, and Acceleration
+  Description: Speed is how fast something moves (distance / time).
+  Velocity is speed with a direction. Acceleration is a change in
+  velocity over time (speeding up, slowing down, or turning).
+
+    Q P1.1-a) Speed is calculated as:
+       A) time / distance
+       B) distance / time
+       C) mass x speed
+       D) force x time
+
+    Q P1.1-b) Velocity differs from speed because it includes:
+       A) mass      B) direction      C) color      D) temperature
+
+  3.1.2 Newton's Laws of Motion
+  Description: First law: objects keep doing what they're doing unless a
+  force acts (inertia). Second law: force = mass x acceleration. Third
+  law: every action has an equal and opposite reaction.
+
+    Q P1.2-a) Newton's third law states that every action has:
+       A) no reaction
+       B) an equal and opposite reaction
+       C) a stronger reaction
+       D) a delayed reaction
+
+    Q P1.2-b) The equation F = m x a comes from Newton's:
+       A) first law      B) second law      C) third law      D) law of gravity
+
+    Q P1.2-c) The tendency of an object to resist changes in motion is:
+       A) friction      B) gravity      C) inertia      D) energy
+
+
+3.2 ENERGY
+------------------------------------------------------------------------
+
+  3.2.1 Kinetic and Potential Energy
+  Description: Kinetic energy is the energy of motion. Potential energy
+  is stored energy due to position (e.g., a ball held up high). Energy
+  can change from one form to another.
+
+    Q P2.1-a) A moving car has mostly:
+       A) potential energy      B) kinetic energy
+       C) no energy             D) chemical energy only
+
+    Q P2.1-b) A rock resting at the top of a hill has stored:
+       A) kinetic energy      B) potential energy
+       C) sound energy        D) no energy
+
+  3.2.2 Conservation of Energy
+  Description: Energy cannot be created or destroyed, only transformed
+  from one type to another. The total amount of energy stays constant.
+
+    Q P2.2-a) The law of conservation of energy says energy can be:
+       A) created from nothing
+       B) destroyed completely
+       C) transformed but not destroyed
+       D) only stored, never moved
+
+
+3.3 FORCES
+------------------------------------------------------------------------
+
+  3.3.1 Gravity and Friction
+  Description: Gravity is a force that pulls objects toward each other;
+  on Earth it pulls things toward the ground. Friction is a force that
+  opposes motion between surfaces in contact.
+
+    Q P3.1-a) The force that pulls a dropped object toward the ground is:
+       A) friction      B) gravity      C) inertia      D) magnetism
+
+    Q P3.1-b) Friction is a force that:
+       A) speeds objects up
+       B) opposes motion between surfaces
+       C) only acts in space
+       D) has no effect on movement
+
+
+3.4 WAVES
+------------------------------------------------------------------------
+
+  3.4.1 Sound and Light
+  Description: Waves carry energy from place to place. Sound waves need a
+  medium (like air) to travel; light waves can travel through empty space.
+  Light travels much faster than sound.
+
+    Q P4.1-a) Sound waves need a medium such as air because they:
+       A) are made of light
+       B) cannot travel through a vacuum
+       C) travel faster than light
+       D) have no energy
+
+    Q P4.1-b) Compared to sound, light travels:
+       A) slower      B) at the same speed      C) much faster      D) not at all
+
+
+========================================================================
+ANSWER KEY
+========================================================================
+
+BIOLOGY
+  B1.1-a) B  — All living things are made of cells.
+  B1.1-b) C  — The cell is the smallest unit of life.
+  B1.2-a) B  — Eukaryotes have a membrane-bound nucleus.
+  B1.2-b) B  — Bacteria are prokaryotes.
+  B1.2-c) B  — Humans are made of eukaryotic cells.
+  B1.3-a) C  — Mitochondria release energy (the "powerhouse").
+  B1.3-b) B  — Chloroplasts are found in plant cells.
+  B2.1-a) B  — DNA is a double helix.
+  B2.1-b) B  — A DNA segment coding a trait is a gene.
+  B2.2-a) B  — A dominant allele masks a recessive one.
+  B2.2-b) B  — Two identical alleles = homozygous.
+  B3.1-a) B  — Selection favors those suited to the environment.
+  B3.1-b) B  — It acts over many generations.
+  B4.1-a) B  — Plants are producers.
+  B4.1-b) B  — A plant-only eater is a herbivore.
+
+CHEMISTRY
+  C1.1-a) C  — Solids have fixed shape and volume.
+  C1.1-b) B  — Heating a liquid produces a gas.
+  C1.2-a) B  — Water is a compound.
+  C1.2-b) C  — An element has one kind of atom.
+  C2.1-a) C  — Protons are positive.
+  C2.1-b) B  — Electrons are negative.
+  C2.1-c) B  — Number of protons defines the element.
+  C2.2-a) B  — Ordered by atomic number.
+  C2.2-b) B  — A column is a group.
+  C3.1-a) B  — Covalent bonds share electrons.
+  C3.1-b) A  — Ionic bonds form between a metal and a non-metal.
+  C4.1-a) C  — pH 3 is acidic.
+  C4.1-b) B  — Pure water is pH 7 (neutral).
+  C4.1-c) B  — pH above 7 is basic.
+
+PHYSICS
+  P1.1-a) B  — Speed = distance / time.
+  P1.1-b) B  — Velocity includes direction.
+  P1.2-a) B  — Equal and opposite reaction (third law).
+  P1.2-b) B  — F = m x a is the second law.
+  P1.2-c) C  — Resistance to change in motion is inertia.
+  P2.1-a) B  — A moving car has kinetic energy.
+  P2.1-b) B  — A raised rock has potential energy.
+  P2.2-a) C  — Energy is transformed, not destroyed.
+  P3.1-a) B  — Gravity pulls objects toward the ground.
+  P3.1-b) B  — Friction opposes motion between surfaces.
+  P4.1-a) B  — Sound cannot travel through a vacuum.
+  P4.1-b) C  — Light travels much faster than sound.
+
+========================================================================
+END OF STUDY GUIDE
+========================================================================

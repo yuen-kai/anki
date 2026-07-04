@@ -10,6 +10,7 @@ below on the same card (via the seam). No difficulty rating — the action is
 <script lang="ts">
     import { type Concept, type Node, pathToConcept, pickTwoProblems } from "./lib";
     import MasteryBadge from "./MasteryBadge.svelte";
+    import MediaImage from "./MediaImage.svelte";
     import ReviewCard from "./ReviewCard.svelte";
     import Seam from "./Seam.svelte";
 
@@ -71,6 +72,10 @@ below on the same card (via the seam). No difficulty rating — the action is
             <div class="case">
                 <p class="case-label">Problem {CASE_LABELS[i] ?? i + 1}</p>
                 <p class="case-prompt">{problem.prompt || "Untitled problem"}</p>
+                <MediaImage
+                    filename={problem.image}
+                    alt="Problem {CASE_LABELS[i] ?? i + 1} figure"
+                />
                 {#if problem.answer}
                     <p class="case-answer">
                         <span aria-hidden="true">✓</span>
@@ -112,6 +117,7 @@ below on the same card (via the seam). No difficulty rating — the action is
                     No description was authored for this concept.
                 </p>
             {/if}
+            <MediaImage filename={concept.image} alt={title} />
             <button class="next-btn" type="button" on:click={onNext}>
                 Next concept
             </button>

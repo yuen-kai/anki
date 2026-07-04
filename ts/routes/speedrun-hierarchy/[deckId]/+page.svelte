@@ -27,7 +27,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         @include sr.tokens;
 
         box-sizing: border-box;
-        min-height: 100%;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
         align-items: center;

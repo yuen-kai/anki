@@ -10,12 +10,14 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use anki_io::create_dir_all;
+use anki_io::write_file;
 use reqwest::Client;
 
 use crate::media::files::add_data_to_folder_uniquely;
 use crate::media::files::mtime_as_i64;
 use crate::media::files::remove_files;
 use crate::media::files::sha1_of_data;
+use crate::media::files::sha1_of_file;
 use crate::prelude::*;
 use crate::progress::ThrottlingProgressHandler;
 use crate::sync::http_client::HttpSyncClient;
@@ -86,6 +88,43 @@ impl MediaManager {
             }
 
             Ok(chosen_fname)
+        })
+    }
+
+    /// Add a bundled file to the media folder under its exact `name`, replacing
+    /// any existing file of that name, and record it in the media database.
+    ///
+    /// Unlike [`Self::add_file`], the name is never altered on a content
+    /// conflict: app-shipped assets (e.g. Speedrun figures) are referenced by
+    /// their exact filename in `<img src="/<name>">`, so an updated asset must
+    /// overwrite the old bytes in place instead of landing under a hashed name.
+    /// Idempotent: an identical re-copy leaves the file (and its mtime)
+    /// untouched, so reseeding on every collection open doesn't churn the DB.
+    pub fn add_or_replace_file(&self, name: &str, data: &[u8]) -> Result<()> {
+        let data_hash = sha1_of_data(data);
+        self.transact(|db| {
+            let path = self.media_folder.join(name);
+            let existing_hash = match sha1_of_file(&path) {
+                Ok(hash) => Some(hash),
+                Err(err) if err.is_not_found() => None,
+                Err(err) => return Err(err.into()),
+            };
+            if existing_hash != Some(data_hash) {
+                write_file(&path, data)?;
+            }
+
+            let entry_current = db
+                .get_entry(name)?
+                .is_some_and(|entry| entry.sha1 == Some(data_hash));
+            if !entry_current {
+                db.set_entry(&MediaEntry {
+                    fname: name.to_string(),
+                    sha1: Some(data_hash),
+                    mtime: mtime_as_i64(&path)?,
+                    sync_required: true,
+                })?;
+            }
+            Ok(())
         })
     }
 

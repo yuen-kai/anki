@@ -20,6 +20,7 @@ use std::ops::Deref;
 use std::result;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::Once;
 use std::sync::OnceLock;
 use std::thread::JoinHandle;
 
@@ -67,6 +68,16 @@ struct BackendState {
 }
 
 pub fn init_backend(init_msg: &[u8]) -> result::Result<Backend, String> {
+    // Load a gitignored `.env` from the working directory (repo root under
+    // `just run`) once at startup, so developer secrets like OPENAI_API_KEY reach
+    // the shared engine through std::env without being exported or hardcoded (see
+    // speedrun::ai_import). A missing file is a no-op, and an already-set OS env
+    // var is never overridden, so the env-wins precedence is preserved.
+    static DOTENV: Once = Once::new();
+    DOTENV.call_once(|| {
+        dotenvy::dotenv().ok();
+    });
+
     let input: anki_proto::backend::BackendInit =
         match anki_proto::backend::BackendInit::decode(init_msg) {
             Ok(req) => req,

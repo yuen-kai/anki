@@ -432,6 +432,8 @@ def is_sveltekit_page(path: str) -> bool:
         "speedrun-study",
         "speedrun-review",
         "speedrun-review-demo",
+        "speedrun-account",
+        "speedrun-import",
     ]
 
 
@@ -788,6 +790,82 @@ def speedrun_show_decks() -> bytes:
     return _speedrun_response({})
 
 
+# --- Speedrun accounts + sync (the speedrun-account SvelteKit screen) --------
+#
+# The account screen posts these (via the FrontendService Speedrun* RPCs, so
+# they share the _speedrun_request/_speedrun_response protobuf wrapping) to log
+# in to the in-repo self-hosted sync server (SimpleServer) with a username +
+# password. Login stores the returned sync key in the profile, and Anki's normal
+# sync (button + auto-sync on open/close) runs against it.
+
+
+def speedrun_sync_login() -> bytes:
+    """Log in to the self-hosted sync server with a username and password, store
+    the returned key in the profile, so the normal sync flow can use it."""
+    data = _speedrun_request()
+    username = str(data.get("username", "")).strip()
+    password = str(data.get("password", ""))
+    endpoint = str(data.get("endpoint", "")).strip() or None
+    if not username or not password:
+        return _speedrun_response(
+            {
+                "ok": False,
+                "account": None,
+                "endpoint": None,
+                "message": "Enter a username and password.",
+            }
+        )
+    try:
+        auth = aqt.mw.col.sync_login(username, password, endpoint)
+    except Exception as exc:
+        return _speedrun_response(
+            {"ok": False, "account": None, "endpoint": None, "message": str(exc)}
+        )
+
+    def store() -> None:
+        aqt.mw.pm.set_sync_key(auth.hkey)
+        aqt.mw.pm.set_sync_username(username)
+        if endpoint:
+            aqt.mw.pm.set_custom_sync_url(endpoint)
+
+    aqt.mw.taskman.run_on_main(store)
+    return _speedrun_response({"ok": True, "account": username, "endpoint": endpoint})
+
+
+def speedrun_sync_now() -> bytes:
+    """Kick off a normal collection sync against the stored credentials. Runs on
+    the main thread with Anki's usual progress UI."""
+    if not aqt.mw.pm.sync_auth():
+        return _speedrun_response({"ok": False, "message": "Not signed in."})
+
+    def on_main() -> None:
+        from aqt import sync as aqt_sync
+
+        if aqt.mw.pm.sync_auth():
+            aqt_sync.sync_collection(aqt.mw, lambda: None)
+
+    aqt.mw.taskman.run_on_main(on_main)
+    return _speedrun_response({"ok": True, "message": "Sync started."})
+
+
+def speedrun_sign_out() -> bytes:
+    """Drop the stored sync credentials."""
+    aqt.mw.taskman.run_on_main(lambda: aqt.mw.pm.clear_sync_auth())
+    return _speedrun_response({"ok": True})
+
+
+def speedrun_sync_status() -> bytes:
+    auth = aqt.mw.pm.sync_auth()
+    return _speedrun_response(
+        {
+            "loggedIn": bool(auth),
+            "account": (aqt.mw.pm.profile or {}).get("syncUser") if auth else None,
+            "endpoint": aqt.mw.pm.sync_endpoint(),
+            "hostAvailable": True,
+        }
+    )
+
+
 # The bespoke card-study screen (speedrun-review) now drives the shared Rust
 # engine directly: speedrunStudyState / speedrunNextCard / speedrunAnswerCard /
 # speedrunRecordLearned / speedrunStudyHierarchy are SchedulerService RPCs (see
@@ -818,6 +896,11 @@ post_handler_list = [
     speedrun_start_study,
     speedrun_overview_action,
     speedrun_show_decks,
+    # Speedrun accounts + sync (native login against the self-hosted server).
+    speedrun_sync_login,
+    speedrun_sync_now,
+    speedrun_sign_out,
+    speedrun_sync_status,
 ]
 
 
@@ -876,6 +959,15 @@ exposed_backend_list = [
     "speedrun_save_hierarchy",
     "speedrun_delete_deck",
     "speedrun_study_summary",
+    # SchedulerService: idempotent deck seeding (shared with AnkiDroid). Desktop
+    # also seeds eagerly on collection open (main.py); this exposes it so the
+    # mobile-shell decks screen can seed on load too.
+    "speedrun_ensure_seeded",
+    # SchedulerService: Speedrun AI deck-import (shared with AnkiDroid). The
+    # OpenAI call runs in the shared Rust engine, so the API key stays
+    # server-side on both hosts.
+    "speedrun_ai_config",
+    "speedrun_ai_import",
     # DeckConfigService
     "get_ignored_before_count",
     "get_retention_workload",

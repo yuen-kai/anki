@@ -134,7 +134,7 @@ RPCs) and the backend-free demo render the same screen.
             <div class="hdr-left">
                 <button class="back" on:click={back} aria-label="Back to decks">
                     <span aria-hidden="true">&larr;</span>
-                     Decks
+                    Decks
                 </button>
                 <span class="deck-name">{leaf || "Study"}</span>
                 {#if metaText}<span class="deck-meta">{metaText}</span>{/if}
@@ -308,7 +308,7 @@ RPCs) and the backend-free demo render the same screen.
 
     .study {
         box-sizing: border-box;
-        min-height: 100%;
+        min-height: 100vh;
         padding-bottom: 38px;
         background: var(--sr-paper);
         color: var(--sr-ink);

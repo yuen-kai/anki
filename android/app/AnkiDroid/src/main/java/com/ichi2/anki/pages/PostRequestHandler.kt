@@ -22,11 +22,14 @@ import androidx.annotation.VisibleForTesting
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import anki.collection.OpChanges
+import com.google.protobuf.ByteString
 import com.ichi2.anki.CollectionManager
 import com.ichi2.anki.CollectionManager.withCol
 import com.ichi2.anki.NoteEditorFragment
+import com.ichi2.anki.getEndpoint
 import com.ichi2.anki.importAnkiPackageUndoable
 import com.ichi2.anki.importCsvRaw
+import com.ichi2.anki.isLoggedIn
 import com.ichi2.anki.launchCatchingTask
 import com.ichi2.anki.libanki.Collection
 import com.ichi2.anki.libanki.completeTagRaw
@@ -43,8 +46,11 @@ import com.ichi2.anki.libanki.sched.getPerformanceScoreRaw
 import com.ichi2.anki.libanki.sched.getReadinessScoreRaw
 import com.ichi2.anki.libanki.sched.getSpeedrunScoreBreakdownRaw
 import com.ichi2.anki.libanki.sched.simulateFsrsReviewRaw
+import com.ichi2.anki.libanki.sched.speedrunAiConfigRaw
+import com.ichi2.anki.libanki.sched.speedrunAiImportRaw
 import com.ichi2.anki.libanki.sched.speedrunAnswerCardRaw
 import com.ichi2.anki.libanki.sched.speedrunDeleteDeckRaw
+import com.ichi2.anki.libanki.sched.speedrunEnsureSeededRaw
 import com.ichi2.anki.libanki.sched.speedrunGetHierarchyRaw
 import com.ichi2.anki.libanki.sched.speedrunListDecksRaw
 import com.ichi2.anki.libanki.sched.speedrunNextCardRaw
@@ -59,12 +65,18 @@ import com.ichi2.anki.libanki.stats.graphsRaw
 import com.ichi2.anki.libanki.stats.setGraphPreferencesRaw
 import com.ichi2.anki.observability.undoableOp
 import com.ichi2.anki.searchInBrowser
+import com.ichi2.anki.settings.Prefs
+import com.ichi2.anki.syncAuth
+import com.ichi2.anki.updateLogin
+import com.ichi2.anki.worker.SyncWorker
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import timber.log.Timber
+import anki.generic.Json as GenericJson
 
 interface PostRequestHandler {
     suspend fun handlePostRequest(
@@ -158,6 +170,14 @@ val collectionMethods =
         "speedrunSaveHierarchy" to { bytes -> speedrunSaveHierarchyRaw(bytes) },
         "speedrunDeleteDeck" to { bytes -> speedrunDeleteDeckRaw(bytes) },
         "speedrunStudySummary" to { bytes -> speedrunStudySummaryRaw(bytes) },
+        // Preload the bundled demo + MCAT decks (idempotent); the mobile shell's
+        // decks screen calls this on load so it has content out of the box.
+        "speedrunEnsureSeeded" to { bytes -> speedrunEnsureSeededRaw(bytes) },
+        // AI deck-import: the OpenAI call runs in the shared Rust engine, so the
+        // API key stays server-side and the AnkiDroid webview drives the same
+        // backend as desktop (anki/scheduler.proto).
+        "speedrunAiConfig" to { bytes -> speedrunAiConfigRaw(bytes) },
+        "speedrunAiImport" to { bytes -> speedrunAiImportRaw(bytes) },
         "getMemoryScore" to { bytes -> getMemoryScoreRaw(bytes) },
         "getPerformanceScore" to { bytes -> getPerformanceScoreRaw(bytes) },
         "getReadinessScore" to { bytes -> getReadinessScoreRaw(bytes) },
@@ -207,7 +227,115 @@ val uiMethods =
         // Speedrun cross-screen navigation (open deck, start study, show decks)
         // is client-side SvelteKit routing in the mobile shell, so there are no
         // navigation RPCs to handle here; the desktop keeps them as Qt actions.
+        //
+        // Speedrun accounts + sync (the speedrun-account screen). These mirror
+        // the desktop handlers in qt/aqt/mediasrv.py: the page collects a
+        // username + password, the host logs in to the self-hosted sync server
+        // and stores the returned key like any other login. They exchange the
+        // protobuf generic.Json wrapper via the FrontendService Speedrun* RPCs.
+        "speedrunSyncLogin" to { bytes -> lifecycleScope.async { speedrunSyncLogin(bytes) } },
+        "speedrunSyncNow" to { _ -> lifecycleScope.async { speedrunSyncNow() } },
+        "speedrunSignOut" to { _ -> lifecycleScope.async { speedrunSignOut() } },
+        "speedrunSyncStatus" to { _ -> lifecycleScope.async { speedrunSyncStatus() } },
     )
+
+// The account screen posts the protobuf generic.Json wrapper (an
+// application/binary body whose `json` field holds the UTF-8 payload) via the
+// FrontendService Speedrun* RPCs, exactly like the other Speedrun handlers and
+// desktop's mediasrv `_speedrun_request` / `_speedrun_response`. Decode and
+// encode that wrapper here so the same account lib.ts drives both hosts; the
+// field names inside stay identical to mediasrv.py.
+private fun parseJsonRequest(bytes: ByteArray): JSONObject {
+    if (bytes.isEmpty()) return JSONObject()
+    return try {
+        val payload = GenericJson.parseFrom(bytes).json
+        if (payload.isEmpty) JSONObject() else JSONObject(payload.toStringUtf8())
+    } catch (_: Exception) {
+        JSONObject()
+    }
+}
+
+private fun jsonResponse(build: JSONObject.() -> Unit): ByteArray =
+    GenericJson
+        .newBuilder()
+        .setJson(ByteString.copyFromUtf8(JSONObject().apply(build).toString()))
+        .build()
+        .toByteArray()
+
+/**
+ * Log in to the self-hosted sync server with a username and password, then store
+ * the returned key like a normal login so the usual sync flow can use it.
+ * Mirrors desktop's `speedrun_sync_login`.
+ */
+private suspend fun FragmentActivity.speedrunSyncLogin(bytes: ByteArray): ByteArray {
+    val request = parseJsonRequest(bytes)
+    val username = request.optString("username").trim()
+    val password = request.optString("password")
+    val endpoint = request.optString("endpoint").trim().ifEmpty { null }
+    if (username.isEmpty() || password.isEmpty()) {
+        return jsonResponse {
+            put("ok", false)
+            put("account", JSONObject.NULL)
+            put("endpoint", JSONObject.NULL)
+            put("message", "Enter a username and password.")
+        }
+    }
+    return try {
+        val auth = withCol { syncLogin(username, password, endpoint) }
+        updateLogin(username, auth.hkey)
+        if (endpoint != null) {
+            Prefs.currentSyncUri = endpoint
+        }
+        jsonResponse {
+            put("ok", true)
+            put("account", username)
+            put("endpoint", endpoint ?: JSONObject.NULL)
+        }
+    } catch (exc: Exception) {
+        // do not log the error, it can contain PII (matches LoginViewModel)
+        Timber.w("speedrun sync login failed")
+        jsonResponse {
+            put("ok", false)
+            put("message", exc.localizedMessage ?: "login failed")
+            put("account", JSONObject.NULL)
+            put("endpoint", JSONObject.NULL)
+        }
+    }
+}
+
+/**
+ * Kick off a background collection sync against the stored credentials. Mirrors
+ * desktop's `speedrun_sync_now` (fire-and-forget).
+ */
+private fun FragmentActivity.speedrunSyncNow(): ByteArray {
+    val auth =
+        syncAuth() ?: return jsonResponse {
+            put("ok", false)
+            put("message", "Not signed in.")
+        }
+    SyncWorker.start(this, auth, syncMedia = true)
+    return jsonResponse {
+        put("ok", true)
+        put("message", "Sync started.")
+    }
+}
+
+/** Drop the stored sync credentials. Mirrors desktop's `speedrun_sign_out`. */
+private fun speedrunSignOut(): ByteArray {
+    updateLogin("", "")
+    return jsonResponse { put("ok", true) }
+}
+
+/** Report the host's sync status. Mirrors desktop's `speedrun_sync_status`. */
+private fun speedrunSyncStatus(): ByteArray {
+    val loggedIn = isLoggedIn()
+    return jsonResponse {
+        put("loggedIn", loggedIn)
+        put("account", if (loggedIn) (Prefs.username ?: JSONObject.NULL) else JSONObject.NULL)
+        put("endpoint", getEndpoint() ?: JSONObject.NULL)
+        put("hostAvailable", true)
+    }
+}
 
 sealed class UiPostRequestResponse {
     /** The requested method was not a valid UI POST request */

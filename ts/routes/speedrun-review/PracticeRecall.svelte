@@ -10,6 +10,7 @@ card (via the seam) to self-check against. Grading rides at the bottom.
     import DifficultyBar from "./DifficultyBar.svelte";
     import { type AnswerResult, type Concept, type Rating } from "./lib";
     import MasteryBadge from "./MasteryBadge.svelte";
+    import MediaImage from "./MediaImage.svelte";
     import ReviewCard from "./ReviewCard.svelte";
     import Seam from "./Seam.svelte";
 
@@ -61,6 +62,7 @@ card (via the seam) to self-check against. Grading rides at the bottom.
             {:else}
                 <p class="saved none">No description was authored for this concept.</p>
             {/if}
+            <MediaImage filename={concept.image} alt={title} />
         </div>
 
         <Seam label="same screen · now rate the card" />

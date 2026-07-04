@@ -60,7 +60,7 @@ impl Collection {
     ) -> Result<Vec<TopicStat>> {
         let leaves = self.speedrun_authored_leaves(deck_id);
         let stats = self.speedrun_concept_card_stats(deck_id)?;
-        let progress = self.speedrun_deck_progress(deck_id);
+        let progress = self.speedrun_deck_progress(deck_id)?;
         let weights_by_label = leaf_weight_by_label();
 
         let mut out = Vec::with_capacity(leaves.len());

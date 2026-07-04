@@ -679,23 +679,16 @@ class AnkiQt(QMainWindow):
         return True
 
     def _maybe_seed_speedrun(self) -> None:
-        # Speedrun: preload the authored demo deck so the study/review screens
-        # have real content out of the box. The one canonical seed path; it is
-        # idempotent (a no-op once the deck exists) and fail-open, so a seed
-        # error only logs and never blocks a collection from opening.
+        # Speedrun: preload the authored demo + MCAT decks so the study/review
+        # screens have real content out of the box. The seed lives in the shared
+        # Rust engine (SpeedrunEnsureSeeded), so desktop and AnkiDroid seed from
+        # one path; it is idempotent (a no-op once the decks exist) and this call
+        # is fail-open, so a seed error only logs and never blocks a collection
+        # from opening.
         try:
-            from anki.speedrun.seed_deck import seed as seed_speedrun_deck
-
-            seed_speedrun_deck(self.col)
+            self.col._backend.speedrun_ensure_seeded(json=b"{}")
         except Exception:
-            logging.getLogger(__name__).exception("speedrun: demo deck seed skipped")
-
-        try:
-            from anki.speedrun.seed_mcat_ch31_35 import seed as seed_mcat_deck
-
-            seed_mcat_deck(self.col)
-        except Exception:
-            logging.getLogger(__name__).exception("speedrun: MCAT deck seed skipped")
+            logging.getLogger(__name__).exception("speedrun: deck seed skipped")
 
     def _loadCollection(self) -> None:
         cpath = self.pm.collectionPath()

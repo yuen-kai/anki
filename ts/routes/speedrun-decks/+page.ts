@@ -2,10 +2,17 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { stageIndex } from "../speedrun-dashboard/lib";
-import { type DeckSummary, getHierarchy, listDecks, type Node } from "../speedrun-hierarchy/lib";
+import {
+    type DeckSummary,
+    ensureSeeded,
+    getHierarchy,
+    isMobileShell,
+    listDecks,
+    type Node,
+} from "../speedrun-hierarchy/lib";
 import { type StudyProgress, studyState } from "../speedrun-review/lib";
-import type { DeckMetrics, DeckRow } from "./lib";
 import type { PageLoad } from "./$types";
+import type { DeckMetrics, DeckRow } from "./lib";
 
 // Walk the tree once: topics are leaf nodes (no children); the bare root of an
 // empty deck is "no hierarchy yet", not a topic. Concepts are collected from
@@ -58,6 +65,11 @@ export const load = (async () => {
     let decks: DeckRow[] = [];
     let error: string | null = null;
     try {
+        // The mobile shell has no eager Qt-side seed step, so seed here before
+        // listing (idempotent; desktop already seeded on collection open).
+        if (isMobileShell()) {
+            await ensureSeeded().catch(() => []);
+        }
         // Enrich every deck in parallel; each enrich() swallows its own failure.
         decks = await Promise.all((await listDecks()).map(enrich));
     } catch (err) {

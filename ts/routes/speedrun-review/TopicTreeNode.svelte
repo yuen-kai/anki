@@ -190,6 +190,20 @@ it down from the level above. NewTopicIntro stacks one of these per path level.
         opacity: 1;
     }
 
+    // On a phone the off-path siblings (fixed-width leaf tiles) overflow the
+    // card, so drop them and keep just the path spine (root -> group -> new
+    // leaf), which is the whole point of the intro. Collapse the flanking grid
+    // to a single centred column so the on-path tile stays under the connector.
+    @media (max-width: 40rem) {
+        .flank {
+            display: none;
+        }
+        .row {
+            grid-template-columns: auto;
+            justify-content: center;
+        }
+    }
+
     @media (prefers-reduced-motion: reduce) {
         .link {
             animation: none;

@@ -17,9 +17,18 @@
 //!   standard scheduler serves it and [`Collection::grade_now`] grades it with
 //!   genuine FSRS intervals.
 //! - **This module owns *mode*** (what interaction renders): a per-concept
-//!   mastery map in the collection config under [`STUDY_PROGRESS_CONFIG_KEY`],
-//!   the same native-store pattern as the authoring blob. It never produces an
-//!   FSRS interval.
+//!   mastery record stored **on each concept's `SpeedrunItem` card**, in the
+//!   card's `custom_data` JSON (keys `sr*`). It never produces an FSRS
+//!   interval.
+//!
+//! Mastery used to live in one monolithic collection-config blob
+//! ([`STUDY_PROGRESS_CONFIG_KEY`]). Config syncs whole-table, newest-collection
+//! -wins, so two devices editing different concepts offline would clobber each
+//! other on sync. Card `custom_data` instead merges per card (newest card
+//! wins, [`crate::sync::collection::chunks`]), so concurrent edits to different
+//! concepts each survive. A one-time migration
+//! ([`Collection::speedrun_migrate_progress_if_needed`]) folds any legacy blob
+//! onto the cards on first read.
 //!
 //! Each concept walks a four-state mastery ladder ([`TopicState`]); the
 //! internal `hierarchy` state displays as "Applying" in the UI:
@@ -80,13 +89,30 @@ impl TopicState {
     }
 }
 
-/// Collection-config key holding the per-deck, per-concept mastery map. Shape:
-/// `{ "<deckId>": { "<conceptId>": { state, seen, ratings } } }`. Must match
-/// the legacy desktop key so an existing collection's progress is preserved.
+/// Legacy collection-config key that once held the per-deck, per-concept
+/// mastery map (`{ "<deckId>": { "<conceptId>": { state, seen, ratings,
+/// appCorrect, appTotal } } }`). Retained only so the one-time migration can
+/// fold it onto the cards; nothing reads it for live study anymore.
 const STUDY_PROGRESS_CONFIG_KEY: &str = "speedrun_study_progress";
+/// Collection-config flag set once the legacy `speedrun_study_progress` blob
+/// has been folded onto the cards' `custom_data`. Guards the migration so it
+/// runs at most once per collection.
+const MASTERY_MIGRATED_CONFIG_KEY: &str = "speedrun_mastery_migrated";
 /// Collection-config key holding the authored hierarchy blob per deck (written
 /// by the authoring editor; read here to drive materialize + learning blocks).
 const AUTHORING_CONFIG_KEY: &str = "speedrun_authoring";
+
+// Per-card `custom_data` keys for the mastery record. Each is <= 8 bytes and
+// the whole serialized object stays well under the 100-byte `custom_data`
+// budget (see `validate_custom_data`), which is why `ratings` is packed as a
+// digit string and the window is capped (see [`MASTERY_REVIEW_WINDOW`]). Every
+// key is skipped when its value is the zero/default, so an unstudied card
+// carries no `custom_data` at all.
+const CD_STATE: &str = "srs";
+const CD_SEEN: &str = "srn";
+const CD_RATINGS: &str = "srr";
+const CD_APP_CORRECT: &str = "srac";
+const CD_APP_TOTAL: &str = "srat";
 
 /// The minimal note type each authored concept is mirrored into. Field order is
 /// the contract: `ConceptId` (index 0) keys the card back to the concept, and
@@ -103,8 +129,12 @@ const ITEM_AFMT: &str = "{{FrontSide}}";
 const ACC_THRESHOLD: f32 = 0.8;
 /// Minimum recorded answers before a concept can advance.
 const MIN_REPS: usize = 2;
-/// How many of the most recent ratings feed the advancement signal.
-const MASTERY_REVIEW_WINDOW: usize = 50;
+/// How many of the most recent ratings feed the advancement signal, and the cap
+/// on how many are persisted per card. Kept small so the packed `srr` string
+/// plus the other mastery keys stay inside the 100-byte `custom_data` budget
+/// (see the `CD_*` keys). 32 recent ratings is ample for an "80% of recent"
+/// signal; it was 50 while mastery lived in the unbounded config blob.
+const MASTERY_REVIEW_WINDOW: usize = 32;
 
 /// Difficulty rating as sent by the screen: 1..4 = Again/Hard/Good/Easy.
 const RATING_AGAIN: i32 = 1;
@@ -149,11 +179,13 @@ fn signal_cleared(ratings: &[i32]) -> bool {
     good as f32 / window.len() as f32 >= ACC_THRESHOLD
 }
 
-/// One concept's persisted mastery state. Serializes to `{ state, seen,
-/// ratings, appCorrect, appTotal }`; the trailing two are the authored
-/// Performance score's evidence (see
-/// [`Collection::speedrun_record_concept_answer`]). All fields default, so a
-/// store written before Performance persistence existed round-trips unchanged
+/// One concept's mastery state. Held in memory during a study call and
+/// persisted on the concept's `SpeedrunItem` card via
+/// [`ConceptEntry::write_into_custom_data`]. The `Serialize`/`Deserialize`
+/// derives are used only to read the **legacy** config blob during migration
+/// (shape `{ state, seen, ratings, appCorrect, appTotal }`); the live per-card
+/// form uses the compact `CD_*` keys instead. All fields default, so a legacy
+/// entry written before Performance persistence existed round-trips unchanged
 /// (the two counts start at 0).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(crate) struct ConceptEntry {
@@ -175,10 +207,94 @@ pub(crate) struct ConceptEntry {
     pub(crate) app_total: u32,
 }
 
+/// True for the empty/absent `custom_data` forms Anki uses interchangeably.
+fn custom_data_is_empty(s: &str) -> bool {
+    matches!(s, "" | "{}")
+}
+
+impl ConceptEntry {
+    /// Read a concept's mastery record from its card's `custom_data` JSON. An
+    /// absent card or absent key defaults to learning/unseen with no evidence,
+    /// so an unstudied card round-trips to a default entry.
+    fn from_custom_data(custom_data: &str) -> Self {
+        let map: serde_json::Map<String, Value> = if custom_data_is_empty(custom_data) {
+            serde_json::Map::new()
+        } else {
+            serde_json::from_str(custom_data).unwrap_or_default()
+        };
+        let state = match map.get(CD_STATE).and_then(Value::as_u64).unwrap_or(0) {
+            1 => TopicState::Practicing,
+            2 => TopicState::Hierarchy,
+            3 => TopicState::Mastering,
+            _ => TopicState::Learning,
+        };
+        let ratings = map
+            .get(CD_RATINGS)
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .chars()
+            .filter_map(|c| c.to_digit(10).map(|d| d as i32))
+            .collect();
+        ConceptEntry {
+            state,
+            seen: map.get(CD_SEEN).and_then(Value::as_u64).unwrap_or(0) != 0,
+            ratings,
+            app_correct: map.get(CD_APP_CORRECT).and_then(Value::as_u64).unwrap_or(0) as u32,
+            app_total: map.get(CD_APP_TOTAL).and_then(Value::as_u64).unwrap_or(0) as u32,
+        }
+    }
+
+    /// Merge this record into a card's existing `custom_data`, preserving any
+    /// unrelated keys, and return the new JSON string (`""` when it collapses
+    /// to empty). Zero/default fields are written as *absent* so the object
+    /// stays minimal, and `ratings` is packed to at most
+    /// [`MASTERY_REVIEW_WINDOW`] single digits to respect the 100-byte
+    /// budget.
+    fn write_into_custom_data(&self, custom_data: &str) -> String {
+        let mut map: serde_json::Map<String, Value> = if custom_data_is_empty(custom_data) {
+            serde_json::Map::new()
+        } else {
+            serde_json::from_str(custom_data).unwrap_or_default()
+        };
+        set_or_remove(&mut map, CD_STATE, ladder_index(self.state) as u64);
+        set_or_remove(&mut map, CD_SEEN, self.seen as u64);
+        set_or_remove(&mut map, CD_APP_CORRECT, self.app_correct as u64);
+        set_or_remove(&mut map, CD_APP_TOTAL, self.app_total as u64);
+        let packed: String = self
+            .ratings
+            .iter()
+            .rev()
+            .take(MASTERY_REVIEW_WINDOW)
+            .rev()
+            .filter_map(|r| char::from_digit(*r as u32, 10))
+            .collect();
+        if packed.is_empty() {
+            map.remove(CD_RATINGS);
+        } else {
+            map.insert(CD_RATINGS.to_string(), Value::from(packed));
+        }
+        if map.is_empty() {
+            String::new()
+        } else {
+            serde_json::to_string(&map).unwrap_or_default()
+        }
+    }
+}
+
+/// Insert `key=value` when non-zero, else remove it, so default fields never
+/// take up room in the card's `custom_data`.
+fn set_or_remove(map: &mut serde_json::Map<String, Value>, key: &str, value: u64) {
+    if value == 0 {
+        map.remove(key);
+    } else {
+        map.insert(key.to_string(), Value::from(value));
+    }
+}
+
 /// `conceptId -> entry` for one deck.
 pub(crate) type ConceptMap = HashMap<String, ConceptEntry>;
-/// `deckId -> conceptMap`; the value stored under
-/// [`STUDY_PROGRESS_CONFIG_KEY`].
+/// `deckId -> conceptMap`; the legacy value once stored under
+/// [`STUDY_PROGRESS_CONFIG_KEY`], read only during migration.
 type StudyProgressStore = HashMap<String, ConceptMap>;
 
 // --- Authored-hierarchy view (read-only, minimal) --------------------------
@@ -287,25 +403,120 @@ pub(crate) struct ReconcileOutcome {
 }
 
 impl Collection {
-    // --- config read/write -------------------------------------------------
+    // --- per-card mastery read/write ---------------------------------------
 
-    fn speedrun_study_store(&self) -> StudyProgressStore {
-        self.get_config_optional(STUDY_PROGRESS_CONFIG_KEY)
-            .unwrap_or_default()
+    /// `conceptId -> (cardId, entry)` for every materialized concept in the
+    /// deck, reading each concept's mastery straight off its `SpeedrunItem`
+    /// card's `custom_data`. Concepts with no card yet (deck never reconciled)
+    /// are simply absent, matching the old "absent = default" contract.
+    fn speedrun_card_mastery(
+        &mut self,
+        deck_id: DeckId,
+    ) -> Result<HashMap<String, (CardId, ConceptEntry)>> {
+        let Some(notetype_id) = self
+            .get_notetype_by_name(ITEM_NOTETYPE_NAME)?
+            .map(|nt| nt.id)
+        else {
+            return Ok(HashMap::new());
+        };
+        let mut out = HashMap::new();
+        for cid in self.search_cards(SearchNode::from_deck_id(deck_id, true), SortMode::NoOrder)? {
+            let card = self.storage.get_card(cid)?.or_not_found(cid)?;
+            let note = self
+                .storage
+                .get_note(card.note_id)?
+                .or_not_found(card.note_id)?;
+            if note.notetype_id != notetype_id {
+                continue;
+            }
+            let concept_id = note
+                .fields()
+                .get(ITEM_FIELD_CONCEPT_ID)
+                .cloned()
+                .unwrap_or_default();
+            if concept_id.is_empty() {
+                continue;
+            }
+            out.insert(
+                concept_id,
+                (cid, ConceptEntry::from_custom_data(&card.custom_data)),
+            );
+        }
+        Ok(out)
     }
 
-    pub(crate) fn speedrun_deck_progress(&self, deck_id: DeckId) -> ConceptMap {
-        self.speedrun_study_store()
-            .remove(&deck_id.0.to_string())
-            .unwrap_or_default()
+    /// The deck's per-concept mastery map (`conceptId -> entry`), read from the
+    /// concept cards' `custom_data`. Runs the one-time legacy-blob migration on
+    /// first access so pre-existing progress is preserved.
+    pub(crate) fn speedrun_deck_progress(&mut self, deck_id: DeckId) -> Result<ConceptMap> {
+        self.speedrun_migrate_progress_if_needed()?;
+        Ok(self
+            .speedrun_card_mastery(deck_id)?
+            .into_iter()
+            .map(|(concept_id, (_cid, entry))| (concept_id, entry))
+            .collect())
     }
 
-    fn save_speedrun_deck_progress(&mut self, deck_id: DeckId, progress: ConceptMap) -> Result<()> {
-        let mut store = self.speedrun_study_store();
-        store.insert(deck_id.0.to_string(), progress);
-        // Non-undoable: the mastery map is bookkeeping beside the FSRS answer,
-        // so it must not push an entry onto the undo stack.
-        self.set_config_json(STUDY_PROGRESS_CONFIG_KEY, &store, false)?;
+    /// Persist mastery records onto their cards. Non-undoable (the mastery
+    /// record is bookkeeping beside the FSRS answer, so it must not push an
+    /// undo entry — [`Op::SkipUndo`] preserves any prior undoable grade),
+    /// and each write bumps mtime/usn so the card (and its merged mastery)
+    /// syncs. Unchanged cards are skipped, so no redundant mtime churn or
+    /// sync traffic.
+    fn speedrun_persist_entries(&mut self, entries: &[(CardId, ConceptEntry)]) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        self.transact(Op::SkipUndo, |col| {
+            let usn = col.usn()?;
+            for (card_id, entry) in entries {
+                let mut card = col.storage.get_card(*card_id)?.or_not_found(*card_id)?;
+                let new_custom_data = entry.write_into_custom_data(&card.custom_data);
+                if new_custom_data != card.custom_data {
+                    card.custom_data = new_custom_data;
+                    card.set_modified(usn);
+                    col.storage.update_card(&card)?;
+                }
+            }
+            Ok(())
+        })?;
+        Ok(())
+    }
+
+    /// One-time migration: fold any legacy `speedrun_study_progress` config
+    /// blob onto the concept cards' `custom_data`, so progress recorded
+    /// before the move to per-card (sync-mergeable) storage is preserved.
+    /// Guarded by a config flag so it runs at most once. The legacy blob is
+    /// intentionally left in place as a backup — nothing reads it for live
+    /// study anymore, so a now-stale copy syncing around is harmless.
+    fn speedrun_migrate_progress_if_needed(&mut self) -> Result<()> {
+        if self
+            .get_config_optional::<bool, _>(MASTERY_MIGRATED_CONFIG_KEY)
+            .unwrap_or(false)
+        {
+            return Ok(());
+        }
+        let store: StudyProgressStore = self
+            .get_config_optional(STUDY_PROGRESS_CONFIG_KEY)
+            .unwrap_or_default();
+        for (deck_str, concept_map) in &store {
+            let Ok(raw) = deck_str.parse::<i64>() else {
+                continue;
+            };
+            let deck_id = DeckId(raw);
+            // Materialize the deck's cards so there is somewhere to write, then
+            // map each legacy entry onto its concept's card.
+            self.speedrun_reconcile(deck_id)?;
+            let cards = self.speedrun_card_mastery(deck_id)?;
+            let to_write: Vec<(CardId, ConceptEntry)> = concept_map
+                .iter()
+                .filter_map(|(concept_id, entry)| {
+                    cards.get(concept_id).map(|(cid, _)| (*cid, entry.clone()))
+                })
+                .collect();
+            self.speedrun_persist_entries(&to_write)?;
+        }
+        self.set_config_json(MASTERY_MIGRATED_CONFIG_KEY, &true, false)?;
         Ok(())
     }
 
@@ -327,7 +538,7 @@ impl Collection {
     /// `{ progress: { <conceptId>: { state, seen } } }`. An absent concept
     /// defaults to learning/unseen, so the screen always gets a complete map.
     pub(crate) fn speedrun_study_state(&mut self, deck_id: DeckId) -> Result<Value> {
-        let progress = self.speedrun_deck_progress(deck_id);
+        let progress = self.speedrun_deck_progress(deck_id)?;
         let hierarchy = self.speedrun_authored_hierarchy(deck_id);
         let mut out = serde_json::Map::new();
         for node in hierarchy.concept_leaves() {
@@ -347,7 +558,7 @@ impl Collection {
     pub(crate) fn speedrun_next_card(&mut self, deck_id: DeckId) -> Result<Value> {
         self.speedrun_reconcile(deck_id)?;
         let hierarchy = self.speedrun_authored_hierarchy(deck_id);
-        let progress = self.speedrun_deck_progress(deck_id);
+        let progress = self.speedrun_deck_progress(deck_id)?;
         if let Some(block) = next_learning_block(&hierarchy, &progress) {
             return Ok(block);
         }
@@ -383,12 +594,20 @@ impl Collection {
         deck_id: DeckId,
         concept_ids: &[String],
     ) -> Result<Value> {
+        // Ensure every concept has a card to carry its mastery, then migrate any
+        // legacy progress, before reading the current per-card map.
+        self.speedrun_reconcile(deck_id)?;
+        self.speedrun_migrate_progress_if_needed()?;
         let hierarchy = self.speedrun_authored_hierarchy(deck_id);
-        let mut progress = self.speedrun_deck_progress(deck_id);
+        let mut mastery = self.speedrun_card_mastery(deck_id)?;
 
         let touched: HashSet<&String> = concept_ids.iter().collect();
+        let mut changed: HashSet<String> = HashSet::new();
         for id in &touched {
-            progress.entry((*id).clone()).or_default().seen = true;
+            if let Some((_cid, entry)) = mastery.get_mut(*id) {
+                entry.seen = true;
+                changed.insert((*id).clone());
+            }
         }
 
         let mut upgraded: Vec<String> = Vec::new();
@@ -399,20 +618,26 @@ impl Collection {
             }
             if !ids
                 .iter()
-                .all(|id| progress.get(id).map(|e| e.seen).unwrap_or(false))
+                .all(|id| mastery.get(id).map(|(_, e)| e.seen).unwrap_or(false))
             {
                 continue;
             }
             for id in &ids {
-                let entry = progress.entry(id.clone()).or_default();
-                if entry.state == TopicState::Learning {
-                    entry.state = TopicState::Practicing;
-                    upgraded.push(id.clone());
+                if let Some((_cid, entry)) = mastery.get_mut(id) {
+                    if entry.state == TopicState::Learning {
+                        entry.state = TopicState::Practicing;
+                        upgraded.push(id.clone());
+                        changed.insert(id.clone());
+                    }
                 }
             }
         }
 
-        self.save_speedrun_deck_progress(deck_id, progress)?;
+        let to_write: Vec<(CardId, ConceptEntry)> = changed
+            .iter()
+            .filter_map(|id| mastery.get(id).map(|(cid, entry)| (*cid, entry.clone())))
+            .collect();
+        self.speedrun_persist_entries(&to_write)?;
 
         if upgraded.is_empty() {
             Ok(json!({
@@ -482,18 +707,26 @@ impl Collection {
     }
 
     /// Record a difficulty rating against a concept and move its mastery state
-    /// (config only — FSRS timing is handled by [`Collection::grade_now`] in
-    /// [`Collection::speedrun_answer_card`]). `Again` demotes one state (floor
-    /// `practicing`); any other rating advances one state once the rolling
-    /// signal clears. Returns `{ state, upgraded, from, to }`.
+    /// on the concept's card (FSRS timing is handled separately by
+    /// [`Collection::grade_now`] in [`Collection::speedrun_answer_card`]).
+    /// `Again` demotes one state (floor `practicing`); any other rating
+    /// advances one state once the rolling signal clears. Returns
+    /// `{ state, upgraded, from, to }`.
     fn speedrun_record_concept_answer(
         &mut self,
         deck_id: DeckId,
         concept_id: &str,
         rating: i32,
     ) -> Result<Value> {
-        let mut progress = self.speedrun_deck_progress(deck_id);
-        let mut entry = progress.get(concept_id).cloned().unwrap_or_default();
+        self.speedrun_migrate_progress_if_needed()?;
+        let mut mastery = self.speedrun_card_mastery(deck_id)?;
+        // The concept is graded via a materialized card, so it is present; a
+        // stray id with no card falls back to a default entry and simply has
+        // nowhere to persist.
+        let (card_id, mut entry) = match mastery.remove(concept_id) {
+            Some((cid, entry)) => (Some(cid), entry),
+            None => (None, ConceptEntry::default()),
+        };
 
         // Answers only reach concepts at practicing or above; floor the
         // effective pre-answer state so a stray learning concept never drops
@@ -530,8 +763,9 @@ impl Collection {
             current
         };
         entry.state = new_state;
-        progress.insert(concept_id.to_string(), entry);
-        self.save_speedrun_deck_progress(deck_id, progress)?;
+        if let Some(card_id) = card_id {
+            self.speedrun_persist_entries(&[(card_id, entry)])?;
+        }
 
         Ok(json!({
             "state": new_state.as_str(),
@@ -755,12 +989,13 @@ impl Collection {
         correct: u32,
         total: u32,
     ) {
-        let mut progress = self.speedrun_deck_progress(deck_id);
-        let entry = progress.entry(concept_id.to_string()).or_default();
+        self.speedrun_reconcile(deck_id).unwrap();
+        let mut mastery = self.speedrun_card_mastery(deck_id).unwrap();
+        let (card_id, mut entry) = mastery.remove(concept_id).unwrap();
         entry.seen = true;
         entry.app_correct = correct;
         entry.app_total = total;
-        self.save_speedrun_deck_progress(deck_id, progress).unwrap();
+        self.speedrun_persist_entries(&[(card_id, entry)]).unwrap();
     }
 }
 
@@ -1210,18 +1445,21 @@ mod tests {
         // learn + two Goods reaches Applying (hierarchy); both were at
         // practicing, so no application attempt is recorded yet.
         advance_to_applying(&mut col, DeckId(1), &["c1"], "c1");
-        assert_eq!(col.speedrun_deck_progress(DeckId(1))["c1"].app_total, 0);
+        assert_eq!(
+            col.speedrun_deck_progress(DeckId(1)).unwrap()["c1"].app_total,
+            0
+        );
 
         // A Good at the Applying stage is a correct application attempt.
         grade_concept(&mut col, DeckId(1), "c1", 3);
-        let entry = col.speedrun_deck_progress(DeckId(1))["c1"].clone();
+        let entry = col.speedrun_deck_progress(DeckId(1)).unwrap()["c1"].clone();
         assert_eq!(entry.app_total, 1);
         assert_eq!(entry.app_correct, 1);
 
         // An Again at the application stage is a wrong attempt: counted, then
         // the concept demotes.
         grade_concept(&mut col, DeckId(1), "c1", 1);
-        let entry = col.speedrun_deck_progress(DeckId(1))["c1"].clone();
+        let entry = col.speedrun_deck_progress(DeckId(1)).unwrap()["c1"].clone();
         assert_eq!(entry.app_total, 2);
         assert_eq!(entry.app_correct, 1);
     }
@@ -1241,6 +1479,158 @@ mod tests {
         assert_eq!(
             stored["root"]["children"][0]["concepts"][0]["id"],
             json!("c1")
+        );
+    }
+
+    // --- per-card mastery storage (the sync-mergeable move) ----------------
+
+    /// The concept's card carries a valid, budget-respecting mastery record in
+    /// its `custom_data`, and reading it back reproduces the entry.
+    #[test]
+    fn mastery_is_persisted_on_the_concept_card() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Kinetics", &["c1"])]);
+        advance_to_applying(&mut col, DeckId(1), &["c1"], "c1");
+        grade_concept(&mut col, DeckId(1), "c1", 3);
+
+        let card_id = item_cards(&mut col, DeckId(1))["c1"];
+        let card = col.storage.get_card(card_id).unwrap().unwrap();
+        // Stored on the card, not the config blob.
+        assert!(card.custom_data.contains(CD_STATE));
+        assert!(card.custom_data.contains(CD_RATINGS));
+        // Stays inside the custom_data budget (<=100 bytes, keys <=8 bytes).
+        card.validate_custom_data().unwrap();
+
+        let entry = ConceptEntry::from_custom_data(&card.custom_data);
+        // advance_to_applying reaches Applying (hierarchy); the extra Good at the
+        // application stage records an attempt and advances to Mastering.
+        assert_eq!(entry.state, TopicState::Mastering);
+        assert!(entry.seen);
+        assert_eq!(entry.app_total, 1);
+        assert_eq!(entry.app_correct, 1);
+    }
+
+    /// Even a heavily-drilled concept (full ratings window, many attempts)
+    /// keeps its `custom_data` within Anki's 100-byte budget.
+    #[test]
+    fn mastery_custom_data_stays_within_budget() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Kinetics", &["c1"])]);
+        practice(&mut col, DeckId(1), &["c1"]);
+        for _ in 0..60 {
+            grade_concept(&mut col, DeckId(1), "c1", 3);
+        }
+        let card_id = item_cards(&mut col, DeckId(1))["c1"];
+        let card = col.storage.get_card(card_id).unwrap().unwrap();
+        assert!(
+            card.custom_data.len() <= 100,
+            "custom_data must stay within budget, got {} bytes: {}",
+            card.custom_data.len(),
+            card.custom_data
+        );
+        card.validate_custom_data().unwrap();
+    }
+
+    /// Editing one concept's mastery leaves its neighbours' cards untouched.
+    /// This per-card isolation is what lets sync merge concurrent offline edits
+    /// to different concepts without clobbering (the whole point of the move
+    /// off the single config blob).
+    #[test]
+    fn mastery_edits_are_isolated_per_card() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Kinetics", &["c1", "c2"])]);
+        practice(&mut col, DeckId(1), &["c1", "c2"]);
+
+        let c2_card = item_cards(&mut col, DeckId(1))["c2"];
+        let before = col.storage.get_card(c2_card).unwrap().unwrap();
+
+        // Hammer c1 through several answers.
+        for _ in 0..5 {
+            grade_concept(&mut col, DeckId(1), "c1", 3);
+        }
+
+        let after = col.storage.get_card(c2_card).unwrap().unwrap();
+        assert_eq!(
+            before.custom_data, after.custom_data,
+            "c2's mastery must not change when only c1 is answered"
+        );
+        assert_eq!(
+            before.mtime, after.mtime,
+            "c2's card must not be re-touched"
+        );
+    }
+
+    // --- one-time legacy-blob migration ------------------------------------
+
+    /// A pre-existing `speedrun_study_progress` config blob is folded onto the
+    /// concept cards on first read, and drives the scores from there.
+    #[test]
+    fn legacy_config_progress_migrates_onto_cards() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Kinetics", &["c1", "c2"])]);
+        // Simulate an old collection whose progress only lives in the blob.
+        col.set_config(
+            STUDY_PROGRESS_CONFIG_KEY,
+            &json!({
+                "1": {
+                    "c1": { "state": "hierarchy", "seen": true, "ratings": [3, 3],
+                            "appCorrect": 3, "appTotal": 4 },
+                    "c2": { "state": "practicing", "seen": true, "ratings": [3] },
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            !col.get_config_optional::<bool, _>(MASTERY_MIGRATED_CONFIG_KEY)
+                .unwrap_or(false),
+            "not migrated yet"
+        );
+
+        // First read triggers the migration.
+        let progress = col.speedrun_deck_progress(DeckId(1)).unwrap();
+        assert_eq!(progress["c1"].state, TopicState::Hierarchy);
+        assert_eq!(progress["c1"].app_correct, 3);
+        assert_eq!(progress["c1"].app_total, 4);
+        assert_eq!(progress["c2"].state, TopicState::Practicing);
+        assert!(col
+            .get_config_optional::<bool, _>(MASTERY_MIGRATED_CONFIG_KEY)
+            .unwrap());
+
+        // The migrated evidence now lands on the card, so Performance reads it.
+        let perf = col.get_performance_score(DeckId(1)).unwrap();
+        assert_eq!(
+            perf.graded_reviews, 4,
+            "the migrated attempts feed the score"
+        );
+    }
+
+    /// The migration runs once: a later change to the (retained) legacy blob is
+    /// not re-applied, so it can't overwrite fresh per-card progress.
+    #[test]
+    fn migration_is_one_shot() {
+        let mut col = Collection::new();
+        set_hierarchy(&mut col, "1", &[("Kinetics", &["c1"])]);
+        col.set_config(
+            STUDY_PROGRESS_CONFIG_KEY,
+            &json!({ "1": { "c1": { "state": "practicing", "seen": true } } }),
+        )
+        .unwrap();
+        // First read migrates c1 -> practicing.
+        assert_eq!(
+            col.speedrun_deck_progress(DeckId(1)).unwrap()["c1"].state,
+            TopicState::Practicing
+        );
+
+        // A stale later blob write must NOT be re-migrated over the card.
+        col.set_config(
+            STUDY_PROGRESS_CONFIG_KEY,
+            &json!({ "1": { "c1": { "state": "mastering", "seen": true } } }),
+        )
+        .unwrap();
+        assert_eq!(
+            col.speedrun_deck_progress(DeckId(1)).unwrap()["c1"].state,
+            TopicState::Practicing,
+            "the one-shot guard blocks re-migration"
         );
     }
 }

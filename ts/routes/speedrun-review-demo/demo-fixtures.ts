@@ -10,7 +10,12 @@ import { deferredEnvelope, type ScoreEnvelope } from "../speedrun-dashboard/lib"
 import type { DeckRow } from "../speedrun-decks/lib";
 import type { Concept, Hierarchy, Node, Problem } from "../speedrun-hierarchy/lib";
 import type { StudyProgress } from "../speedrun-review/lib";
-import { buildConceptTree, type ConceptTreeNode, type StudySummary, type SubjectBreakdown } from "../speedrun-study/lib";
+import {
+    buildConceptTree,
+    type ConceptTreeNode,
+    type StudySummary,
+    type SubjectBreakdown,
+} from "../speedrun-study/lib";
 
 // Stable ids so the demo page can name specific nodes/concepts (the intro
 // target, the scaffolded concept) without walking the tree by title.

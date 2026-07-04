@@ -750,6 +750,16 @@ fun Collection.speedrunDeleteDeckRaw(input: ByteArray): ByteArray = backend.spee
 
 fun Collection.speedrunStudySummaryRaw(input: ByteArray): ByteArray = backend.speedrunStudySummaryRaw(input = input)
 
+// Idempotently preload the bundled demo + MCAT decks. Shared with desktop, so
+// both hosts seed from the one Rust path (rslib/src/speedrun/seed.rs).
+fun Collection.speedrunEnsureSeededRaw(input: ByteArray): ByteArray = backend.speedrunEnsureSeededRaw(input = input)
+
+// Speedrun AI deck-import (the speedrun-import screen). The OpenAI call runs in
+// the shared Rust engine, so the API key stays server-side on both hosts.
+fun Collection.speedrunAiConfigRaw(input: ByteArray): ByteArray = backend.speedrunAiConfigRaw(input = input)
+
+fun Collection.speedrunAiImportRaw(input: ByteArray): ByteArray = backend.speedrunAiImportRaw(input = input)
+
 // Speedrun honest scores (Memory / Performance / Readiness) + progression, read
 // by the study overview and dashboard screens. SchedulerService RPCs, shared
 // with desktop.

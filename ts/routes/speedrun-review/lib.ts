@@ -161,12 +161,15 @@ export interface ShownProblem {
     id: string;
     prompt: string;
     answer: string | null;
+    // The stem figure filename (if any), carried through so the learn-stage
+    // worked cases can show it alongside the prompt.
+    image?: string;
 }
 
 export function shownProblem(problem: Problem): ShownProblem {
     const i = problem.correctIndex;
     const answer = i >= 0 && i < problem.choices.length ? problem.choices[i] : null;
-    return { id: problem.id, prompt: problem.prompt, answer };
+    return { id: problem.id, prompt: problem.prompt, answer, image: problem.image };
 }
 
 // The learning stage teaches a concept from its first two problems (contrasting

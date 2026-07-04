@@ -1,15 +1,220 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Build, install and launch AnkiDroid (debug) on a device or emulator.
-# If nothing is connected, boots the first available emulator (AVD).
+# Build, install and launch AnkiDroid (debug) on a device or emulator, and
+# self-configure the Android build toolchain so you don't have to export
+# anything by hand.
+#
+# Before building it resolves and exports the environment the build needs:
+#   * ANDROID_HOME / ANDROID_SDK_ROOT (SDK location)
+#   * ANDROID_NDK_HOME  (the exact NDK pinned in bridge/gradle/libs.versions.toml,
+#                        installed via sdkmanager if it's missing)
+#   * JAVA_HOME         (a JDK 17/21/25; the bridge build requires one of these)
+# It also writes the machine-local android/{app,bridge}/local.properties (with
+# local_backend=true so the app consumes the .aar we rebuild here) and makes
+# sure cargo-ndk is installed. All of this is idempotent, so it's safe to re-run.
+#
+# Unlike a plain `gradlew install`, this first rebuilds the shared web assets
+# (the SvelteKit bundle) and the rsdroid bridge that packages them into its
+# .aar. Gradle treats that .aar as an opaque file dependency, so without this
+# step TS/Rust/Svelte changes never reach the device (the exact "I don't see my
+# update" symptom). The dev build is single-arch (arm64 on Apple Silicon) and
+# skips the robolectric/test artifacts for a faster edit-run loop.
 
 set -e
 
-sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+here="$(cd "$(dirname "$0")" && pwd)"
+
+# --------------------------------------------------------------------------
+# Toolchain self-configuration
+# --------------------------------------------------------------------------
+
+die() { echo "error: $*" >&2; exit 1; }
+
+# Resolve + export the SDK location. Honors an existing ANDROID_HOME/
+# ANDROID_SDK_ROOT, otherwise falls back to the platform defaults.
+resolve_sdk() {
+    local candidate="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+    if [ -z "$candidate" ]; then
+        local c
+        for c in "$HOME/Library/Android/sdk" "$HOME/Android/Sdk"; do
+            [ -d "$c" ] && { candidate="$c"; break; }
+        done
+        candidate="${candidate:-$HOME/Library/Android/sdk}"
+    fi
+    [ -d "$candidate" ] || die "Android SDK not found at '$candidate'. Install it (Android Studio, or the command-line tools) or set ANDROID_HOME."
+    export ANDROID_HOME="$candidate"
+    export ANDROID_SDK_ROOT="$candidate"
+}
+
+# Print the value of a `key = "value"` line from a TOML file.
+toml_value() { sed -n "s/^[[:space:]]*$2[[:space:]]*=[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$1" | head -n1; }
+
+find_sdkmanager() {
+    local c
+    for c in "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager "$ANDROID_HOME/tools/bin/sdkmanager"; do
+        [ -x "$c" ] && { echo "$c"; return 0; }
+    done
+    command -v sdkmanager 2>/dev/null && return 0
+    return 1
+}
+
+# Resolve + export ANDROID_NDK_HOME. Honors an existing value, otherwise prefers
+# the pinned version, then any install of the same major version, then installs
+# the pinned version via sdkmanager, then falls back to the newest install.
+resolve_ndk() {
+    local want="$1" major="${1%%.*}"
+    if [ -n "$ANDROID_NDK_HOME" ] && [ -d "$ANDROID_NDK_HOME" ]; then
+        export ANDROID_NDK_HOME
+        return
+    fi
+    if [ -d "$ANDROID_HOME/ndk/$want" ]; then
+        export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$want"
+        return
+    fi
+    local newest
+    newest="$(ls -1d "$ANDROID_HOME/ndk/$major".* 2>/dev/null | sort -V | tail -n1)"
+    if [ -n "$newest" ]; then
+        export ANDROID_NDK_HOME="$newest"
+        return
+    fi
+    local sm
+    if sm="$(find_sdkmanager)"; then
+        echo "NDK $want not installed; installing it with sdkmanager..."
+        yes | "$sm" --licenses >/dev/null 2>&1 || true
+        "$sm" --install "ndk;$want"
+        [ -d "$ANDROID_HOME/ndk/$want" ] || die "sdkmanager did not install 'ndk;$want' under $ANDROID_HOME/ndk."
+        export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$want"
+        return
+    fi
+    newest="$(ls -1d "$ANDROID_HOME/ndk/"*/ 2>/dev/null | sort -V | tail -n1)"
+    if [ -n "$newest" ]; then
+        export ANDROID_NDK_HOME="${newest%/}"
+        echo "warning: NDK $want is not installed and sdkmanager was not found; using ${ANDROID_NDK_HOME} instead." >&2
+        return
+    fi
+    die "NDK $want is not installed and sdkmanager was not found.
+  Install the command-line tools, then run:
+    \"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager\" --install \"ndk;$want\""
+}
+
+# Print the major Java version of a JDK home (handles the legacy 1.x scheme).
+java_major() {
+    [ -x "$1/bin/java" ] || return 1
+    "$1/bin/java" -version 2>&1 | awk -F'"' '/version/{print $2; exit}' \
+        | awk -F. '{if ($1=="1") print $2; else print $1}'
+}
+
+# The bridge build requires JDK 17, 21 or 25 (see bridge/build.gradle.kts).
+java_acceptable() {
+    local m
+    m="$(java_major "$1")" || return 1
+    case "$m" in 17 | 21 | 25) return 0 ;; *) return 1 ;; esac
+}
+
+# Resolve + export JAVA_HOME to a compatible JDK. Honors an existing JAVA_HOME
+# when compatible; otherwise searches the OS, then Android Studio's bundled JBR.
+resolve_java() {
+    if [ -n "$JAVA_HOME" ]; then
+        if java_acceptable "$JAVA_HOME"; then export JAVA_HOME; return; fi
+        echo "warning: JAVA_HOME=$JAVA_HOME is not a JDK 17/21/25; searching for a compatible one." >&2
+    fi
+    local v home
+    if [ -x /usr/libexec/java_home ]; then
+        for v in 21 25 17; do
+            home="$(/usr/libexec/java_home -v "$v" 2>/dev/null || true)"
+            if [ -n "$home" ] && java_acceptable "$home"; then export JAVA_HOME="$home"; return; fi
+        done
+    fi
+    for home in \
+        "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+        "$HOME/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+        "/Applications/Android Studio.app/Contents/jre/Contents/Home" \
+        /Library/Java/JavaVirtualMachines/*/Contents/Home \
+        /usr/lib/jvm/*; do
+        if java_acceptable "$home"; then export JAVA_HOME="$home"; return; fi
+    done
+    die "No compatible JDK found. The Gradle build needs a JDK 17, 21 or 25 (21 recommended).
+  Install one and re-run, for example:
+    * brew install --cask temurin@21
+    * or download the macOS 'JDK' .pkg (Temurin 21) from https://adoptium.net/temurin/releases/?version=21
+    * or install Android Studio (it bundles a compatible JBR; this script auto-detects it)
+  If you already have one, export JAVA_HOME to it and re-run."
+}
+
+ensure_cargo_ndk() {
+    command -v cargo >/dev/null 2>&1 || die "cargo not found. Install Rust from https://rustup.rs/ and re-run."
+    if ! cargo ndk --version >/dev/null 2>&1; then
+        local ver
+        ver="$(toml_value "$here/bridge/build_rust/Cargo.toml" cargo-ndk)"
+        echo "Installing cargo-ndk ${ver:-4.1.2}..."
+        cargo install "cargo-ndk@${ver:-4.1.2}"
+    fi
+}
+
+# Create the machine-local, gitignored local.properties files if absent. The
+# app needs local_backend=true so it loads the .aar we rebuild below instead of
+# the published Maven backend.
+write_local_properties() {
+    local app_props="$here/app/local.properties" bridge_props="$here/bridge/local.properties"
+    if [ ! -f "$app_props" ]; then
+        printf 'sdk.dir=%s\nlocal_backend=true\n' "$ANDROID_HOME" > "$app_props"
+        echo "Wrote $app_props"
+    fi
+    if [ ! -f "$bridge_props" ]; then
+        printf 'sdk.dir=%s\n' "$ANDROID_HOME" > "$bridge_props"
+        echo "Wrote $bridge_props"
+    fi
+}
+
+# android-launch sets SKIP_BUILD=1 to skip the bridge/app build and go straight
+# to install + launch; the NDK + cargo-ndk are only needed for the build.
+skip_build="${SKIP_BUILD:-}"
+
+echo "Configuring Android toolchain..."
+resolve_sdk
+resolve_java
+if [ -z "$skip_build" ]; then
+    ndk_version="$(toml_value "$here/bridge/gradle/libs.versions.toml" ndk)"
+    [ -n "$ndk_version" ] || die "could not read the required NDK version from bridge/gradle/libs.versions.toml"
+    resolve_ndk "$ndk_version"
+    ensure_cargo_ndk
+fi
+write_local_properties
+echo "  ANDROID_HOME=$ANDROID_HOME"
+[ -n "$ANDROID_NDK_HOME" ] && echo "  ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+echo "  JAVA_HOME=$JAVA_HOME"
+
+# --------------------------------------------------------------------------
+# Build (no device needed) — finish all the slow work before the emulator opens
+# --------------------------------------------------------------------------
+
+sdk="$ANDROID_HOME"
 adb="$sdk/platform-tools/adb"
 emulator="$sdk/emulator/emulator"
+# play/amazon/full debug flavors share this id (no per-flavor suffix), so the
+# Full flavor we build below installs and launches under it.
 app_id="com.ichi2.anki.debug"
+
+# Rebuild the bridge + app before touching the emulator so the slow work
+# finishes first. SKIP_BUILD (android-launch) jumps straight to install for a
+# fast redeploy of the last build.
+if [ -z "$skip_build" ]; then
+    # build_rust runs ninja (SvelteKit + reviewer/mathjax), cross-compiles
+    # rsdroid, and repackages the .aar the app consumes.
+    echo "Rebuilding rsdroid bridge + web assets..."
+    (cd "$here/bridge" && ANDROID_SKIP_ROBOLECTRIC=1 cargo run -p build_rust)
+
+    # installFullDebug below reuses this (assemble up-to-date), so it only installs.
+    echo "Building the app (assembleFullDebug)..."
+    (cd "$here/app" && ./gradlew assembleFullDebug)
+else
+    echo "SKIP_BUILD set: skipping bridge + app build; installing the last build."
+fi
+
+# --------------------------------------------------------------------------
+# Build is done — bring up a device only if none is connected, then install
+# --------------------------------------------------------------------------
 
 if ! "$adb" devices | sed 1d | grep -qw device; then
     avd="$("$emulator" -list-avds | head -n1)"
@@ -24,7 +229,19 @@ while [ "$("$adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" !=
     sleep 1
 done
 
-cd "$(dirname "$0")/app"
-./gradlew installPlayDebug
-"$adb" shell monkey -p "$app_id" -c android.intent.category.LAUNCHER 1 >/dev/null
-echo "Launched $app_id"
+# Install + launch the Full debug flavor (assemble already ran above, so this
+# just installs the built APK, then launches it).
+cd "$here/app"
+./gradlew installFullDebug
+
+# Bring the freshly-installed build to the foreground. `monkey -c LAUNCHER` is
+# unreliable on recent Android images: it resolves the launcher category to the
+# system ResolverActivity and exits non-zero without launching, which under
+# `set -e` aborted this script before the app ever came up (the "I installed it
+# but don't see my update" symptom). Start the launcher activity directly
+# instead, and don't let a launch hiccup fail the whole build+install.
+launch_activity="com.ichi2.anki.IntentHandler"
+echo "Launching $app_id"
+"$adb" shell am start -n "$app_id/$launch_activity" \
+    -a android.intent.action.MAIN -c android.intent.category.LAUNCHER >/dev/null \
+    || echo "warning: could not auto-launch $app_id; open it from the launcher." >&2
