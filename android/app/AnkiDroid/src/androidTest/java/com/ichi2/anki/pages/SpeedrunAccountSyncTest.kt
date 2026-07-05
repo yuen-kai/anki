@@ -6,14 +6,11 @@ import androidx.fragment.app.FragmentActivity
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.WorkManager
-import anki.sync.SyncCollectionResponse.ChangesRequired
 import com.google.protobuf.ByteString
 import com.ichi2.anki.CollectionManager.withCol
 import com.ichi2.anki.DeckPicker
 import com.ichi2.anki.isLoggedIn
-import com.ichi2.anki.reopen
 import com.ichi2.anki.settings.Prefs
-import com.ichi2.anki.syncAuth
 import com.ichi2.anki.tests.InstrumentedTest
 import com.ichi2.anki.testutil.GrantStoragePermission.storagePermission
 import com.ichi2.anki.testutil.disableIntroductionSlide
@@ -21,7 +18,6 @@ import com.ichi2.anki.testutil.discardPreliminaryViews
 import com.ichi2.anki.testutil.grantPermissions
 import com.ichi2.anki.testutil.notificationPermission
 import com.ichi2.anki.updateLogin
-import com.ichi2.anki.worker.SyncWorker
 import com.ichi2.anki.worker.UniqueWorkNames
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -134,40 +130,26 @@ class SpeedrunAccountSyncTest : InstrumentedTest() {
         assertEquals("test", status.optString("account"))
         assertEquals(ENDPOINT, status.optString("endpoint"))
 
-        // 3) data round-trip: pull the pylib-seeded note via the native sync engine,
-        //    mirroring DeckPicker's handleDownload (close -> full download -> reopen).
-        //    A fresh device collection vs the seeded server needs a one-way download;
-        //    a device already synced by a previous run reports NO_CHANGES.
-        val auth = syncAuth() ?: error("no SyncAuth after login")
-        val required = runBlocking { withCol { syncCollection(auth, syncMedia = false).required } }
-        Timber.i("speedrun account: syncCollection required=%s", required)
-        when (required) {
-            ChangesRequired.NO_CHANGES -> Timber.i("speedrun account: device already in sync with server")
-            ChangesRequired.FULL_DOWNLOAD,
-            ChangesRequired.FULL_SYNC,
-            ChangesRequired.FULL_UPLOAD,
-            ->
-                runBlocking {
-                    withCol {
-                        close(downgrade = false, forFullSync = true)
-                        try {
-                            fullUploadOrDownload(auth, serverUsn = null, upload = false)
-                        } finally {
-                            reopen(afterFullSync = true)
-                        }
-                    }
-                }
-            else -> error("unexpected sync state for account round-trip: $required")
+        // 3) data round-trip through the real account handler: `speedrunSyncNow`
+        //    must perform the first-time full sync itself, so a server-seeded note
+        //    lands on the device with no manual download. This is the regression:
+        //    the handler used to fire the background SyncWorker, which skips
+        //    one-way syncs, so a fresh phone never picked up the server's data.
+        val now = post("speedrunSyncNow")
+        Timber.i("speedrun account: syncNow -> %s", now)
+        if (now.optBoolean("conflict")) {
+            // The device already had its own collection: adopt the server's copy.
+            val resolved = post("speedrunSyncNow", envelope { put("resolve", "download") })
+            assertTrue(resolved.optBoolean("ok"), "resolve download ok: $resolved")
+        } else {
+            assertTrue(now.optBoolean("ok"), "syncNow ok: $now")
         }
         val seeded = runBlocking { withCol { findNotes(SEED_MARKER) } }
         Timber.i("speedrun account: notes matching %s = %s", SEED_MARKER, seeded)
-        assertTrue(seeded.isNotEmpty(), "seeded note present on device after sync: $seeded")
+        assertTrue(seeded.isNotEmpty(), "seeded note present on device after speedrunSyncNow: $seeded")
 
-        // 4) syncNow fires the real SyncWorker; assert the handler contract and let the
-        //    worker finish so it does not race collection teardown.
-        val now = post("speedrunSyncNow")
-        assertTrue(now.optBoolean("ok"), "syncNow ok: $now")
-        awaitSyncWorkerFinished()
+        // 4) let the background media sync finish so it does not race teardown.
+        awaitUniqueWorkFinished(UniqueWorkNames.SYNC_MEDIA)
     }
 
     /** True when the host sync server answers on 10.0.2.2:28080 (emulator -> host loopback). */
@@ -181,21 +163,21 @@ class SpeedrunAccountSyncTest : InstrumentedTest() {
             false
         }
 
-    /** Poll WorkManager until the unique SYNC work leaves the running set (best effort). */
-    private fun awaitSyncWorkerFinished() {
+    /** Poll WorkManager until the given unique work leaves the running set (best effort). */
+    private fun awaitUniqueWorkFinished(uniqueName: String) {
         val wm = WorkManager.getInstance(activity.applicationContext)
         val deadline = System.currentTimeMillis() + 30_000
         while (System.currentTimeMillis() < deadline) {
-            val infos = wm.getWorkInfosForUniqueWork(UniqueWorkNames.SYNC).get()
+            val infos = wm.getWorkInfosForUniqueWork(uniqueName).get()
             val states = infos.map { it.state }
             if (infos.isEmpty() || states.all { it.isFinished }) {
-                Timber.i("speedrun account: SyncWorker states=%s", states)
+                Timber.i("speedrun account: %s states=%s", uniqueName, states)
                 return
             }
             Thread.sleep(250)
         }
-        Timber.w("speedrun account: SyncWorker did not finish in time; cancelling")
-        SyncWorker.cancel(activity.applicationContext)
+        Timber.w("speedrun account: %s did not finish in time; cancelling", uniqueName)
+        wm.cancelUniqueWork(uniqueName)
     }
 
     companion object {
