@@ -986,3 +986,74 @@ async fn offline_reviews_from_two_devices_merge_and_resolve_conflicts() -> Resul
     })
     .await
 }
+
+/// AnkiWeb answers a fresh client's first `/sync/meta` with a 308 redirect to
+/// the account's assigned shard; the client must persist that endpoint and then
+/// run the required *full download* against the shard, not the redirecting hub.
+/// The Speedrun phone host (`PostRequestHandler.speedrunNormalSync` /
+/// `speedrunFullSync`) relies on exactly this: it stores `new_endpoint`, then
+/// full-downloads a first-time device link from it. `meta_redirect_is_handled`
+/// only covers a *normal* sync's redirect, so this locks in the redirect +
+/// full-sync combination a phone hits on its first AnkiWeb link.
+#[tokio::test]
+async fn redirect_then_full_download_uses_persisted_endpoint() -> Result<()> {
+    with_active_server(|client| async move {
+        let shard = client.endpoint.clone();
+        // A "hub" that 308-redirects meta to the shard, standing in for the
+        // sync.ankiweb.net -> syncNN.ankiweb.net hop.
+        let hub = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/sync/meta"))
+            .respond_with(ResponseTemplate::new(308).insert_header("location", shard.as_str()))
+            .mount(&hub)
+            .await;
+
+        let mut ctx = SyncTestContext::new(client);
+
+        // Desktop uploads a base straight to the shard.
+        let mut desktop = ctx.col1();
+        let cards = add_basic_cards(&mut desktop, 3);
+        assert!(matches!(
+            ctx.normal_sync(&mut desktop).await.required,
+            SyncActionRequired::FullSyncRequired { .. }
+        ));
+        ctx.full_upload(desktop).await;
+
+        // Phone starts pointed at the hub. Its first meta must redirect, and the
+        // returned endpoint (what the caller persists as Prefs.currentSyncUri) is
+        // the shard, with a full download required.
+        ctx.client.endpoint = Url::try_from(hub.uri().as_str()).unwrap();
+        let phone = ctx.col2();
+        let out = {
+            let mut phone = phone;
+            let out = ctx.normal_sync(&mut phone).await;
+            assert_eq!(out.new_endpoint.as_deref(), Some(shard.as_str()));
+            assert_eq!(
+                out.required,
+                SyncActionRequired::FullSyncRequired {
+                    upload_ok: false,
+                    download_ok: true,
+                }
+            );
+            out
+        };
+
+        // Persist the redirected endpoint and run the full download from it.
+        ctx.client.endpoint = Url::try_from(out.new_endpoint.unwrap().as_str()).unwrap();
+        ctx.full_download(ctx.col2()).await;
+
+        // The phone now holds the desktop's cards, fetched from the shard...
+        let phone = ctx.col2();
+        for cid in &cards {
+            assert!(
+                phone.storage.get_card(*cid)?.is_some(),
+                "card {cid} was not downloaded from the shard",
+            );
+        }
+        // ...and the hub only ever handled the single meta hop; the full download
+        // (start/chunk/download/...) went to the persisted shard endpoint.
+        assert_eq!(hub.received_requests().await.unwrap().len(), 1);
+        Ok(())
+    })
+    .await
+}
