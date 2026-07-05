@@ -769,3 +769,220 @@ async fn regular_sync(ctx: &SyncTestContext) -> Result<()> {
     ));
     Ok(())
 }
+
+// Two-device offline review sync (the "sync test", speedrun brief §7b)
+////////////////////////////////////////////////////////////////////////
+
+/// Add `n` Basic cards to the default deck, returning their card ids in order.
+fn add_basic_cards(col: &mut Collection, n: usize) -> Vec<CardId> {
+    add_basic_cards_to_deck(col, DeckId(1), "card", n)
+}
+
+fn add_basic_cards_to_deck(
+    col: &mut Collection,
+    deck_id: DeckId,
+    prefix: &str,
+    n: usize,
+) -> Vec<CardId> {
+    let nt = col.get_notetype_by_name("Basic").unwrap().unwrap();
+    (0..n)
+        .map(|i| {
+            let mut note = nt.new_note();
+            note.set_field(0, &format!("{prefix} {i}")).unwrap();
+            col.add_note(&mut note, deck_id).unwrap();
+            col.search_cards(note.id, SortMode::NoOrder).unwrap()[0]
+        })
+        .collect()
+}
+
+fn revlog_count(col: &Collection) -> u32 {
+    col.storage
+        .db_scalar::<u32>("select count() from revlog")
+        .unwrap()
+}
+
+#[tokio::test]
+async fn two_clients_sync_decks_and_review_progress_both_directions() -> Result<()> {
+    // grade_now ratings are 0=again, 1=hard, 2=good, 3=easy.
+    const GOOD: i32 = 2;
+    with_active_server(|client| async move {
+        let ctx = SyncTestContext::new(client);
+
+        // Establish a shared base collection on the sync server, then download it
+        // into the second client. This mirrors signing a new device into an
+        // account that already has collection data.
+        let mut phone = ctx.col1();
+        add_basic_cards(&mut phone, 2);
+        assert!(matches!(
+            ctx.normal_sync(&mut phone).await.required,
+            SyncActionRequired::FullSyncRequired { .. }
+        ));
+        ctx.full_upload(phone).await;
+
+        let mut desktop = ctx.col2();
+        assert_eq!(
+            ctx.normal_sync(&mut desktop).await.required,
+            SyncActionRequired::FullSyncRequired {
+                upload_ok: false,
+                download_ok: true,
+            }
+        );
+        ctx.full_download(desktop).await;
+
+        let mut phone = ctx.col1();
+        let mut desktop = ctx.col2();
+
+        // Phone/device A creates a deck and records review progress.
+        let phone_deck = phone.get_or_create_normal_deck("Phone-created deck")?;
+        let phone_card = add_basic_cards_to_deck(&mut phone, phone_deck.id, "phone-created", 1)[0];
+        phone.grade_now(&[phone_card], GOOD)?;
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        assert_eq!(
+            ctx.normal_sync(&mut phone).await.required,
+            SyncActionRequired::NoChanges
+        );
+        assert_eq!(
+            ctx.normal_sync(&mut desktop).await.required,
+            SyncActionRequired::NoChanges
+        );
+
+        let synced_phone_deck = desktop.storage.get_deck(phone_deck.id)?.unwrap();
+        assert_eq!(synced_phone_deck.name.to_string(), "Phone-created deck");
+        assert_eq!(desktop.storage.get_card(phone_card)?.unwrap().reps, 1);
+        assert_eq!(revlog_count(&desktop), 1);
+
+        // Desktop/device B creates a different deck and records different review
+        // progress, then phone pulls it back.
+        let desktop_deck = desktop.get_or_create_normal_deck("Desktop-created deck")?;
+        let desktop_card =
+            add_basic_cards_to_deck(&mut desktop, desktop_deck.id, "desktop-created", 1)[0];
+        desktop.grade_now(&[desktop_card], GOOD)?;
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        assert_eq!(
+            ctx.normal_sync(&mut desktop).await.required,
+            SyncActionRequired::NoChanges
+        );
+        assert_eq!(
+            ctx.normal_sync(&mut phone).await.required,
+            SyncActionRequired::NoChanges
+        );
+
+        let synced_desktop_deck = phone.storage.get_deck(desktop_deck.id)?.unwrap();
+        assert_eq!(synced_desktop_deck.name.to_string(), "Desktop-created deck");
+        assert_eq!(phone.storage.get_card(desktop_card)?.unwrap().reps, 1);
+        assert_eq!(revlog_count(&phone), 2);
+        assert_eq!(revlog_count(&desktop), 2);
+
+        Ok(())
+    })
+    .await
+}
+
+/// The brief's §7b: review different cards on two devices while offline, then
+/// sync and show every review lands once (none lost, none double-counted); then
+/// review the *same* card on both and show the conflict resolves to a clear
+/// winner. This exercises the shared engine that both desktop and the AnkiDroid
+/// Speedrun host sync through, so it stands in for the phone<->desktop
+/// round-trip.
+#[tokio::test]
+async fn offline_reviews_from_two_devices_merge_and_resolve_conflicts() -> Result<()> {
+    // grade_now ratings are 0=again, 1=hard, 2=good, 3=easy.
+    const AGAIN: i32 = 0;
+    const GOOD: i32 = 2;
+    const EASY: i32 = 3;
+    with_active_server(|client| async move {
+        let ctx = SyncTestContext::new(client);
+
+        // A shared starting point: the phone authors 20 cards and uploads them,
+        // the desktop downloads them. Now both sides share one base to diverge
+        // from (the first link a fresh device makes).
+        let mut phone = ctx.col1();
+        let cards = add_basic_cards(&mut phone, 20);
+        assert!(matches!(
+            ctx.normal_sync(&mut phone).await.required,
+            SyncActionRequired::FullSyncRequired { .. }
+        ));
+        ctx.full_upload(phone).await;
+
+        let mut desktop = ctx.col2();
+        assert_eq!(
+            ctx.normal_sync(&mut desktop).await.required,
+            SyncActionRequired::FullSyncRequired {
+                upload_ok: false,
+                download_ok: true,
+            }
+        );
+        ctx.full_download(desktop).await;
+
+        // Offline: 10 reviews on the phone, 10 *different* reviews on the desktop.
+        let mut phone = ctx.col1();
+        let mut desktop = ctx.col2();
+        // A revlog entry is keyed by its answer time in ms, so space the grades
+        // out (human reviews always are) to avoid same-millisecond id collisions.
+        for &cid in &cards[0..10] {
+            phone.grade_now(&[cid], GOOD)?;
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        for &cid in &cards[10..20] {
+            desktop.grade_now(&[cid], GOOD)?;
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+
+        // Reconnect and sync both ways.
+        assert_eq!(
+            ctx.normal_sync(&mut phone).await.required,
+            SyncActionRequired::NoChanges
+        );
+        assert_eq!(
+            ctx.normal_sync(&mut desktop).await.required,
+            SyncActionRequired::NoChanges
+        );
+        assert_eq!(
+            ctx.normal_sync(&mut phone).await.required,
+            SyncActionRequired::NoChanges
+        );
+
+        // All 20 reviews landed once on each device: none lost, none doubled.
+        assert_eq!(revlog_count(&phone), 20);
+        assert_eq!(revlog_count(&desktop), 20);
+        for &cid in &cards {
+            assert_eq!(phone.storage.get_card(cid)?.unwrap().reps, 1);
+            assert_eq!(desktop.storage.get_card(cid)?.unwrap().reps, 1);
+        }
+
+        // Conflict: the same card is reviewed on both devices offline (reusing the
+        // same open handles). The card's modification time is in seconds, so make
+        // the desktop's review strictly later to get a deterministic winner.
+        let conflict = cards[0];
+        phone.grade_now(&[conflict], AGAIN)?;
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        desktop.grade_now(&[conflict], EASY)?;
+        let winner = desktop.storage.get_card(conflict)?.unwrap();
+
+        // Sync the earlier side up first, then the later side, then pull back.
+        ctx.normal_sync(&mut phone).await;
+        ctx.normal_sync(&mut desktop).await;
+        ctx.normal_sync(&mut phone).await;
+
+        // Last-writer-wins by modification time: the desktop's later review wins
+        // and both devices converge on it.
+        let phone_card = phone.storage.get_card(conflict)?.unwrap();
+        assert_eq!(phone_card.mtime, winner.mtime, "later review wins");
+        assert_eq!(phone_card.interval, winner.interval);
+        assert_eq!(phone_card.ctype, winner.ctype);
+        assert_eq!(
+            phone_card,
+            desktop.storage.get_card(conflict)?.unwrap(),
+            "both devices converge on the same card state",
+        );
+        // The losing review is still kept in history on both devices (22 = 20 + the
+        // two conflicting reviews), so nothing is silently discarded.
+        assert_eq!(revlog_count(&phone), 22);
+        assert_eq!(revlog_count(&desktop), 22);
+
+        Ok(())
+    })
+    .await
+}
