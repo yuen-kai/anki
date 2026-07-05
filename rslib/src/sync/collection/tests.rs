@@ -1057,3 +1057,65 @@ async fn redirect_then_full_download_uses_persisted_endpoint() -> Result<()> {
     })
     .await
 }
+
+/// The Speedrun phone reseeds the bundled decks (`speedrun_ensure_seeded`) on
+/// every decks-screen load. After a first-time full download from AnkiWeb, that
+/// reseed must be a no-op: if it re-created or bumped the seeded decks it would
+/// dirty the schema and force the *next* sync into a full-sync conflict, so the
+/// phone could never settle into clean incremental merges. This proves the seed
+/// signatures ride along in the synced config, so a post-download reseed leaves
+/// the collection (and schema) untouched and the next sync is `NoChanges`.
+#[tokio::test]
+async fn reseed_after_full_download_does_not_force_a_conflict() -> Result<()> {
+    with_active_server(|client| async move {
+        let ctx = SyncTestContext::new(client);
+
+        // Desktop seeds the bundled decks and uploads them.
+        let mut desktop = ctx.col1();
+        desktop.speedrun_ensure_seeded()?;
+        assert!(matches!(
+            ctx.normal_sync(&mut desktop).await.required,
+            SyncActionRequired::FullSyncRequired { .. }
+        ));
+        ctx.full_upload(desktop).await;
+
+        // Phone links to the account for the first time: full download.
+        let mut phone = ctx.col2();
+        assert_eq!(
+            ctx.normal_sync(&mut phone).await.required,
+            SyncActionRequired::FullSyncRequired {
+                upload_ok: false,
+                download_ok: true,
+            }
+        );
+        ctx.full_download(phone).await;
+
+        // Phone reopens and reseeds, exactly as the decks screen does on load.
+        let mut phone = ctx.col2();
+        let scm_before = phone.storage.db_scalar::<i64>("select scm from col")?;
+        let out = phone.speedrun_ensure_seeded()?;
+        assert_eq!(
+            out["seeded"].as_array().map(Vec::len),
+            Some(0),
+            "reseed re-created decks after a download: {out}",
+        );
+        assert_eq!(
+            out["updated"].as_array().map(Vec::len),
+            Some(0),
+            "reseed modified decks after a download: {out}",
+        );
+        assert_eq!(
+            phone.storage.db_scalar::<i64>("select scm from col")?,
+            scm_before,
+            "reseed bumped the schema, which forces the next sync to be a full sync",
+        );
+
+        // The next sync therefore stays a clean incremental no-op, not a conflict.
+        assert_eq!(
+            ctx.normal_sync(&mut phone).await.required,
+            SyncActionRequired::NoChanges,
+        );
+        Ok(())
+    })
+    .await
+}
