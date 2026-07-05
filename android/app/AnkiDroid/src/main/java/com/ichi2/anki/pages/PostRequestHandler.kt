@@ -22,6 +22,8 @@ import androidx.annotation.VisibleForTesting
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import anki.collection.OpChanges
+import anki.sync.SyncAuth
+import anki.sync.SyncCollectionResponse
 import com.google.protobuf.ByteString
 import com.ichi2.anki.CollectionManager
 import com.ichi2.anki.CollectionManager.withCol
@@ -64,11 +66,13 @@ import com.ichi2.anki.libanki.stats.getGraphPreferencesRaw
 import com.ichi2.anki.libanki.stats.graphsRaw
 import com.ichi2.anki.libanki.stats.setGraphPreferencesRaw
 import com.ichi2.anki.observability.undoableOp
+import com.ichi2.anki.reopen
 import com.ichi2.anki.searchInBrowser
+import com.ichi2.anki.setLastSyncTimeToNow
 import com.ichi2.anki.settings.Prefs
 import com.ichi2.anki.syncAuth
 import com.ichi2.anki.updateLogin
-import com.ichi2.anki.worker.SyncWorker
+import com.ichi2.anki.worker.SyncMediaWorker
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -234,7 +238,7 @@ val uiMethods =
         // and stores the returned key like any other login. They exchange the
         // protobuf generic.Json wrapper via the FrontendService Speedrun* RPCs.
         "speedrunSyncLogin" to { bytes -> lifecycleScope.async { speedrunSyncLogin(bytes) } },
-        "speedrunSyncNow" to { _ -> lifecycleScope.async { speedrunSyncNow() } },
+        "speedrunSyncNow" to { bytes -> lifecycleScope.async { speedrunSyncNow(bytes) } },
         "speedrunSignOut" to { _ -> lifecycleScope.async { speedrunSignOut() } },
         "speedrunSyncStatus" to { _ -> lifecycleScope.async { speedrunSyncStatus() } },
     )
@@ -304,19 +308,114 @@ private suspend fun FragmentActivity.speedrunSyncLogin(bytes: ByteArray): ByteAr
 }
 
 /**
- * Kick off a background collection sync against the stored credentials. Mirrors
- * desktop's `speedrun_sync_now` (fire-and-forget).
+ * Run a collection sync against the stored credentials and wait for it to
+ * finish, mirroring desktop's `speedrun_sync_now`. The Speedrun shell replaces
+ * the stock deck list, so the account screen is the only sync entry point on the
+ * phone; unlike the background [SyncWorker] (which skips one-way syncs because it
+ * has no UI to resolve them), this must handle the first-time full download /
+ * upload itself, otherwise a fresh phone never picks up the desktop's collection.
+ *
+ * A normal (incremental) sync merges reviews both ways via the shared engine's
+ * per-object last-writer-wins rule. When the server and this device have both
+ * changed since their last common point (a full sync is required) the direction
+ * is ambiguous, so we report a `conflict` and let the screen ask the user which
+ * copy to keep; the choice comes back as `resolve = "download" | "upload"`.
  */
-private fun FragmentActivity.speedrunSyncNow(): ByteArray {
+private suspend fun FragmentActivity.speedrunSyncNow(bytes: ByteArray): ByteArray {
     val auth =
         syncAuth() ?: return jsonResponse {
             put("ok", false)
             put("message", "Not signed in.")
         }
-    SyncWorker.start(this, auth, syncMedia = true)
+    val resolve = parseJsonRequest(bytes).optString("resolve").trim()
+    return try {
+        withContext(Dispatchers.IO) {
+            when (resolve) {
+                "download" -> speedrunFullSync(auth, upload = false)
+                "upload" -> speedrunFullSync(auth, upload = true)
+                else -> speedrunNormalSync(auth)
+            }
+        }
+    } catch (exc: Exception) {
+        // Offline / server down / auth issues: report inline so the screen can
+        // show it and the app keeps working (matches the AI/offline rule).
+        Timber.w(exc, "speedrun sync failed")
+        jsonResponse {
+            put("ok", false)
+            put("message", exc.localizedMessage ?: "Sync failed.")
+        }
+    }
+}
+
+/**
+ * A normal incremental sync. On success the reviews are merged both ways; a
+ * required full download/upload is performed automatically, and an ambiguous
+ * full sync is reported back as a conflict for the user to resolve.
+ */
+private suspend fun FragmentActivity.speedrunNormalSync(auth: SyncAuth): ByteArray {
+    val output = withCol { syncCollection(auth, syncMedia = false) }
+    // AnkiWeb may hand us a new endpoint to talk to; persist + reuse it.
+    var effectiveAuth = auth
+    if (output.hasNewEndpoint() && output.newEndpoint.isNotEmpty()) {
+        Prefs.currentSyncUri = output.newEndpoint
+        effectiveAuth = syncAuth() ?: effectiveAuth
+    }
+    return when (output.required) {
+        SyncCollectionResponse.ChangesRequired.NO_CHANGES -> {
+            withCol { _loadScheduler() } // scheduler version may have changed
+            setLastSyncTimeToNow()
+            SyncMediaWorker.start(this, effectiveAuth)
+            jsonResponse {
+                put("ok", true)
+                put("message", "Sync complete.")
+            }
+        }
+        SyncCollectionResponse.ChangesRequired.FULL_DOWNLOAD ->
+            speedrunFullSync(effectiveAuth, upload = false)
+        SyncCollectionResponse.ChangesRequired.FULL_UPLOAD ->
+            speedrunFullSync(effectiveAuth, upload = true)
+        SyncCollectionResponse.ChangesRequired.FULL_SYNC ->
+            jsonResponse {
+                put("ok", false)
+                put("conflict", true)
+                put("canUpload", true)
+                put("canDownload", true)
+                put(
+                    "message",
+                    "This device and the server have both changed since the last sync. " +
+                        "Choose which copy to keep.",
+                )
+            }
+        else ->
+            jsonResponse {
+                put("ok", false)
+                put("message", "Unexpected sync state.")
+            }
+    }
+}
+
+/**
+ * Replace one side of the collection wholesale (the first-time link, or a
+ * user-picked conflict resolution). Mirrors [handleDownload]/[handleUpload]
+ * without the DeckPicker UI, so it works from the Speedrun single-fragment host.
+ */
+private suspend fun FragmentActivity.speedrunFullSync(
+    auth: SyncAuth,
+    upload: Boolean,
+): ByteArray {
+    withCol {
+        close(downgrade = false, forFullSync = true)
+        try {
+            fullUploadOrDownload(auth, serverUsn = null, upload = upload)
+        } finally {
+            reopen(afterFullSync = true)
+        }
+    }
+    setLastSyncTimeToNow()
+    SyncMediaWorker.start(this, auth)
     return jsonResponse {
         put("ok", true)
-        put("message", "Sync started.")
+        put("message", if (upload) "Uploaded to the server." else "Downloaded from the server.")
     }
 }
 

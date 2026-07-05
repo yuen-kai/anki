@@ -27,9 +27,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     let loggedIn = $state(initial.loggedIn);
     let account = $state<string | null>(initial.account);
-    // The sync server the host is configured for, reported on load (and after
-    // sign in). Sign in always targets AnkiWeb; this is only surfaced read-only
-    // when a custom server happens to already be configured.
+    // The sync server to sign in against. Pre-filled from whatever the host is
+    // already configured for; left blank it means AnkiWeb. Editable on the phone,
+    // where there's no separate preferences screen to point at a self-hosted
+    // server. Shown read-only once signed in.
     let endpoint = $state(initial.endpoint ?? "");
     let username = $state("");
     let password = $state("");
@@ -37,6 +38,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let message = $state("");
     let error = $state("");
     let lastSynced = $state<string | null>(null);
+    // Set when the host reports a full-sync conflict: the server and this device
+    // both changed, so the user has to pick which copy to keep (phone only).
+    let conflict = $state(false);
 
     function describe(e: unknown): string {
         return e instanceof Error ? e.message : String(e);
@@ -58,7 +62,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     async function doSignIn(): Promise<void> {
         await run(async () => {
-            const result = await hostSyncLogin(username.trim(), password, "");
+            const result = await hostSyncLogin(username.trim(), password, endpoint.trim());
             if (!result.ok) {
                 throw new Error(result.message || "Sign in failed.");
             }
@@ -78,15 +82,43 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     async function doSync(): Promise<void> {
+        conflict = false;
         await run(async () => {
             const res = await hostSyncNow();
+            if (res.conflict) {
+                conflict = true;
+                return;
+            }
             if (!res.ok) {
                 throw new Error(res.message || "Sync failed.");
             }
             lastSynced = new Date().toLocaleTimeString();
             const status = await hostSyncStatus();
             hostAvailableOverride = hostAvailableOverride || status.hostAvailable;
-        }, "Sync started.");
+        }, "Sync complete.");
+        // Don't leave a success note above the conflict prompt.
+        if (conflict) {
+            message = "";
+        }
+    }
+
+    async function resolveConflict(direction: "download" | "upload"): Promise<void> {
+        busy = true;
+        error = "";
+        message = "";
+        try {
+            const res = await hostSyncNow(direction);
+            if (!res.ok) {
+                throw new Error(res.message || "Sync failed.");
+            }
+            conflict = false;
+            lastSynced = new Date().toLocaleTimeString();
+            message = res.message;
+        } catch (e) {
+            error = describe(e);
+        } finally {
+            busy = false;
+        }
     }
 
     async function doSignOut(): Promise<void> {
@@ -95,6 +127,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             loggedIn = false;
             account = null;
             lastSynced = null;
+            conflict = false;
         });
     }
 
@@ -154,6 +187,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                 disabled={busy}
                             />
                         </label>
+                        <label class="field">
+                            <span class="label">Sync server</span>
+                            <input
+                                class="sr-input"
+                                type="url"
+                                inputmode="url"
+                                autocomplete="off"
+                                placeholder="Leave blank for AnkiWeb"
+                                bind:value={endpoint}
+                                disabled={busy}
+                            />
+                        </label>
 
                         <button
                             type="submit"
@@ -188,6 +233,33 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     >
                         Sync now
                     </button>
+
+                    {#if conflict}
+                        <div class="conflict" role="group" aria-label="Resolve sync conflict">
+                            <p class="conflict-msg">
+                                This device and the server have both changed since the last
+                                sync. Choose which copy to keep. The other copy is replaced.
+                            </p>
+                            <div class="conflict-actions">
+                                <button
+                                    type="button"
+                                    class="sr-btn sr-btn--primary"
+                                    onclick={() => resolveConflict("download")}
+                                    disabled={busy}
+                                >
+                                    Keep server copy
+                                </button>
+                                <button
+                                    type="button"
+                                    class="sr-btn sr-btn--ghost"
+                                    onclick={() => resolveConflict("upload")}
+                                    disabled={busy}
+                                >
+                                    Keep this device
+                                </button>
+                            </div>
+                        </div>
+                    {/if}
 
                     {#if lastSynced}
                         <p class="synced">Last synced at {lastSynced}.</p>
@@ -393,6 +465,31 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin: 0;
         font-size: 13px;
         color: var(--sr-stage-solo-deep);
+    }
+
+    .conflict {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--sr-line-2);
+        border-radius: var(--sr-radius-control);
+        background: var(--sr-ghost);
+    }
+    .conflict-msg {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--sr-ink-2);
+    }
+    .conflict-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .conflict-actions :global(.sr-btn) {
+        flex: 1 1 0;
+        min-width: 8rem;
     }
 
     .signout {

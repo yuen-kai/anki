@@ -37,6 +37,17 @@ export interface HostLoginResult {
     message?: string;
 }
 
+export interface HostSyncResult {
+    ok: boolean;
+    message: string;
+    // Set by the phone host when a full sync is required in an ambiguous
+    // direction, so the screen can ask the user which copy to keep. The desktop
+    // resolves this with its own dialog and never reports a conflict here.
+    conflict?: boolean;
+    canUpload?: boolean;
+    canDownload?: boolean;
+}
+
 // The Speedrun RPCs exchange a `{ json }` blob (a protobuf generic.Json wrapper);
 // these mirror the encode/decode helpers ../speedrun-hierarchy/lib.ts uses.
 const enc = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
@@ -56,9 +67,12 @@ export async function hostSyncLogin(
     );
 }
 
-/** Ask the host to run a collection sync now. */
-export async function hostSyncNow(): Promise<{ ok: boolean; message: string }> {
-    return dec<{ ok: boolean; message: string }>(await speedrunSyncNow({ json: enc({}) }, quiet));
+/**
+ * Ask the host to run a collection sync now. Pass a `resolve` direction to force
+ * one side of a full sync after the host reported a conflict (phone only).
+ */
+export async function hostSyncNow(resolve?: "upload" | "download"): Promise<HostSyncResult> {
+    return dec<HostSyncResult>(await speedrunSyncNow({ json: enc(resolve ? { resolve } : {}) }, quiet));
 }
 
 /** Tell the host to drop its sync credentials (sign out). */
