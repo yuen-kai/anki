@@ -82,8 +82,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     async function doSync(): Promise<void> {
+        busy = true;
+        error = "";
+        message = "";
         conflict = false;
-        await run(async () => {
+        try {
             const res = await hostSyncNow();
             if (res.conflict) {
                 conflict = true;
@@ -93,12 +96,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 throw new Error(res.message || "Sync failed.");
             }
             lastSynced = new Date().toLocaleTimeString();
+            // Show the host's own status: the phone finishes the sync inline
+            // ("Sync complete."), while the desktop runs it in the background and
+            // reports "Sync started.".
+            message = res.message || "Sync started.";
             const status = await hostSyncStatus();
             hostAvailableOverride = hostAvailableOverride || status.hostAvailable;
-        }, "Sync complete.");
-        // Don't leave a success note above the conflict prompt.
-        if (conflict) {
-            message = "";
+        } catch (e) {
+            error = describe(e);
+        } finally {
+            busy = false;
         }
     }
 
