@@ -3,6 +3,7 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
+    import MediaImage from "../speedrun-review/MediaImage.svelte";
     import type { Problem } from "./lib";
 
     export let problem: Problem;
@@ -24,6 +25,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     <legend class="sr-only">Answer choices; mark the correct one</legend>
     {#each [0, 1, 2, 3] as i (i)}
         {@const correct = problem.correctIndex === i}
+        {@const choiceImage = problem.choiceImages?.[i] ?? undefined}
         <div class="choice" class:correct>
             <input
                 class="mark sr-only"
@@ -47,6 +49,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 placeholder={`Answer ${i + 1}`}
                 aria-label={`Answer ${i + 1}`}
             />
+            {#if choiceImage}
+                <div class="fig">
+                    <MediaImage
+                        filename={choiceImage}
+                        alt={`Answer ${i + 1} figure`}
+                        compact
+                    />
+                </div>
+            {/if}
         </div>
     {/each}
 </fieldset>
@@ -70,9 +81,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
         background: var(--sr-tile);
         gap: 9px;
+        flex-wrap: wrap;
         padding: 8px 11px;
         border-radius: var(--sr-radius-sm);
         font-size: 11.5px;
+    }
+    // A choice's figure drops onto its own full-width line beneath the answer
+    // text; the flex row-gap already spaces it from the row above.
+    .fig {
+        flex-basis: 100%;
     }
     .choice.correct {
         @include syn.answer-correct;

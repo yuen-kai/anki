@@ -118,7 +118,8 @@ degrades to a recall.
         <div class="sc-sec sc-sec--reveal">
             <p class="step green">STEP {checkedStep} · Checked</p>
             {#if hasKey && problem}
-                {@const correctImage = problem.choiceImages?.[correctIndex] ?? undefined}
+                {@const correctImage =
+                    problem.choiceImages?.[correctIndex] ?? undefined}
                 <div class="answer correct static">
                     <span class="badge badge--correct" aria-hidden="true">✓</span>
                     <span class="choice-body">

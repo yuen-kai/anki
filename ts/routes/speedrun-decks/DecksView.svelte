@@ -216,113 +216,113 @@ and the backend-free demo render the same screen.
 
                 <div class="rows">
                     {#each rows as deck (deck.deckId)}
-                    {@const m = deck.metrics}
-                    <article class="sr-card row">
-                        <div class="row-info">
-                            <h2 class="row-name">{deck.name || "Untitled deck"}</h2>
-                            <p class="row-meta">
-                                {#if m}
-                                    {plural(m.topics, "topic")} · {plural(
-                                        m.concepts,
-                                        "concept",
-                                    )}
+                        {@const m = deck.metrics}
+                        <article class="sr-card row">
+                            <div class="row-info">
+                                <h2 class="row-name">{deck.name || "Untitled deck"}</h2>
+                                <p class="row-meta">
+                                    {#if m}
+                                        {plural(m.topics, "topic")} · {plural(
+                                            m.concepts,
+                                            "concept",
+                                        )}
+                                    {:else}
+                                        counts unavailable
+                                    {/if}
+                                </p>
+                            </div>
+
+                            <div class="row-progress">
+                                <div class="row-progress-head">
+                                    <span class="prog-label">Completion</span>
+                                    <span class="prog-value">
+                                        {m ? `${percent(m.completion)}%` : "—"}
+                                    </span>
+                                </div>
+                                <div class="sr-bar" aria-hidden="true">
+                                    <div
+                                        class="sr-bar__fill"
+                                        style="width:{m ? percent(m.completion) : 0}%"
+                                    ></div>
+                                </div>
+                            </div>
+
+                            <div class="row-actions">
+                                {#if confirmingId === deck.deckId}
+                                    <div
+                                        class="confirm"
+                                        role="group"
+                                        aria-label="Delete deck"
+                                    >
+                                        <span class="confirm-q">Delete deck?</span>
+                                        <button
+                                            type="button"
+                                            class="sr-btn sr-btn--dark"
+                                            on:click={() => remove(deck)}
+                                            disabled={busy}
+                                        >
+                                            Delete
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="sr-btn sr-btn--ghost"
+                                            on:click={cancelDelete}
+                                            disabled={busy}
+                                            use:focusOnShow
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
                                 {:else}
-                                    counts unavailable
-                                {/if}
-                            </p>
-                        </div>
-
-                        <div class="row-progress">
-                            <div class="row-progress-head">
-                                <span class="prog-label">Completion</span>
-                                <span class="prog-value">
-                                    {m ? `${percent(m.completion)}%` : "—"}
-                                </span>
-                            </div>
-                            <div class="sr-bar" aria-hidden="true">
-                                <div
-                                    class="sr-bar__fill"
-                                    style="width:{m ? percent(m.completion) : 0}%"
-                                ></div>
-                            </div>
-                        </div>
-
-                        <div class="row-actions">
-                            {#if confirmingId === deck.deckId}
-                                <div
-                                    class="confirm"
-                                    role="group"
-                                    aria-label="Delete deck"
-                                >
-                                    <span class="confirm-q">Delete deck?</span>
                                     <button
                                         type="button"
                                         class="sr-btn sr-btn--dark"
-                                        on:click={() => remove(deck)}
+                                        on:click={() => study(deck)}
                                         disabled={busy}
                                     >
-                                        Delete
+                                        Study
                                     </button>
                                     <button
                                         type="button"
                                         class="sr-btn sr-btn--ghost"
-                                        on:click={cancelDelete}
+                                        on:click={() => onDetails(deck)}
                                         disabled={busy}
-                                        use:focusOnShow
                                     >
-                                        Cancel
+                                        Details
                                     </button>
-                                </div>
-                            {:else}
-                                <button
-                                    type="button"
-                                    class="sr-btn sr-btn--dark"
-                                    on:click={() => study(deck)}
-                                    disabled={busy}
-                                >
-                                    Study
-                                </button>
-                                <button
-                                    type="button"
-                                    class="sr-btn sr-btn--ghost"
-                                    on:click={() => onDetails(deck)}
-                                    disabled={busy}
-                                >
-                                    Details
-                                </button>
-                                <button
-                                    type="button"
-                                    class="trash"
-                                    aria-label="Delete deck"
-                                    on:click={() => askDelete(deck)}
-                                    bind:this={trashButtons[deck.deckId]}
-                                    disabled={busy}
-                                >
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        width="18"
-                                        height="18"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="1.7"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        aria-hidden="true"
+                                    <button
+                                        type="button"
+                                        class="trash"
+                                        aria-label="Delete deck"
+                                        on:click={() => askDelete(deck)}
+                                        bind:this={trashButtons[deck.deckId]}
+                                        disabled={busy}
                                     >
-                                        <path d="M4 7h16" />
-                                        <path
-                                            d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"
-                                        />
-                                        <path
-                                            d="M6.5 7l.8 12.1A2 2 0 0 0 9.3 21h5.4a2 2 0 0 0 2-1.9L17.5 7"
-                                        />
-                                        <path d="M10 11v6M14 11v6" />
-                                    </svg>
-                                </button>
-                            {/if}
-                        </div>
-                    </article>
-                {/each}
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            width="18"
+                                            height="18"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="1.7"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            aria-hidden="true"
+                                        >
+                                            <path d="M4 7h16" />
+                                            <path
+                                                d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"
+                                            />
+                                            <path
+                                                d="M6.5 7l.8 12.1A2 2 0 0 0 9.3 21h5.4a2 2 0 0 0 2-1.9L17.5 7"
+                                            />
+                                            <path d="M10 11v6M14 11v6" />
+                                        </svg>
+                                    </button>
+                                {/if}
+                            </div>
+                        </article>
+                    {/each}
 
                     <button type="button" class="new-deck" on:click={onCreate}>
                         <span class="new-deck-plus" aria-hidden="true">+</span>

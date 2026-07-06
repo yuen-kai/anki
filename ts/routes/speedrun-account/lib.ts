@@ -37,6 +37,23 @@ export interface HostLoginResult {
     message?: string;
 }
 
+// Outcome of a quiet (periodic) auto-sync. "synced" = a normal two-way merge
+// completed (or nothing to do); "conflict" = the collections have diverged and
+// a one-way full sync is needed, which auto-sync deliberately does not perform
+// (the user resolves it with the interactive "Sync now" button).
+export type AutoSyncStatus =
+    | "synced"
+    | "conflict"
+    | "not-signed-in"
+    | "offline"
+    | "error";
+
+export interface HostAutoSyncResult {
+    ok: boolean;
+    status: AutoSyncStatus;
+    message?: string;
+}
+
 // The Speedrun RPCs exchange a `{ json }` blob (a protobuf generic.Json wrapper);
 // these mirror the encode/decode helpers ../speedrun-hierarchy/lib.ts uses.
 const enc = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
@@ -56,9 +73,24 @@ export async function hostSyncLogin(
     );
 }
 
-/** Ask the host to run a collection sync now. */
+/** Ask the host to run a collection sync now (interactive: progress + conflict UI). */
 export async function hostSyncNow(): Promise<{ ok: boolean; message: string }> {
     return dec<{ ok: boolean; message: string }>(await speedrunSyncNow({ json: enc({}) }, quiet));
+}
+
+/**
+ * Quiet background sync for the periodic auto-sync. Runs only a normal two-way
+ * merge; if a one-way full sync is required it reports "conflict" and does
+ * nothing, leaving resolution to the interactive hostSyncNow(). Never shows UI.
+ */
+export async function hostAutoSync(): Promise<HostAutoSyncResult> {
+    try {
+        return dec<HostAutoSyncResult>(
+            await speedrunSyncNow({ json: enc({ interactive: false }) }, quiet),
+        );
+    } catch {
+        return { ok: false, status: "offline" };
+    }
 }
 
 /** Tell the host to drop its sync credentials (sign out). */

@@ -28,6 +28,7 @@ deleted.
         rotateProblem,
     } from "../speedrun-review/lib";
     import NewTopicIntro from "../speedrun-review/NewTopicIntro.svelte";
+    import NewUserModal from "../speedrun-review/NewUserModal.svelte";
     import PracticeRecall from "../speedrun-review/PracticeRecall.svelte";
     import ProblemCard from "../speedrun-review/ProblemCard.svelte";
     import TopicLearned from "../speedrun-review/TopicLearned.svelte";
@@ -45,6 +46,7 @@ deleted.
     } from "./demo-fixtures";
 
     type SceneId =
+        | "welcome"
         | "decks"
         | "decks-empty"
         | "builder"
@@ -70,6 +72,12 @@ deleted.
     // Ordered as the real journey reads top to bottom: browse decks, build one,
     // then study it screen by screen.
     const scenes: Scene[] = [
+        {
+            id: "welcome",
+            label: "New user",
+            caption:
+                "The first-run welcome. Explains the four levels and the single action: start studying.",
+        },
         {
             id: "decks",
             label: "Decks",
@@ -361,7 +369,9 @@ deleted.
 
             <div class="stage" class:stage--center={!isFull}>
                 {#key stageKey}
-                    {#if scene.id === "decks"}
+                    {#if scene.id === "welcome"}
+                        <NewUserModal onStart={() => goTo("decks")} />
+                    {:else if scene.id === "decks"}
                         <DecksView
                             decks={DEMO_DECKS}
                             onStudy={() => goTo("study")}

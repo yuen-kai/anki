@@ -26,6 +26,7 @@ import com.google.protobuf.ByteString
 import com.ichi2.anki.CollectionManager
 import com.ichi2.anki.CollectionManager.withCol
 import com.ichi2.anki.NoteEditorFragment
+import com.ichi2.anki.SpeedrunSyncOutcome
 import com.ichi2.anki.getEndpoint
 import com.ichi2.anki.importAnkiPackageUndoable
 import com.ichi2.anki.importCsvRaw
@@ -66,14 +67,16 @@ import com.ichi2.anki.libanki.stats.setGraphPreferencesRaw
 import com.ichi2.anki.observability.undoableOp
 import com.ichi2.anki.searchInBrowser
 import com.ichi2.anki.settings.Prefs
+import com.ichi2.anki.speedrunSyncCollection
 import com.ichi2.anki.syncAuth
 import com.ichi2.anki.updateLogin
-import com.ichi2.anki.worker.SyncWorker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import net.ankiweb.rsdroid.exceptions.BackendSyncException
 import org.json.JSONObject
 import timber.log.Timber
 import anki.generic.Json as GenericJson
@@ -234,7 +237,7 @@ val uiMethods =
         // and stores the returned key like any other login. They exchange the
         // protobuf generic.Json wrapper via the FrontendService Speedrun* RPCs.
         "speedrunSyncLogin" to { bytes -> lifecycleScope.async { speedrunSyncLogin(bytes) } },
-        "speedrunSyncNow" to { _ -> lifecycleScope.async { speedrunSyncNow() } },
+        "speedrunSyncNow" to { bytes -> lifecycleScope.async { speedrunSyncNow(bytes) } },
         "speedrunSignOut" to { _ -> lifecycleScope.async { speedrunSignOut() } },
         "speedrunSyncStatus" to { _ -> lifecycleScope.async { speedrunSyncStatus() } },
     )
@@ -304,19 +307,55 @@ private suspend fun FragmentActivity.speedrunSyncLogin(bytes: ByteArray): ByteAr
 }
 
 /**
- * Kick off a background collection sync against the stored credentials. Mirrors
- * desktop's `speedrun_sync_now` (fire-and-forget).
+ * Run a collection sync against the stored credentials and wait for it to
+ * finish, mirroring desktop's `speedrun_sync_now`. Uses the interactive sync
+ * ([speedrunSyncCollection]) rather than the background SyncWorker, because the
+ * worker skips one-way syncs and so the phone's first sync (a full download
+ * from AnkiWeb) would silently do nothing.
  */
-private fun FragmentActivity.speedrunSyncNow(): ByteArray {
+private suspend fun FragmentActivity.speedrunSyncNow(bytes: ByteArray): ByteArray {
+    // interactive (the button) shows progress + a conflict dialog; the periodic
+    // auto-sync passes interactive=false for a quiet, normal-only merge.
+    val interactive = parseJsonRequest(bytes).optBoolean("interactive", true)
     val auth =
         syncAuth() ?: return jsonResponse {
             put("ok", false)
+            put("status", "not-signed-in")
             put("message", "Not signed in.")
         }
-    SyncWorker.start(this, auth, syncMedia = true)
-    return jsonResponse {
-        put("ok", true)
-        put("message", "Sync started.")
+    return try {
+        val outcome = speedrunSyncCollection(auth, syncMedia = true, interactive = interactive)
+        jsonResponse {
+            when (outcome) {
+                SpeedrunSyncOutcome.SYNCED -> {
+                    put("ok", true)
+                    put("status", "synced")
+                    put("message", "Sync complete.")
+                }
+                SpeedrunSyncOutcome.NEEDS_RESOLUTION -> {
+                    put("ok", true)
+                    put("status", "conflict")
+                }
+            }
+        }
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (authFailed: BackendSyncException.BackendSyncAuthFailedException) {
+        // credentials no longer valid: drop them so the screen shows signed-out
+        updateLogin("", "")
+        jsonResponse {
+            put("ok", false)
+            put("status", "error")
+            put("message", authFailed.localizedMessage ?: "Sign in again.")
+        }
+    } catch (exc: Exception) {
+        // do not log the message, it can contain PII (matches LoginViewModel)
+        Timber.w("speedrun sync failed")
+        jsonResponse {
+            put("ok", false)
+            put("status", "error")
+            put("message", exc.localizedMessage ?: "Sync failed.")
+        }
     }
 }
 

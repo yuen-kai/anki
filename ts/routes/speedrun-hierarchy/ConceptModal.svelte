@@ -8,6 +8,10 @@ one marked). Rendered inline as the builder's third panel, and inline beneath
 the concepts list when the panel runs self-contained (the demo).
 -->
 <script lang="ts">
+    import { tick } from "svelte";
+    import type { Action } from "svelte/action";
+
+    import MediaImage from "../speedrun-review/MediaImage.svelte";
     import ChoiceEditor from "./ChoiceEditor.svelte";
     import { type Concept, newProblem } from "./lib";
 
@@ -27,6 +31,29 @@ the concepts list when the panel runs self-contained (the demo).
         concept.problems = concept.problems.filter((problem) => problem.id !== id);
         onChange();
     }
+
+    // Grow a textarea to fit its content: reset height, then match scrollHeight
+    // (plus the border, which scrollHeight excludes, since the fields are
+    // border-box). `bind:value` fills the textarea after this action's first
+    // run, so the initial sync measure sees an empty box — re-measure after
+    // tick() once the bound text is in the DOM. The value param also drives
+    // update() so it keeps fitting on later changes (e.g. switching concepts).
+    const autogrow: Action<HTMLTextAreaElement, unknown> = (node) => {
+        const style = getComputedStyle(node);
+        const border =
+            parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+        function resize(): void {
+            node.style.height = "auto";
+            node.style.height = `${node.scrollHeight + border}px`;
+        }
+        resize();
+        void tick().then(resize);
+        node.addEventListener("input", resize);
+        return {
+            update: resize,
+            destroy: () => node.removeEventListener("input", resize),
+        };
+    };
 </script>
 
 <div class="editor3">
@@ -43,6 +70,7 @@ the concepts list when the panel runs self-contained (the demo).
     <textarea
         class="content"
         rows="3"
+        use:autogrow={concept.content}
         bind:value={concept.content}
         on:input={field}
         placeholder="Concept description"
@@ -57,13 +85,15 @@ the concepts list when the panel runs self-contained (the demo).
     {#each concept.problems as problem, i (problem.id)}
         <div class="problem">
             <div class="problem-head">
-                <input
+                <textarea
                     class="prompt"
+                    rows="1"
+                    use:autogrow={problem.prompt}
                     bind:value={problem.prompt}
                     on:input={field}
                     placeholder="Question prompt"
                     aria-label={`Problem ${i + 1} prompt`}
-                />
+                ></textarea>
                 <button
                     class="del"
                     on:click={() => removeProblem(problem.id)}
@@ -72,6 +102,14 @@ the concepts list when the panel runs self-contained (the demo).
                     ×
                 </button>
             </div>
+            {#if problem.image}
+                <div class="stem">
+                    <MediaImage
+                        filename={problem.image}
+                        alt={`Problem ${i + 1} figure`}
+                    />
+                </div>
+            {/if}
             <ChoiceEditor {problem} onChange={field} />
         </div>
     {/each}
@@ -113,7 +151,8 @@ the concepts list when the panel runs self-contained (the demo).
 
         padding: 12px 13px;
         line-height: 1.55;
-        resize: vertical;
+        resize: none;
+        overflow: hidden;
         min-height: 3.5rem;
         caret-color: var(--sr-signal);
     }
@@ -153,17 +192,25 @@ the concepts list when the panel runs self-contained (the demo).
 
     .problem-head {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 0.5rem;
         margin-bottom: 10px;
     }
+    // The problem's stem figure, sitting between the prompt and the choices.
+    .stem {
+        margin-bottom: 10px;
+    }
     // The prompt reads as running text but stays editable, with a coral caret.
+    // A textarea (not an input) so long questions wrap and get room to breathe.
     .prompt {
         flex: 1 1 auto;
         min-width: 0;
+        margin: 0;
         border: none;
         background: none;
         padding: 0;
+        resize: none;
+        overflow: hidden;
         font-family: var(--sr-sans);
         font-size: 12.5px;
         font-weight: 600;

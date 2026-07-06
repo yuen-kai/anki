@@ -17,7 +17,7 @@ function jsonProto(obj) {
     do {
         let b = n & 0x7f;
         n >>>= 7;
-        if (n) b |= 0x80;
+        if (n) { b |= 0x80; }
         varint.push(b);
     } while (n);
     return Buffer.from([0x0a, ...varint, ...payload]);
@@ -117,8 +117,10 @@ async function run() {
         // ---- Account: signed-out (stub status) ----
         try {
             const page = await ctx.newPage();
-            await page.route("**/_anki/speedrunSyncStatus", (r) =>
-                r.fulfill(fulfillJson({ loggedIn: false, account: null, endpoint: null, hostAvailable: true })));
+            await page.route(
+                "**/_anki/speedrunSyncStatus",
+                (r) => r.fulfill(fulfillJson({ loggedIn: false, account: null, endpoint: null, hostAvailable: true })),
+            );
             await page.goto(`${ORIGIN}/speedrun-account`, { waitUntil: "networkidle" });
             await settle(page);
             await shot(page, `account-${device}-signedout`);
@@ -131,8 +133,13 @@ async function run() {
         // ---- Account: signed-in (stub status) ----
         try {
             const page = await ctx.newPage();
-            await page.route("**/_anki/speedrunSyncStatus", (r) =>
-                r.fulfill(fulfillJson({ loggedIn: true, account: "test@example.com", endpoint: "", hostAvailable: true })));
+            await page.route(
+                "**/_anki/speedrunSyncStatus",
+                (r) =>
+                    r.fulfill(
+                        fulfillJson({ loggedIn: true, account: "test@example.com", endpoint: "", hostAvailable: true }),
+                    ),
+            );
             await page.goto(`${ORIGIN}/speedrun-account`, { waitUntil: "networkidle" });
             await settle(page);
             await shot(page, `account-${device}-signedin`);
@@ -205,8 +212,16 @@ async function run() {
             await settle(page);
             await shot(page, `demo-${device}`);
             const scenes = [
-                "Builder", "Concept editor", "Study \u2014 not started", "New topic",
-                "Learn", "Topic learned", "Practice", "Guided", "Solo", "Session complete",
+                "Builder",
+                "Concept editor",
+                "Study \u2014 not started",
+                "New topic",
+                "Learn",
+                "Topic learned",
+                "Practice",
+                "Guided",
+                "Solo",
+                "Session complete",
             ];
             for (const label of scenes) {
                 try {

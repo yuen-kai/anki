@@ -6,7 +6,8 @@
 //! Both hosts (the Qt desktop app and the AnkiDroid shell) call
 //! [`Collection::speedrun_ensure_seeded`] so the study/review screens have real
 //! content out of the box: a small biochemistry demo and a larger MCAT
-//! chapters 31-35 deck. The deck data lives as JSON bundled at compile time
+//! science-review deck (2024 Workout, chapters 4-39). The deck data lives as
+//! JSON bundled at compile time
 //! (`seed_data/*.json`, one authoring-store blob each), so there is no
 //! per-platform seed code and no second authoring path: seeding reuses the same
 //! `speedrun_save_hierarchy` (create the backing deck + store the blob) and
@@ -20,8 +21,8 @@
 //!
 //! - A deck that does not yet exist (matched by name) is created, reconciled,
 //!   and its signature recorded.
-//! - A deck that already exists is refreshed to the current bundle only when the
-//!   bundle's content **changed** since it was last seeded (the recorded
+//! - A deck that already exists is refreshed to the current bundle only when
+//!   the bundle's content **changed** since it was last seeded (the recorded
 //!   signature differs from the current bundle's). Re-storing the bundle under
 //!   the same deck id keeps every matching concept's card — reconcile is keyed
 //!   by `conceptId`, so study progress survives — and materializes any new
@@ -30,8 +31,8 @@
 //!   bundle never clobbers a deck the user edited in-app.
 //! - A deck seeded before this mechanism has no recorded signature, so it
 //!   differs from the current bundle and refreshes once — migrating stale
-//!   preloaded content (e.g. an older MCAT deck), of which the old
-//!   "fewer concepts" backfill is now just a subcase — then becomes idempotent.
+//!   preloaded content (e.g. an older MCAT deck), of which the old "fewer
+//!   concepts" backfill is now just a subcase — then becomes idempotent.
 //!
 //! So a reseed on every collection open propagates a changed bundle to its deck
 //! (preserving FSRS progress on surviving concepts) while leaving an unchanged
@@ -47,20 +48,27 @@ use sha1::Sha1;
 use crate::prelude::*;
 
 /// Collection-config key holding `{ deckId -> content signature }` for the
-/// bundle last seeded into each deck. Lets [`Collection::seed_one_deck`] refresh
-/// a deck only when the bundle's content actually changed (see the module docs),
-/// so an unchanged bundle never reseeds and never clobbers in-app edits.
+/// bundle last seeded into each deck. Lets [`Collection::seed_one_deck`]
+/// refresh a deck only when the bundle's content actually changed (see the
+/// module docs), so an unchanged bundle never reseeds and never clobbers in-app
+/// edits.
 const SEED_SIGNATURE_CONFIG_KEY: &str = "speedrun_seed_signature";
+
+/// Collection-config key holding the names of bundled seed decks the user has
+/// deleted, so [`Collection::seed_one_deck`] won't recreate them. Seeding runs
+/// on every collection open (desktop) and every mobile decks-screen load, so
+/// without this a deck the user deleted would immediately reappear.
+const SEED_DELETED_CONFIG_KEY: &str = "speedrun_seed_deleted";
 
 /// The bundled decks as authoring-store blobs (`{ deckId, root }`). The deck
 /// name is the blob's root title, so the JSON is the single source of truth.
 const BUNDLED_DECKS: [&str; 2] = [
     include_str!("seed_data/demo_biochem.json"),
-    include_str!("seed_data/mcat_ch31_35.json"),
+    include_str!("seed_data/mcat_ch4_39.json"),
 ];
 
 // `SEED_MEDIA: &[(&str, &[u8])]` — the bundled Speedrun images (name + bytes),
-// generated at build time from `seed_data/mcat_ch31_35_media/*.png` (see
+// generated at build time from `seed_data/mcat_ch4_39_media/*.png` (see
 // `rslib/build.rs`). Empty when the folder holds no PNGs. `include_str!` can't
 // embed binaries, so the build script emits `include_bytes!` entries.
 include!(concat!(env!("OUT_DIR"), "/speedrun_seed_media.rs"));
@@ -76,12 +84,13 @@ enum SeedOutcome {
 }
 
 /// A stable content signature for a bundled blob, independent of the deck id it
-/// is stored under: the blob is normalized (its `deckId` dropped) and hashed, so
-/// two blobs that differ only by `deckId` share a signature. Recorded per deck
-/// at seed time so a later open can tell "the bundle's content changed since we
-/// seeded this deck" (signature differs — refresh) from "the user edited the
-/// deck in-app" (signature still matches — leave alone). serde_json serializes
-/// object keys sorted (no `preserve_order`), so the normalized form is stable.
+/// is stored under: the blob is normalized (its `deckId` dropped) and hashed,
+/// so two blobs that differ only by `deckId` share a signature. Recorded per
+/// deck at seed time so a later open can tell "the bundle's content changed
+/// since we seeded this deck" (signature differs — refresh) from "the user
+/// edited the deck in-app" (signature still matches — leave alone). serde_json
+/// serializes object keys sorted (no `preserve_order`), so the normalized form
+/// is stable.
 fn bundle_signature(hierarchy: &Value) -> String {
     let mut normalized = hierarchy.clone();
     if let Some(obj) = normalized.as_object_mut() {
@@ -137,9 +146,10 @@ impl Collection {
 
     /// Copy every bundled Speedrun image ([`SEED_MEDIA`]) into the collection's
     /// media folder by exact filename, idempotently (see
-    /// [`crate::media::MediaManager::add_or_replace_file`]). A no-op when nothing
-    /// is bundled or the collection has no media folder (an in-memory test
-    /// collection), so seeding still works without media configured.
+    /// [`crate::media::MediaManager::add_or_replace_file`]). A no-op when
+    /// nothing is bundled or the collection has no media folder (an
+    /// in-memory test collection), so seeding still works without media
+    /// configured.
     fn copy_seed_media(&self) -> Result<()> {
         if SEED_MEDIA.is_empty() || self.media_folder.as_os_str().is_empty() {
             return Ok(());
@@ -154,7 +164,8 @@ impl Collection {
     /// Create a bundled deck, or refresh it when the bundle's content changed
     /// since it was last seeded (see the module docs). Reconciles either way so
     /// the concepts are materialized into studyable cards, and records the
-    /// bundle's content signature so the next open can skip an unchanged bundle.
+    /// bundle's content signature so the next open can skip an unchanged
+    /// bundle.
     fn seed_one_deck(&mut self, blob: &str) -> Result<SeedOutcome> {
         let mut hierarchy: Value = serde_json::from_str(blob)?;
         let name = hierarchy
@@ -165,6 +176,10 @@ impl Collection {
             .trim()
             .to_string();
         if name.is_empty() {
+            return Ok(SeedOutcome::Unchanged);
+        }
+        // Honor a user's deletion of a bundled deck: don't recreate it.
+        if self.seed_deleted_names().iter().any(|n| n == &name) {
             return Ok(SeedOutcome::Unchanged);
         }
         let signature = bundle_signature(&hierarchy);
@@ -218,6 +233,49 @@ impl Collection {
         self.set_config_json(SEED_SIGNATURE_CONFIG_KEY, &map, false)?;
         Ok(())
     }
+
+    /// Names of bundled seed decks the user has deleted (empty by default).
+    fn seed_deleted_names(&self) -> Vec<String> {
+        self.get_config_optional(SEED_DELETED_CONFIG_KEY)
+            .unwrap_or_default()
+    }
+
+    /// Record that the user deleted the deck named `name` so a later open won't
+    /// reseed it. A no-op unless `name` is a bundled seed deck, so ordinary
+    /// user-created decks never accumulate tombstones. Non-undoable, matching
+    /// the seed-signature/authoring store writes.
+    pub(crate) fn note_speedrun_seed_deleted(&mut self, name: &str) -> Result<()> {
+        let name = name.trim();
+        if name.is_empty() || !bundled_seed_names().iter().any(|n| n == name) {
+            return Ok(());
+        }
+        let mut names = self.seed_deleted_names();
+        if names.iter().any(|n| n == name) {
+            return Ok(());
+        }
+        names.push(name.to_string());
+        self.set_config_json(SEED_DELETED_CONFIG_KEY, &names, false)?;
+        Ok(())
+    }
+}
+
+/// The bundled seed decks' names (each blob's root title). Used to limit
+/// deletion tombstones to seed decks.
+fn bundled_seed_names() -> Vec<String> {
+    BUNDLED_DECKS
+        .iter()
+        .filter_map(|blob| {
+            let hierarchy: Value = serde_json::from_str(blob).ok()?;
+            Some(
+                hierarchy
+                    .get("root")?
+                    .get("title")?
+                    .as_str()?
+                    .trim()
+                    .to_string(),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -326,7 +384,8 @@ mod tests {
     }
 
     /// The `content` of the first concept in depth-first order (concepts before
-    /// children), or empty. Read and write use the same traversal so they agree.
+    /// children), or empty. Read and write use the same traversal so they
+    /// agree.
     fn first_concept_content(hierarchy: &Value) -> String {
         fn walk(node: &Value) -> Option<String> {
             if let Some(concept) = node
@@ -350,7 +409,8 @@ mod tests {
     }
 
     /// Overwrite the first concept's `content` in place, leaving ids/structure
-    /// (and the concept count) untouched — a stand-in for a content-only rewrite.
+    /// (and the concept count) untouched — a stand-in for a content-only
+    /// rewrite.
     fn set_first_concept_content(hierarchy: &mut Value, content: &str) {
         fn walk(node: &mut Value, content: &str) -> bool {
             if let Some(concept) = node
@@ -397,36 +457,57 @@ mod tests {
     }
 
     #[test]
-    fn seeded_mcat_deck_has_all_five_topics_fully_populated() {
+    fn seeded_mcat_deck_has_all_parts_and_chapters_populated() {
         let mut col = Collection::new();
         col.speedrun_ensure_seeded().unwrap();
 
         let mcat = mcat_name();
         let stored = stored_hierarchy(&mut col, &mcat);
-        // The whole bundle: 20 concepts / 80 problems across 5 topic leaves.
-        assert_eq!(count_concepts(&stored), 20, "20 concepts total");
-        assert_eq!(count_problems(&stored), 80, "80 problems total");
+        // The whole bundle: 474 concepts / 660 problems across 36 chapter leaves
+        // grouped into 6 subject parts (2024 Workout ch4-39).
+        assert_eq!(count_concepts(&stored), 474, "474 concepts total");
+        assert_eq!(count_problems(&stored), 660, "660 problems total");
 
+        // Six subject parts, in book order.
+        let parts: Vec<String> = stored["root"]["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["title"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(
+            parts,
+            [
+                "Biochemistry",
+                "Biology",
+                "Psychology and Sociology",
+                "General Chemistry",
+                "Organic Chemistry",
+                "Physics",
+            ]
+        );
+
+        // 36 chapter leaves, every one populated with concepts.
         let leaves = leaf_concept_counts(&stored);
-        assert_eq!(leaves.len(), 5, "five topic leaves");
+        assert_eq!(leaves.len(), 36, "36 chapter leaves");
         for (title, n) in &leaves {
-            assert_eq!(*n, 4, "topic {title:?} holds 4 concepts");
+            assert!(*n > 0, "chapter {title:?} holds concepts");
         }
-        // The Physics topics specifically (the regression): each populated.
-        for physics in [
-            "Kinematics and Dynamics",
-            "Work and Energy",
-            "Thermodynamics",
+        // Representative chapters spanning the range are present.
+        for chapter in [
+            "Enzymes and Inhibition",
+            "Biologically Important Molecules",
+            "Light, Optics, and Quantum Physics",
         ] {
             assert!(
-                leaves.iter().any(|(t, n)| t == physics && *n == 4),
-                "physics topic {physics:?} has 4 concepts"
+                leaves.iter().any(|(t, _)| t == chapter),
+                "chapter {chapter:?} present"
             );
         }
 
         // One materialized card per concept.
         let did = col.get_deck_id(&mcat).unwrap().unwrap();
-        assert_eq!(card_count(&mut col, did), 20);
+        assert_eq!(card_count(&mut col, did), 474);
     }
 
     #[test]
@@ -461,25 +542,53 @@ mod tests {
     }
 
     #[test]
+    fn deleting_a_seeded_deck_keeps_it_gone_across_reseeds() {
+        let mut col = Collection::new();
+        let mcat = mcat_name();
+        let demo = deck_names()[0].clone();
+
+        // First open seeds both bundled decks.
+        col.speedrun_ensure_seeded().unwrap();
+        let did = col.get_deck_id(&mcat).unwrap().expect("mcat seeded");
+
+        // The user deletes the MCAT deck.
+        col.speedrun_delete_deck(&did.0.to_string()).unwrap();
+        assert!(col.get_deck_id(&mcat).unwrap().is_none(), "deleted");
+
+        // A later open (desktop) / decks-screen load (mobile) reseeds, but must
+        // not resurrect the deck the user deleted.
+        let again = col.speedrun_ensure_seeded().unwrap();
+        assert!(
+            col.get_deck_id(&mcat).unwrap().is_none(),
+            "a deleted seed deck must stay deleted across reseeds"
+        );
+        assert!(
+            !json_names(&again, "seeded").contains(&mcat),
+            "the deleted deck must not be reported as re-seeded"
+        );
+        // The other bundled deck is untouched.
+        assert!(
+            col.get_deck_id(&demo).unwrap().is_some(),
+            "the demo deck stays seeded"
+        );
+    }
+
+    #[test]
     fn ensure_seeded_backfills_a_stale_bundled_deck() {
         let mut col = Collection::new();
         let mcat = mcat_name();
 
-        // Simulate a deck seeded from an older bundle: the MCAT deck exists, but
-        // only the Organic Chemistry side is populated (2 concepts) and the
-        // Physics leaves are empty — the exact state the bug reported. The two
-        // concept ids match the current bundle so their cards must be preserved.
+        // Simulate a deck seeded from an older bundle: the MCAT deck exists but
+        // holds only a sliver (2 concepts of one chapter). The two concept ids
+        // match the current bundle, so their cards must be preserved on refresh.
         let stale = json!({
             "deckId": "new",
-            "root": { "id": "sr-mcat3135-root", "title": mcat, "concepts": [], "children": [
-                { "id": "sr-mcat3135-orgo", "title": "Organic Chemistry", "concepts": [], "children": [
-                    { "id": "sr-mcat3135-ch31", "title": "OC topic", "children": [], "concepts": [
-                        { "id": "sr-mcat3135-ch31-c1", "title": "a", "content": "a", "problems": [] },
-                        { "id": "sr-mcat3135-ch31-c2", "title": "b", "content": "b", "problems": [] },
+            "root": { "id": "sr-mcat439-root", "title": mcat, "concepts": [], "children": [
+                { "id": "sr-mcat439-biochem", "title": "Biochemistry", "concepts": [], "children": [
+                    { "id": "sr-mcat439-ch4", "title": "Enzymes and Inhibition", "children": [], "concepts": [
+                        { "id": "sr-mcat439-ch4-c1", "title": "a", "content": "a", "problems": [] },
+                        { "id": "sr-mcat439-ch4-c2", "title": "b", "content": "b", "problems": [] },
                     ]},
-                ]},
-                { "id": "sr-mcat3135-physics", "title": "Physics", "concepts": [], "children": [
-                    { "id": "sr-mcat3135-ch33", "title": "Kinematics and Dynamics", "children": [], "concepts": [] },
                 ]},
             ]}
         });
@@ -510,21 +619,20 @@ mod tests {
             "demo created"
         );
 
-        // The MCAT deck now carries the full bundle, Physics included, and grew
-        // from 2 to 20 cards (the 2 original concept cards were kept, not
-        // recreated: reconcile is keyed by conceptId).
+        // The MCAT deck now carries the full bundle and grew from 2 to 474 cards
+        // (the 2 original concept cards were kept, not recreated: reconcile is
+        // keyed by conceptId).
         let stored = stored_hierarchy(&mut col, &mcat);
-        assert_eq!(count_concepts(&stored), 20);
-        for physics in [
-            "Kinematics and Dynamics",
-            "Work and Energy",
-            "Thermodynamics",
+        assert_eq!(count_concepts(&stored), 474);
+        for chapter in [
+            "Enzymes and Inhibition",
+            "Light, Optics, and Quantum Physics",
         ] {
             assert!(
                 leaf_concept_counts(&stored)
                     .iter()
-                    .any(|(t, n)| t == physics && *n == 4),
-                "physics topic {physics:?} backfilled"
+                    .any(|(t, n)| t == chapter && *n > 0),
+                "chapter {chapter:?} backfilled"
             );
         }
         assert_eq!(
@@ -532,7 +640,7 @@ mod tests {
             did,
             "same deck id"
         );
-        assert_eq!(card_count(&mut col, did), 20);
+        assert_eq!(card_count(&mut col, did), 474);
     }
 
     #[test]
@@ -545,15 +653,15 @@ mod tests {
         col.speedrun_ensure_seeded().unwrap();
         let did = col.get_deck_id(&mcat).unwrap().unwrap();
         let cards_before = card_ids(&mut col, did);
-        assert_eq!(cards_before.len(), 20, "20 concept cards materialized");
+        assert_eq!(cards_before.len(), 474, "474 concept cards materialized");
 
-        // Simulate a deck seeded from an OLDER bundle of the same shape: same 20
+        // Simulate a deck seeded from an OLDER bundle of the same shape: same 474
         // concept ids (so a refresh adds/removes no cards), but different content
         // and a stale recorded signature. count_concepts is unchanged — the bug
         // the concept-count guard missed.
         let mut edited = stored_hierarchy(&mut col, &mcat);
         set_first_concept_content(&mut edited, "OLD STALE CONTENT");
-        assert_eq!(count_concepts(&edited), 20, "concept count unchanged");
+        assert_eq!(count_concepts(&edited), 474, "concept count unchanged");
         col.speedrun_save_hierarchy(edited).unwrap();
         col.record_seed_signature(did, "stale-signature").unwrap();
 
@@ -567,7 +675,7 @@ mod tests {
 
         // The stored blob is back to the bundle content (the stale edit is gone).
         let refreshed = stored_hierarchy(&mut col, &mcat);
-        assert_eq!(count_concepts(&refreshed), 20);
+        assert_eq!(count_concepts(&refreshed), 474);
         assert_ne!(first_concept_content(&refreshed), "OLD STALE CONTENT");
         assert_eq!(
             first_concept_content(&refreshed),
@@ -577,7 +685,11 @@ mod tests {
 
         // Same deck id, and every concept card kept its identity (same id set) —
         // reconcile is keyed by conceptId — so FSRS progress is preserved.
-        assert_eq!(col.get_deck_id(&mcat).unwrap().unwrap(), did, "same deck id");
+        assert_eq!(
+            col.get_deck_id(&mcat).unwrap().unwrap(),
+            did,
+            "same deck id"
+        );
         assert_eq!(
             card_ids(&mut col, did),
             cards_before,
@@ -619,7 +731,11 @@ mod tests {
             "USER EDIT",
             "user edit preserved"
         );
-        assert_eq!(col.get_deck_id(&mcat).unwrap().unwrap(), did, "same deck id");
+        assert_eq!(
+            col.get_deck_id(&mcat).unwrap().unwrap(),
+            did,
+            "same deck id"
+        );
     }
 
     #[test]
@@ -651,16 +767,22 @@ mod tests {
         let media = col.media().unwrap();
         let path = col.media_folder.join("placeholder-x.png");
 
-        media.add_or_replace_file("placeholder-x.png", b"one").unwrap();
+        media
+            .add_or_replace_file("placeholder-x.png", b"one")
+            .unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"one");
 
         // Re-copying identical bytes keeps the exact name (idempotent).
-        media.add_or_replace_file("placeholder-x.png", b"one").unwrap();
+        media
+            .add_or_replace_file("placeholder-x.png", b"one")
+            .unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"one");
 
         // New bytes under the same name overwrite in place — no hash-suffixed
         // twin, so `<img src="/placeholder-x.png">` keeps resolving.
-        media.add_or_replace_file("placeholder-x.png", b"two").unwrap();
+        media
+            .add_or_replace_file("placeholder-x.png", b"two")
+            .unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"two");
         let count = std::fs::read_dir(&col.media_folder).unwrap().count();
         assert_eq!(count, 1, "no duplicate file created on overwrite");

@@ -56,6 +56,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use serde_json::Value;
+use sha1::Digest;
+use sha1::Sha1;
 
 use crate::config::BoolKey;
 use crate::notetype::Notetype;
@@ -101,6 +103,12 @@ const MASTERY_MIGRATED_CONFIG_KEY: &str = "speedrun_mastery_migrated";
 /// Collection-config key holding the authored hierarchy blob per deck (written
 /// by the authoring editor; read here to drive materialize + learning blocks).
 const AUTHORING_CONFIG_KEY: &str = "speedrun_authoring";
+/// Collection-config key holding `{ deckId -> reconcile signature }`: a hash of
+/// the deck's authored concept-id set at the time it was last fully reconciled.
+/// [`Collection::speedrun_reconcile`] skips its O(cards) materialize scan when
+/// the current signature still matches (the concept set is unchanged), so the
+/// hot `speedrun_next_card` path doesn't rescan the whole deck every call.
+const RECONCILE_SIGNATURE_CONFIG_KEY: &str = "speedrun_reconcile_signature";
 
 // Per-card `custom_data` keys for the mastery record. Each is <= 8 bytes and
 // the whole serialized object stays well under the 100-byte `custom_data`
@@ -353,6 +361,21 @@ impl AuthoredHierarchy {
     }
 }
 
+/// A stable signature of a deck's authored concept-id set. Reconcile creates or
+/// removes exactly one card per concept id, so it only needs to run when this
+/// set changes; [`Collection::speedrun_reconcile`] compares this against the
+/// last recorded signature to skip an unchanged deck's full materialize scan.
+fn reconcile_signature_for(concept_ids: &HashSet<String>) -> String {
+    let mut ids: Vec<&str> = concept_ids.iter().map(String::as_str).collect();
+    ids.sort_unstable();
+    let mut hasher = Sha1::new();
+    for id in ids {
+        hasher.update(id.as_bytes());
+        hasher.update([0u8]);
+    }
+    hex::encode(hasher.finalize())
+}
+
 /// The non-empty concept ids of a node, in order.
 fn node_concept_ids(node: &AuthoredNode) -> Vec<String> {
     node.concepts
@@ -419,27 +442,20 @@ impl Collection {
         else {
             return Ok(HashMap::new());
         };
+        // One join query over the deck's concept cards, rather than two point
+        // lookups (get_card + get_note) per card, so this scales to a deck
+        // holding tens of thousands of concept cards (the hot study path reads
+        // this on every next-card / study-state / answer).
         let mut out = HashMap::new();
-        for cid in self.search_cards(SearchNode::from_deck_id(deck_id, true), SortMode::NoOrder)? {
-            let card = self.storage.get_card(cid)?.or_not_found(cid)?;
-            let note = self
-                .storage
-                .get_note(card.note_id)?
-                .or_not_found(card.note_id)?;
-            if note.notetype_id != notetype_id {
-                continue;
-            }
-            let concept_id = note
-                .fields()
-                .get(ITEM_FIELD_CONCEPT_ID)
-                .cloned()
-                .unwrap_or_default();
+        for (concept_id, card_id, custom_data) in
+            self.storage.speedrun_item_cards(deck_id, notetype_id)?
+        {
             if concept_id.is_empty() {
                 continue;
             }
             out.insert(
                 concept_id,
-                (cid, ConceptEntry::from_custom_data(&card.custom_data)),
+                (card_id, ConceptEntry::from_custom_data(&custom_data)),
             );
         }
         Ok(out)
@@ -525,6 +541,22 @@ impl Collection {
             .unwrap_or_default()
     }
 
+    /// `{ deckId -> reconcile signature }` for every deck reconciled so far.
+    fn reconcile_signatures(&self) -> HashMap<String, String> {
+        self.get_config_optional(RECONCILE_SIGNATURE_CONFIG_KEY)
+            .unwrap_or_default()
+    }
+
+    /// Record the concept-set signature just materialized for `deck_id`, so the
+    /// next reconcile over an unchanged hierarchy can skip its scan.
+    /// Non-undoable, matching the authoring/seed store's bespoke config writes.
+    fn set_reconcile_signature(&mut self, deck_id: DeckId, signature: &str) -> Result<()> {
+        let mut map = self.reconcile_signatures();
+        map.insert(deck_id.0.to_string(), signature.to_string());
+        self.set_config_json(RECONCILE_SIGNATURE_CONFIG_KEY, &map, false)?;
+        Ok(())
+    }
+
     fn speedrun_authored_hierarchy(&self, deck_id: DeckId) -> AuthoredHierarchy {
         self.speedrun_authoring_store()
             .get(&deck_id.0.to_string())
@@ -556,8 +588,10 @@ impl Collection {
     /// Reconcile the deck's cards, then return the learning block for the first
     /// topic still being taught, else the next FSRS-due card, else done.
     pub(crate) fn speedrun_next_card(&mut self, deck_id: DeckId) -> Result<Value> {
-        self.speedrun_reconcile(deck_id)?;
+        // Parse the (potentially multi-MB) authored blob once and reuse it for
+        // both reconcile and the learning-block scan, rather than parsing twice.
         let hierarchy = self.speedrun_authored_hierarchy(deck_id);
+        self.speedrun_reconcile_hierarchy(deck_id, &hierarchy)?;
         let progress = self.speedrun_deck_progress(deck_id)?;
         if let Some(block) = next_learning_block(&hierarchy, &progress) {
             return Ok(block);
@@ -802,6 +836,18 @@ impl Collection {
     /// what gives the authored concepts genuine FSRS scheduling.
     pub(crate) fn speedrun_reconcile(&mut self, deck_id: DeckId) -> Result<ReconcileOutcome> {
         let hierarchy = self.speedrun_authored_hierarchy(deck_id);
+        self.speedrun_reconcile_hierarchy(deck_id, &hierarchy)
+    }
+
+    /// Reconcile against an already-parsed hierarchy. The hot
+    /// [`Collection::speedrun_next_card`] path parses the authored blob once
+    /// and passes it here, avoiding a second multi-MB parse per call on
+    /// large decks.
+    fn speedrun_reconcile_hierarchy(
+        &mut self,
+        deck_id: DeckId,
+        hierarchy: &AuthoredHierarchy,
+    ) -> Result<ReconcileOutcome> {
         // conceptId -> title, first occurrence wins, deterministic order.
         let mut wanted: Vec<(String, String)> = Vec::new();
         let mut wanted_ids: HashSet<String> = HashSet::new();
@@ -811,6 +857,25 @@ impl Collection {
                     wanted.push((concept.id.clone(), concept.title.clone()));
                 }
             }
+        }
+
+        // Fast path: when the concept-id set is unchanged since the last full
+        // reconcile (signature matches) and the backing note type + FSRS are
+        // already in place, every concept already has exactly its card, so the
+        // O(cards) materialize scan below is pure overhead — skip it. This keeps
+        // the hot `speedrun_next_card` path from rescanning the whole deck each
+        // call. Any authoring change alters the concept set (or clears the
+        // signature via a save), so a stale skip cannot drop a needed card.
+        let signature = reconcile_signature_for(&wanted_ids);
+        if self.get_notetype_by_name(ITEM_NOTETYPE_NAME)?.is_some()
+            && self.get_config_bool(BoolKey::Fsrs)
+            && self.reconcile_signatures().get(&deck_id.0.to_string()) == Some(&signature)
+        {
+            return Ok(ReconcileOutcome {
+                created: 0,
+                removed: 0,
+                total: wanted.len(),
+            });
         }
 
         let notetype_id = self.speedrun_install_item_notetype()?;
@@ -858,6 +923,10 @@ impl Collection {
         if !self.get_config_bool(BoolKey::Fsrs) {
             self.set_config_bool(BoolKey::Fsrs, true, false)?;
         }
+
+        // Record the concept-set signature so a later reconcile over the same
+        // hierarchy can take the fast skip path above.
+        self.set_reconcile_signature(deck_id, &signature)?;
 
         Ok(ReconcileOutcome {
             created,

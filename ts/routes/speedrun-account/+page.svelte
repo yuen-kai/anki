@@ -3,10 +3,15 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    import { untrack } from "svelte";
+    import { onMount, untrack } from "svelte";
 
     import { goto } from "$app/navigation";
 
+    import {
+        autoSyncState,
+        clearAutoSyncAttention,
+        startAutoSync,
+    } from "./autosync.svelte";
     import {
         ANKIWEB_SIGNUP_URL,
         hostSignOut,
@@ -27,10 +32,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     let loggedIn = $state(initial.loggedIn);
     let account = $state<string | null>(initial.account);
-    // The sync server the host is configured for, reported on load (and after
-    // sign in). Sign in always targets AnkiWeb; this is only surfaced read-only
-    // when a custom server happens to already be configured.
-    let endpoint = $state(initial.endpoint ?? "");
     let username = $state("");
     let password = $state("");
     let busy = $state(false);
@@ -64,9 +65,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             }
             loggedIn = true;
             account = result.account;
-            if (result.endpoint) {
-                endpoint = result.endpoint;
-            }
             password = "";
             hostAvailableOverride = true;
         }, "Signed in.");
@@ -83,6 +81,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             if (!res.ok) {
                 throw new Error(res.message || "Sync failed.");
             }
+            clearAutoSyncAttention();
             lastSynced = new Date().toLocaleTimeString();
             const status = await hostSyncStatus();
             hostAvailableOverride = hostAvailableOverride || status.hostAvailable;
@@ -101,6 +100,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     function toDecks(): void {
         goto("/speedrun-decks");
     }
+
+    // Start periodic auto-sync (idempotent; also started from the decks home).
+    onMount(startAutoSync);
 </script>
 
 <div class="screen">
@@ -173,13 +175,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         <span class="who">{account ?? "your account"}</span>
                     </div>
 
-                    {#if endpoint}
-                        <div class="identity">
-                            <span class="label">Server</span>
-                            <span class="server">{endpoint}</span>
-                        </div>
-                    {/if}
-
                     <button
                         type="button"
                         class="sr-btn sr-btn--primary full"
@@ -188,6 +183,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     >
                         Sync now
                     </button>
+
+                    {#if autoSyncState.needsAttention}
+                        <p class="attention" role="status">
+                            This device and AnkiWeb have diverged. Use Sync now to
+                            choose which version to keep.
+                        </p>
+                    {/if}
 
                     {#if lastSynced}
                         <p class="synced">Last synced at {lastSynced}.</p>
@@ -382,11 +384,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--sr-ink);
         word-break: break-word;
     }
-    .server {
-        font-family: var(--sr-mono);
-        font-size: 13px;
+    .attention {
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: var(--sr-radius-control);
+        background: var(--sr-ghost);
         color: var(--sr-ink-2);
-        word-break: break-all;
+        font-size: 13px;
+        line-height: 1.4;
     }
 
     .synced {

@@ -24,7 +24,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// Bundle the Speedrun seed images (`seed_data/mcat_ch31_35_media/*.png`) into a
+/// Bundle the Speedrun seed images (`seed_data/mcat_ch4_39_media/*.png`) into a
 /// generated `SEED_MEDIA` table that `anki::speedrun::seed` copies into each
 /// collection's media folder on seeding. Regenerated whenever a PNG is added,
 /// removed or changed, so dropping a file into the folder and rebuilding ships
@@ -32,7 +32,7 @@ fn main() -> Result<()> {
 fn generate_speedrun_seed_media() -> Result<()> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
     let out_dir = std::env::var("OUT_DIR")?;
-    let media_dir = Path::new(&manifest_dir).join("src/speedrun/seed_data/mcat_ch31_35_media");
+    let media_dir = Path::new(&manifest_dir).join("src/speedrun/seed_data/mcat_ch4_39_media");
     println!("cargo:rerun-if-changed={}", media_dir.display());
 
     let mut pngs: Vec<(String, String)> = Vec::new();
@@ -59,12 +59,9 @@ fn generate_speedrun_seed_media() -> Result<()> {
     }
     pngs.sort();
 
-    let mut src =
-        String::from("pub(crate) static SEED_MEDIA: &[(&str, &[u8])] = &[\n");
+    let mut src = String::from("pub(crate) static SEED_MEDIA: &[(&str, &[u8])] = &[\n");
     for (name, abs_path) in &pngs {
-        src.push_str(&format!(
-            "    ({name:?}, include_bytes!({abs_path:?})),\n"
-        ));
+        src.push_str(&format!("    ({name:?}, include_bytes!({abs_path:?})),\n"));
     }
     src.push_str("];\n");
     fs::write(Path::new(&out_dir).join("speedrun_seed_media.rs"), src)?;

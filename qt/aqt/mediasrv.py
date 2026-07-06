@@ -833,10 +833,21 @@ def speedrun_sync_login() -> bytes:
 
 
 def speedrun_sync_now() -> bytes:
-    """Kick off a normal collection sync against the stored credentials. Runs on
-    the main thread with Anki's usual progress UI."""
+    """Run a collection sync against the stored credentials.
+
+    Interactive (the "Sync now" button, the default): fire Anki's usual progress
+    + conflict UI. Quiet (``interactive=false``, the periodic auto-sync): run
+    only a normal two-way merge in the background and report the outcome; a
+    required one-way full sync is skipped and reported as ``conflict`` so the UI
+    can prompt the user to resolve it."""
+    interactive = bool(_speedrun_request().get("interactive", True))
     if not aqt.mw.pm.sync_auth():
-        return _speedrun_response({"ok": False, "message": "Not signed in."})
+        return _speedrun_response(
+            {"ok": False, "status": "not-signed-in", "message": "Not signed in."}
+        )
+
+    if not interactive:
+        return _speedrun_response(_speedrun_quiet_sync())
 
     def on_main() -> None:
         from aqt import sync as aqt_sync
@@ -845,7 +856,58 @@ def speedrun_sync_now() -> bytes:
             aqt_sync.sync_collection(aqt.mw, lambda: None)
 
     aqt.mw.taskman.run_on_main(on_main)
-    return _speedrun_response({"ok": True, "message": "Sync started."})
+    return _speedrun_response(
+        {"ok": True, "status": "started", "message": "Sync started."}
+    )
+
+
+def _speedrun_quiet_sync() -> dict[str, Any]:
+    """Run a normal (merging) sync in the background and return its outcome with
+    no UI. A required one-way full sync is skipped and reported as a conflict for
+    the caller to resolve via the interactive flow."""
+    import threading
+    from concurrent.futures import Future
+
+    from anki.errors import SyncError, SyncErrorKind
+    from anki.sync import SyncOutput
+
+    done = threading.Event()
+    result: dict[str, Any] = {"ok": False, "status": "error"}
+
+    def on_main() -> None:
+        auth = aqt.mw.pm.sync_auth()
+        if not auth:
+            result.update(ok=False, status="not-signed-in")
+            done.set()
+            return
+
+        def task() -> SyncOutput:
+            return aqt.mw.col.sync_collection(auth, aqt.mw.pm.media_syncing_enabled())
+
+        def on_future_done(fut: Future) -> None:
+            try:
+                out = fut.result()
+                aqt.mw.col._load_scheduler()  # scheduler version may have changed
+                if out.new_endpoint:
+                    aqt.mw.pm.set_current_sync_url(out.new_endpoint)
+                if out.required == SyncOutput.NO_CHANGES:
+                    aqt.mw.media_syncer.start_monitoring()
+                    result.update(ok=True, status="synced")
+                else:
+                    result.update(ok=True, status="conflict")
+            except Exception as exc:
+                if isinstance(exc, SyncError) and exc.kind is SyncErrorKind.AUTH:
+                    aqt.mw.pm.clear_sync_auth()
+                result.update(ok=False, status="error", message=str(exc))
+            finally:
+                done.set()
+
+        aqt.mw.taskman.run_in_background(task, on_future_done)
+
+    aqt.mw.taskman.run_on_main(on_main)
+    if not done.wait(timeout=180):
+        return {"ok": False, "status": "error", "message": "Sync timed out."}
+    return result
 
 
 def speedrun_sign_out() -> bytes:

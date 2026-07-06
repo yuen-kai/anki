@@ -32,6 +32,7 @@ use crate::decks::DeckId;
 use crate::decks::DeckKind;
 use crate::error::Result;
 use crate::notes::NoteId;
+use crate::notetype::NotetypeId;
 use crate::scheduler::congrats::CongratsInfo;
 use crate::scheduler::fsrs::memory_state::get_last_revlog_info;
 use crate::scheduler::queue::BuryMode;
@@ -474,6 +475,31 @@ impl super::SqliteStorage {
         self.db
             .prepare_cached(concat!(include_str!("get_card.sql"), " where nid = ?"))?
             .query_and_then([nid], |r| row_to_card(r).map_err(Into::into))?
+            .collect()
+    }
+
+    /// `(field-0, card id, custom_data)` for every card in `deck_id` (or pulled
+    /// from it into a filtered deck) whose note is of `ntid`, in a single join
+    /// query. The Speedrun per-concept mastery/materialize scans use this so
+    /// the hot study path doesn't do two point lookups per card across a
+    /// deck that can hold tens of thousands of concept cards.
+    pub(crate) fn speedrun_item_cards(
+        &self,
+        deck_id: DeckId,
+        ntid: NotetypeId,
+    ) -> Result<Vec<(String, CardId, String)>> {
+        self.db
+            .prepare_cached(
+                "SELECT c.id, field_at_index(n.flds, 0), c.data \
+                 FROM cards c JOIN notes n ON c.nid = n.id \
+                 WHERE (c.did = ?1 OR c.odid = ?1) AND n.mid = ?2",
+            )?
+            .query_and_then(params![deck_id, ntid], |r| {
+                let card_id: CardId = r.get(0)?;
+                let concept_id: String = r.get(1)?;
+                let data: CardData = r.get(2)?;
+                Ok((concept_id, card_id, data.custom_data))
+            })?
             .collect()
     }
 

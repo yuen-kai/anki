@@ -26,8 +26,9 @@
 //! (see [`crate::speedrun::seed`]): `image` is a filename in collection media
 //! rendered as `<img src="/<filename>">`; `choiceImages` is parallel to
 //! `choices` (length 4, filename or null). The store round-trips the blob as an
-//! opaque `serde_json::Value`, so these extra fields are preserved untouched and
-//! ignored by everything that only reads id/title (e.g. [`crate::speedrun::study`]).
+//! opaque `serde_json::Value`, so these extra fields are preserved untouched
+//! and ignored by everything that only reads id/title (e.g.
+//! [`crate::speedrun::study`]).
 //!
 //! The store owns only structure. Materialization into FSRS-scheduled cards and
 //! the per-concept mastery state live in [`crate::speedrun::study`], which
@@ -175,10 +176,17 @@ impl Collection {
     /// desktop `authoring.delete_deck`).
     pub(crate) fn speedrun_delete_deck(&mut self, deck_id: &str) -> Result<()> {
         let did = parse_deck_id(deck_id)?;
+        // Grab the name before removal: seeding runs on every collection open
+        // (and every mobile decks-screen load), so a deleted bundled deck must
+        // be tombstoned or it reappears on the next reseed.
+        let name = self.get_deck(did)?.map(|deck| deck.human_name());
         self.remove_decks_and_child_decks(&[did])?;
         let mut store = self.speedrun_authoring_map();
         if store.remove(&did.0.to_string()).is_some() {
             self.save_speedrun_authoring_map(store)?;
+        }
+        if let Some(name) = name {
+            self.note_speedrun_seed_deleted(&name)?;
         }
         Ok(())
     }
