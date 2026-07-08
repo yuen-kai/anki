@@ -116,3 +116,26 @@ in build scripts/tests is fine.
 ## Individual preferences
 
 See @.claude/user.md
+
+## Cursor Cloud specific instructions
+
+Build tooling `just` and `n2` are installed in the shared cargo bin
+(`/usr/local/cargo/bin`, on PATH); Rust (rust-toolchain.toml) is preinstalled.
+The build system still auto-downloads uv/Python/Node/Yarn/protoc into `out/` on
+first build. The VM update script runs `./ninja node_modules pyenv` to refresh
+JS + Python deps; a full build (`just build`) is still needed before running.
+
+Running the GUI headlessly: the desktop app is PyQt6 and forces
+`QT_QPA_PLATFORM=xcb`, so it needs an X display. A TigerVNC server runs on
+`DISPLAY=:1`; launch with `DISPLAY=:1 just run`. Startup takes ~15-30s before
+the window and the in-process mediasrv (port 40000) come up. Use a fresh
+profile dir via `ANKI_BASE=/tmp/<dir>` to avoid clobbering an existing
+collection. Unit tests (`just test-*`) need no display; e2e sets
+`QT_QPA_PLATFORM=offscreen` itself.
+
+This is the "Speedrun" fork: opening any collection auto-seeds demo decks
+("MCAT Biochemistry (demo)", "MCAT Ch 31-35"). The study UI is a custom
+"Learn" flow (Start studying -> topic unlock -> Begin -> reveal concept details
+-> next concept), not the classic Again/Hard/Good/Easy queue for new material,
+and the Default deck's new-cards/day limit is low, so newly added Basic cards
+may not surface in a study session right away.
