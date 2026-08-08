@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Police Chase</title>
+    <link rel="stylesheet" href="./src/style.css">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./vendor/three/three.module.min.js",
+                "three/addons/": "./vendor/three/addons/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <canvas id="viewport"></canvas>
+
+    <div id="loading" class="overlay">
+        <div class="overlay-inner">
+            <div class="loading-title">POLICE CHASE</div>
+            <div class="loading-bar"><div id="loading-fill" class="loading-fill"></div></div>
+            <div id="loading-step" class="loading-step">starting</div>
+        </div>
+    </div>
+
+    <div id="error" class="overlay hidden">
+        <div class="overlay-inner">
+            <div class="error-title">Could not start</div>
+            <pre id="error-detail" class="error-detail"></pre>
+        </div>
+    </div>
+
+    <div id="preview-notice" class="preview-notice hidden">
+        <strong>World preview</strong>
+        <span>Driving, police and scoring are not implemented — those decisions are still open in QUESTIONS.md.</span>
+        <span class="preview-keys">arrow keys / WASD move the placeholder car &middot; C cycles camera &middot; P toggles this notice</span>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+</body>
+
+</html>
