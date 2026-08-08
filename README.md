@@ -35,12 +35,18 @@ index.html            page shell and import map
 serve.mjs             zero-dependency static server
 src/
   main.js             bootstrap and frame loop wiring
-  engine/             renderer setup, fixed-timestep loop, raw keyboard state
+  pendingAnswers.js   values still waiting on a design answer
+  engine/             renderer setup, fixed-timestep loop, keyboard, math
+  game/               vehicles, police unit, arrest, HUD, run flow
   render/             sky and daylight, chase camera, car models
-  world/              map data, road network, ground, buildings, props, terrain
-  preview/            temporary stand-ins, deleted as answers arrive
+  world/              map data, road network, nav graph, ground, buildings
 vendor/three/         three.js (MIT), vendored so the game runs offline
 ```
+
+`src/game/tuning.js` and `src/game/vehicleProfiles.js` hold the numbers behind
+the chase, kept in one place so they can be changed without touching logic.
+`src/pendingAnswers.js` holds anything not yet specified at all; those values
+are printed on screen with the question they are waiting on.
 
 `src/world/mapData.js` holds the authored map: road centrelines, park and lot
 footprints, and the map extents. `src/world/roadNetwork.js` samples those
