@@ -1,0 +1,13 @@
+{
+    "name": "police-chase",
+    "version": "0.1.0",
+    "private": true,
+    "description": "A standalone browser police chase game.",
+    "type": "module",
+    "scripts": {
+        "start": "node serve.mjs"
+    },
+    "engines": {
+        "node": ">=18"
+    }
+}
