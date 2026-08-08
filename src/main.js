@@ -3,7 +3,11 @@ import * as THREE from "three";
 import { Keyboard } from "./engine/input.js";
 import { FixedLoop } from "./engine/loop.js";
 import { attachResize, createRenderer, detectQuality, maxAnisotropy } from "./engine/renderer.js";
-import { PlaceholderDriver } from "./preview/placeholderDriver.js";
+import { CollisionWorld } from "./game/collision.js";
+import { PLAYER_KEYS, readPlayerInput } from "./game/playerControls.js";
+import { Vehicle } from "./game/vehicle.js";
+import { PLAYER_PROFILE } from "./game/vehicleProfiles.js";
+import { PENDING_NOTES } from "./pendingAnswers.js";
 import { createCarModel } from "./render/carModel.js";
 import { ChaseCamera } from "./render/chaseCamera.js";
 import { createDaylight } from "./render/sky.js";
@@ -33,7 +37,16 @@ const ui = {
     error: document.getElementById("error"),
     errorDetail: document.getElementById("error-detail"),
     notice: document.getElementById("preview-notice"),
+    pendingNotes: document.getElementById("pending-notes"),
 };
+
+function listPendingAnswers() {
+    if (PENDING_NOTES.length === 0) {
+        return;
+    }
+    const parts = PENDING_NOTES.map((note) => `${note.what} (${note.question}) parked at ${note.parked}`);
+    ui.pendingNotes.textContent = `Awaiting answers: ${parts.join("; ")}`;
+}
 
 function nextFrame() {
     return new Promise((resolve) => requestAnimationFrame(() => resolve()));
@@ -121,31 +134,18 @@ async function boot() {
     scene.fog = daylight.fog;
 
     const obstacles = new ObbField(buildings.colliders);
+    const collision = new CollisionWorld({ obstacles, boundsRadius: MAP.groundRadius - 30 });
 
     const playerCar = createCarModel({ bodyColor: 0x1f2b3a, roofColor: 0x151d28, rimColor: 0xc7cdd4 });
     scene.add(playerCar.group);
 
-    const driver = new PlaceholderDriver({
-        start: MAP.start,
-        obstacles,
-        bounds: MAP.groundRadius - 30,
-    });
+    const player = new Vehicle(PLAYER_PROFILE, MAP.start);
 
-    const chase = new ChaseCamera(camera, { obstacles });
-    chase.snap(driver.state);
+    const chase = new ChaseCamera(camera, { obstacles, referenceSpeed: PLAYER_PROFILE.topSpeed * 0.8 });
+    chase.snap(player.state);
 
     const keyboard = new Keyboard();
-    keyboard.swallow([
-        "ArrowUp",
-        "ArrowDown",
-        "ArrowLeft",
-        "ArrowRight",
-        "Space",
-        "KeyW",
-        "KeyA",
-        "KeyS",
-        "KeyD",
-    ]);
+    keyboard.swallow([...PLAYER_KEYS, "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
     let cameraMode = 0;
     let orbitAngle = 0;
@@ -153,15 +153,15 @@ async function boot() {
     const loop = new FixedLoop({
         step: 1 / 120,
         update(dt) {
-            driver.update(dt, keyboard);
+            player.update(dt, readPlayerInput(keyboard), collision);
         },
         render(alpha, frameSeconds) {
             const dt = Math.min(0.05, frameSeconds);
-            const state = driver.state;
+            const state = player.state;
 
             playerCar.group.position.set(state.x, state.y, state.z);
             playerCar.group.rotation.y = state.heading;
-            playerCar.setSteer(driver.steer * 0.9);
+            playerCar.setSteer(player.steer * 0.55);
             playerCar.roll(state.speed * dt);
 
             if (keyboard.wasPressed("KeyC")) {
@@ -203,10 +203,11 @@ async function boot() {
     await nextFrame();
     renderer.render(scene, camera);
     ui.loading.classList.add("hidden");
+    listPendingAnswers();
     ui.notice.classList.remove("hidden");
     loop.start();
 
-    window.policeChase = { scene, renderer, camera, driver, chase, network, buildings, quality };
+    window.policeChase = { scene, renderer, camera, player, chase, network, buildings, quality };
 }
 
 boot().catch(showError);

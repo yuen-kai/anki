@@ -165,10 +165,10 @@ export function createGrassTexture(size, anisotropy) {
     const patches = fbmField(size, 3, 6, makeRandom(515));
     paintField(ctx, size, blades, (v, x, y) => {
         const patch = patches[y * size + x];
-        const r = 74 + patch * 30 + (v - 0.5) * 26;
-        const g = 108 + patch * 42 + (v - 0.5) * 30;
-        const b = 52 + patch * 20 + (v - 0.5) * 18;
-        return [Math.max(48, Math.min(150, r)), Math.max(70, Math.min(190, g)), Math.max(32, Math.min(110, b))];
+        const r = 84 + patch * 26 + (v - 0.5) * 22;
+        const g = 100 + patch * 30 + (v - 0.5) * 24;
+        const b = 62 + patch * 18 + (v - 0.5) * 16;
+        return [Math.max(58, Math.min(150, r)), Math.max(74, Math.min(165, g)), Math.max(40, Math.min(115, b))];
     });
     return toTexture(canvas, { anisotropy });
 }

@@ -115,8 +115,8 @@ export function createDaylight({ map, quality }) {
     sun.shadow.camera.near = 80;
     sun.shadow.camera.far = 1400;
 
-    const hemisphere = new THREE.HemisphereLight(0xbcd6ea, 0x5b5a52, 0.85);
-    const bounce = new THREE.DirectionalLight(0xd8e4ef, 0.35);
+    const hemisphere = new THREE.HemisphereLight(0xcfe2f2, 0x6d6c60, 1.35);
+    const bounce = new THREE.DirectionalLight(0xd8e4ef, 0.5);
     bounce.position.set(-0.5, 0.35, -0.7).multiplyScalar(400);
 
     const fog = new THREE.Fog(0xbcd6ea, map.groundRadius * 0.55, map.mountains.outerRadius * 1.15);

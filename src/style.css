@@ -135,6 +135,15 @@ body {
     color: #ffd36f;
 }
 
+.preview-notice .preview-pending {
+    font-size: 11px;
+    color: rgba(255, 211, 111, 0.78);
+}
+
+.preview-notice .preview-pending:empty {
+    display: none;
+}
+
 .preview-notice .preview-keys {
     font-family: var(--ui-mono);
     font-size: 11px;

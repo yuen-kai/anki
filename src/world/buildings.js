@@ -386,8 +386,8 @@ export function createBuildings({ map, network, surfaces, facadeTextures, maxBui
     const trimColor = new THREE.Color();
 
     for (const box of placed) {
-        tintColor.setHSL(0.07 + box.tint * 0.06, 0.05 + box.tint * 0.08, 0.46 + box.tint * 0.22);
-        trimColor.setHSL(0.09, 0.04, 0.38 + box.tint * 0.12);
+        tintColor.setHSL(0.05 + box.tint * 0.1, 0.06 + box.tint * 0.12, 0.66 + box.tint * 0.24);
+        trimColor.setHSL(0.09, 0.05, 0.58 + box.tint * 0.16);
 
         const plinth = { ...box, halfW: box.halfW + 0.35, halfD: box.halfD + 0.35 };
         addSides(trimBuilder, plinth, 0, PLINTH_HEIGHT, trimColor, 1);

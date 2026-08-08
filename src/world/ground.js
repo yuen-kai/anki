@@ -49,7 +49,7 @@ class StripBuilder {
             this.normals.push(0, 1, 0);
         }
         this.uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
-        this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        this.indices.push(base, base + 2, base + 1, base, base + 3, base + 2);
     }
 
     build() {
