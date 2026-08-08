@@ -1,0 +1,3 @@
+Create a police chase web game. This should feel like one of those crime open world city car chases but more formalized and as a standalone game. The user plays as the criminal car and police cars start arresting when nearby. Criminal car has more control and police cars have more speed. Goal is survival for as long as possible, number of police cars increases over time. Police cars should work together to trap the user.
+
+You are forbidden from making any gameplay design decisions. Ask me, every time (but ideally load your questions at the start of development). All gameplay design decisions must go into a single doc that only my verbatim text can be in. Absolutely no gameplay design in file comments, the design doc is the sole source of gameplay design truth.
