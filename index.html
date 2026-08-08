@@ -34,9 +34,33 @@
         </div>
     </div>
 
+    <div id="hud" class="hud hidden">
+        <div class="hud-timer">
+            <span class="hud-label">Survived</span>
+            <span id="hud-time" class="hud-time">0:00.0</span>
+        </div>
+        <canvas id="minimap" class="minimap" width="256" height="256"></canvas>
+        <div id="arrest" class="arrest hidden">
+            <span class="arrest-label">Being arrested</span>
+            <div class="arrest-bar"><div id="arrest-fill" class="arrest-fill"></div></div>
+        </div>
+    </div>
+
+    <div id="fade" class="fade"></div>
+
+    <div id="score" class="overlay hidden">
+        <div class="overlay-inner">
+            <div class="score-caption">Busted</div>
+            <div class="score-label">Survived</div>
+            <div id="score-time" class="score-value">0:00.0</div>
+            <div class="score-detail">Police on scene: <span id="score-cars">0</span></div>
+            <button id="restart" class="restart" type="button">Run again</button>
+            <div class="score-hint">or press Enter</div>
+        </div>
+    </div>
+
     <div id="preview-notice" class="preview-notice hidden">
         <strong>Work in progress</strong>
-        <span>Police, arrest and scoring are not implemented — those decisions are still open in QUESTIONS.md.</span>
         <span id="pending-notes" class="preview-pending"></span>
         <span class="preview-keys">WASD drives &middot; C cycles camera &middot; P toggles this notice</span>
     </div>

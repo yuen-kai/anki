@@ -101,7 +101,7 @@ Status legend: `[ ]` unanswered, `[x]` answered and copied into `DESIGN.md`.
       (b) a police car stays within a radius for N seconds, (c) you are surrounded
       by N police cars, (d) you are stopped/slow with police adjacent,
       (e) an "arrest meter" fills up, (f) something else.
-- [ ] 5.2 If it's proximity-based: how close, and for how long? Both numbers are
+- [x] 5.2 If it's proximity-based: how close, and for how long? Both numbers are
       still needed: how small is the radius in metres (a car is about 4.3m long),
       and what is N in seconds?
 - [ ] 5.3 If it's a meter: how fast does it fill, does more police nearby fill it
@@ -127,25 +127,25 @@ Status legend: `[ ]` unanswered, `[x]` answered and copied into `DESIGN.md`.
       (f) spike strips, (g) PIT manoeuvre / ramming to spin you out,
       (h) herding — deliberately leaving one route open to push you somewhere,
       (i) full encirclement, (j) something else.
-- [ ] 6.1b Spike strips are in. What does driving over one do to the player —
+- [x] 6.1b Spike strips are in. What does driving over one do to the player —
       slow you for a while, stop you, or something else? Does it affect police
       who drive over it? How is one deployed, and is it visible in advance?
-- [ ] 6.1c Roadblocks are in. Are they police cars parked across a street ahead,
+- [x] 6.1c Roadblocks are in. Are they police cars parked across a street ahead,
       or separate barricade props? What happens when the player hits one?
 - [x] 6.2 Should the police act as one coordinated unit with assigned roles
       (e.g. two chasers + two flankers), or should each car decide for itself
       with some awareness of the others?
-- [ ] 6.2b Which roles should the unit assign between? Pursue directly, intercept
+- [x] 6.2b Which roles should the unit assign between? Pursue directly, intercept
       ahead, flank on a parallel street, block an intersection, deploy a spike
       strip, form a roadblock, hold back and contain — or a different set?
 - [ ] 6.3 Should coordination get smarter as the run goes on, or be equally smart
       from the start with only the count increasing?
-- [ ] 6.4 Do police always know exactly where the player is, or do they need line
+- [x] 6.4 Do police always know exactly where the player is, or do they need line
       of sight / a last-known position and have to search?
-- [ ] 6.5 If they can lose you: how do you break line of sight, how long until
+- [x] 6.5 If they can lose you: how do you break line of sight, how long until
       they give up, and what happens then — do they patrol, converge on your last
       position, or leave?
-- [ ] 6.6 Should the player ever be able to fully escape and reset the chase, or
+- [x] 6.6 Should the player ever be able to fully escape and reset the chase, or
       is the pressure permanent until arrest?
 - [ ] 6.7 Should the player be able to see police intentions (e.g. a roadblock
       warning, or a marker on a car that is about to cut you off)?
@@ -155,9 +155,9 @@ Status legend: `[ ]` unanswered, `[x]` answered and copied into `DESIGN.md`.
 - [x] 7.1 How many police cars at the very start of a run?
 - [x] 7.2 How do more arrive — on a timer, at score thresholds, in waves,
       or something else? Give the schedule if you have one.
-- [ ] 7.2b What is the timer interval — one new car every how many seconds, and
+- [x] 7.2b What is the timer interval — one new car every how many seconds, and
       is the interval constant or does it shorten as the run goes on?
-- [ ] 7.3 Is there a maximum number of police cars?
+- [x] 7.3 Is there a maximum number of police cars?
 - [x] 7.4 Where do new police enter from: (a) off-screen edges, (b) out of side
       streets near you, (c) from fixed police stations on the map,
       (d) something else.
@@ -192,17 +192,18 @@ Status legend: `[ ]` unanswered, `[x]` answered and copied into `DESIGN.md`.
 - [x] 10.1 What should the HUD show? Pick all that apply: (a) survival timer,
       (b) score, (c) speedometer, (d) minimap, (e) number of police in pursuit,
       (f) arrest/capture meter, (g) wanted level, (h) damage, (i) something else.
-- [ ] 10.2 If there's a minimap: does it show all police, only nearby ones, or
+- [x] 10.2 If there's a minimap: does it show all police, only nearby ones, or
       only ones that can see you? Does it show the street layout?
+- [ ] 10.2b Does the minimap turn with the car, or stay north-up?
 - [ ] 10.3 Should there be off-screen indicators pointing at nearby police?
 - [ ] 10.4 Start screen: straight into the game, or a title screen with a start
       button and controls listed?
 - [ ] 10.5 Should there be a countdown or intro before the chase begins?
 - [ ] 10.6 Can the game be paused? If yes, does pausing feel like cheating —
       should it be blocked during a chase?
-- [ ] 10.7 What should happen on arrest — instant cut to the score screen, a slow
+- [x] 10.7 What should happen on arrest — instant cut to the score screen, a slow
       motion moment, a short cinematic of the surround, something else?
-- [ ] 10.8 Restart: single key press to go again, or back to the menu?
+- [x] 10.8 Restart: single key press to go again, or back to the menu?
 
 ## 11. Audio
 
@@ -225,6 +226,10 @@ Status legend: `[ ]` unanswered, `[x]` answered and copied into `DESIGN.md`.
 
 ## Answering order
 
-Sections 1 and 2 are answered, as is the first pass of blocking questions.
-The follow-ups that came out of those answers and still block a complete build
-are: 5.2, 6.1b, 6.1c, 6.2b, 7.2b, 10.7, 10.8. The rest can be layered on.
+Everything blocking a complete run is answered: the world, the handling model,
+the arrest rule, police coordination, spawning, scoring, the HUD, the end
+screen and the controls. The game is playable end to end.
+
+What is left is optional depth (police variants, pickups, audio, a title
+screen, high scores, touch and gamepad support) plus the small open items
+listed above: 2.5c, 3.3, 3.4, 3.6, 5.3, 5.6, 5.7b, 7.5, 10.2b, 12.1b.

@@ -7,3 +7,5 @@ You are forbidden from making any gameplay design decisions. Ask me, every time 
 fixed hand made map with no wrapping, mountain stops the edge, have some streets have curves but no dead ends, no alleys/shortcuts, buildings solids but have parks/lots, one-way streets and traffic lights dont matter, no civillian traffic, no pedestrians
 
 handle the same for everyone, all, arcade, you decide, within a small radius for N seconds which resets when police are gone, instant after those N seconds, nothing, all excluding spinning out (regular collision/pushing is fine but secondary to other strategies), a coordinated unit with roles that are dynamically reassigned (all cars the same), start with 5 police cars all starting behind the user, arrive by timer, from side streets, survival time only, timer and minimap | arrest meter pops up only when it gets activated, wasd
+
+you decide the numbers. no spike strips or physical roadblocks (police cars forming a road block works tho). the set of roles seem good. arrest -> cinematic fade to score screen. score screen leads to restart. minimap should have street layout and all police. all police should know your location.

@@ -4,11 +4,10 @@ import { Keyboard } from "./engine/input.js";
 import { FixedLoop } from "./engine/loop.js";
 import { attachResize, createRenderer, detectQuality, maxAnisotropy } from "./engine/renderer.js";
 import { CollisionWorld } from "./game/collision.js";
-import { PLAYER_KEYS, readPlayerInput } from "./game/playerControls.js";
-import { Vehicle } from "./game/vehicle.js";
+import { PLAYER_KEYS } from "./game/playerControls.js";
+import { Session } from "./game/session.js";
 import { PLAYER_PROFILE } from "./game/vehicleProfiles.js";
 import { PENDING_NOTES } from "./pendingAnswers.js";
-import { createCarModel } from "./render/carModel.js";
 import { ChaseCamera } from "./render/chaseCamera.js";
 import { createDaylight } from "./render/sky.js";
 import { createBuildings } from "./world/buildings.js";
@@ -16,6 +15,7 @@ import { ObbField } from "./world/colliders.js";
 import { createGround } from "./world/ground.js";
 import { MAP } from "./world/mapData.js";
 import { createMountains } from "./world/mountains.js";
+import { NavGraph } from "./world/navGraph.js";
 import { createProps } from "./world/props.js";
 import { RoadNetwork } from "./world/roadNetwork.js";
 import {
@@ -135,17 +135,24 @@ async function boot() {
 
     const obstacles = new ObbField(buildings.colliders);
     const collision = new CollisionWorld({ obstacles, boundsRadius: MAP.groundRadius - 30 });
-
-    const playerCar = createCarModel({ bodyColor: 0x1f2b3a, roofColor: 0x151d28, rimColor: 0xc7cdd4 });
-    scene.add(playerCar.group);
-
-    const player = new Vehicle(PLAYER_PROFILE, MAP.start);
+    const graph = await step(0.98, "mapping routes", () => new NavGraph(network));
 
     const chase = new ChaseCamera(camera, { obstacles, referenceSpeed: PLAYER_PROFILE.topSpeed * 0.8 });
-    chase.snap(player.state);
 
     const keyboard = new Keyboard();
-    keyboard.swallow([...PLAYER_KEYS, "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+    keyboard.swallow([...PLAYER_KEYS, "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"]);
+
+    const session = new Session({
+        scene,
+        camera,
+        chase,
+        map: MAP,
+        network,
+        graph,
+        collision,
+        obstacles,
+        keyboard,
+    });
 
     let cameraMode = 0;
     let orbitAngle = 0;
@@ -153,16 +160,11 @@ async function boot() {
     const loop = new FixedLoop({
         step: 1 / 120,
         update(dt) {
-            player.update(dt, readPlayerInput(keyboard), collision);
+            session.update(dt);
         },
         render(alpha, frameSeconds) {
             const dt = Math.min(0.05, frameSeconds);
-            const state = player.state;
-
-            playerCar.group.position.set(state.x, state.y, state.z);
-            playerCar.group.rotation.y = state.heading;
-            playerCar.setSteer(player.steer * 0.55);
-            playerCar.roll(state.speed * dt);
+            const state = session.player.state;
 
             if (keyboard.wasPressed("KeyC")) {
                 cameraMode = (cameraMode + 1) % CAMERA_MODES.length;
@@ -171,24 +173,24 @@ async function boot() {
                 ui.notice.classList.toggle("hidden");
             }
 
-            if (CAMERA_MODES[cameraMode] === "chase") {
-                chase.update(state, dt);
-            } else if (CAMERA_MODES[cameraMode] === "orbit") {
-                orbitAngle += dt * 0.24;
-                camera.position.set(
-                    state.x + Math.sin(orbitAngle) * 26,
-                    state.y + 11,
-                    state.z + Math.cos(orbitAngle) * 26,
-                );
-                camera.lookAt(state.x, state.y + 1.2, state.z);
-                chase.initialised = false;
-            } else if (CAMERA_MODES[cameraMode] === "aerial") {
-                camera.position.set(state.x + 60, 150, state.z + 190);
-                camera.lookAt(state.x, 0, state.z);
-                chase.initialised = false;
-            } else {
-                camera.position.set(0, 900, 0.001);
-                camera.lookAt(0, 0, 0);
+            session.render(dt);
+
+            if (session.running && CAMERA_MODES[cameraMode] !== "chase") {
+                if (CAMERA_MODES[cameraMode] === "orbit") {
+                    orbitAngle += dt * 0.24;
+                    camera.position.set(
+                        state.x + Math.sin(orbitAngle) * 26,
+                        state.y + 11,
+                        state.z + Math.cos(orbitAngle) * 26,
+                    );
+                    camera.lookAt(state.x, state.y + 1.2, state.z);
+                } else if (CAMERA_MODES[cameraMode] === "aerial") {
+                    camera.position.set(state.x + 60, 150, state.z + 190);
+                    camera.lookAt(state.x, 0, state.z);
+                } else {
+                    camera.position.set(0, 900, 0.001);
+                    camera.lookAt(0, 0, 0);
+                }
                 chase.initialised = false;
             }
 
@@ -200,6 +202,7 @@ async function boot() {
 
     ui.loadingFill.style.width = "100%";
     ui.loadingStep.textContent = "ready";
+    session.start();
     await nextFrame();
     renderer.render(scene, camera);
     ui.loading.classList.add("hidden");
@@ -207,7 +210,7 @@ async function boot() {
     ui.notice.classList.remove("hidden");
     loop.start();
 
-    window.policeChase = { scene, renderer, camera, player, chase, network, buildings, quality };
+    window.policeChase = { scene, renderer, camera, session, chase, network, graph, buildings, quality };
 }
 
 boot().catch(showError);
